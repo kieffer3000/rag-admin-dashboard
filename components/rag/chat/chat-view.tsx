@@ -8,7 +8,24 @@ import { SourcesPanel } from './sources-panel';
 import { StudioPanel } from './studio-panel';
 import { Composer } from './composer';
 import { Message, TypingIndicator } from './message';
-import { Boxes, Sparkles, ScrollText, GitCompareArrows, GraduationCap } from 'lucide-react';
+import { cn } from '@/lib/utils';
+import {
+  Boxes,
+  Sparkles,
+  ScrollText,
+  GitCompareArrows,
+  GraduationCap,
+  PanelLeft,
+  PanelRight,
+  Minimize2,
+  Maximize2,
+  Layers
+} from 'lucide-react';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger
+} from '@/components/ui/tooltip';
 
 let msgId = 0;
 const newId = () => `msg${++msgId}`;
@@ -24,7 +41,16 @@ export function ChatView() {
   const { messages, addMessage, contextItems, prompts, activePromptId } = useRag();
   const [busy, setBusy] = useState(false);
   const [streaming, setStreaming] = useState<ChatMessage | null>(null);
+  const [sourcesOpen, setSourcesOpen] = useState(true);
+  const [studioOpen, setStudioOpen] = useState(true);
   const scrollRef = useRef<HTMLDivElement>(null);
+
+  const allOpen = sourcesOpen && studioOpen;
+  function toggleAll() {
+    const next = !allOpen;
+    setSourcesOpen(next);
+    setStudioOpen(next);
+  }
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
@@ -49,11 +75,9 @@ export function ChatView() {
       attachment
     );
 
-    // brief "thinking" delay, then stream
     setTimeout(() => {
-      const assistantId = newId();
       const base: ChatMessage = {
-        id: assistantId,
+        id: newId(),
         role: 'assistant',
         content: '',
         citations,
@@ -77,12 +101,57 @@ export function ChatView() {
   return (
     <div className="flex h-full">
       {/* Left: sources */}
-      <div className="hidden w-[300px] shrink-0 border-r border-border/70 bg-white/40 md:block">
-        <SourcesPanel />
-      </div>
+      {sourcesOpen ? (
+        <div className="hidden w-[300px] shrink-0 border-r border-border/70 bg-card/40 md:block">
+          <SourcesPanel onCollapse={() => setSourcesOpen(false)} />
+        </div>
+      ) : (
+        <CollapsedRail
+          side="left"
+          label="Sources"
+          icon={Layers}
+          onClick={() => setSourcesOpen(true)}
+          className="hidden md:flex"
+        />
+      )}
 
       {/* Center: chat */}
       <div className="flex min-w-0 flex-1 flex-col">
+        {/* Panel toolbar */}
+        <div className="hidden h-11 shrink-0 items-center border-b border-border/70 px-2 md:flex">
+          <div className="hidden md:block">
+            <PanelButton
+              active={sourcesOpen}
+              label={sourcesOpen ? 'Hide sources' : 'Show sources'}
+              icon={PanelLeft}
+              onClick={() => setSourcesOpen((v) => !v)}
+            />
+          </div>
+
+          <div className="flex flex-1 justify-center">
+            <button
+              onClick={toggleAll}
+              className="hidden items-center gap-1.5 rounded-lg border border-border/70 px-2.5 py-1.5 text-[12px] font-medium text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground md:inline-flex"
+            >
+              {allOpen ? (
+                <Minimize2 className="h-3.5 w-3.5" />
+              ) : (
+                <Maximize2 className="h-3.5 w-3.5" />
+              )}
+              {allOpen ? 'Collapse panels' : 'Expand panels'}
+            </button>
+          </div>
+
+          <div className="hidden xl:block">
+            <PanelButton
+              active={studioOpen}
+              label={studioOpen ? 'Hide studio' : 'Show studio'}
+              icon={PanelRight}
+              onClick={() => setStudioOpen((v) => !v)}
+            />
+          </div>
+        </div>
+
         <div ref={scrollRef} className="scroll-clean min-h-0 flex-1 overflow-y-auto">
           {empty ? (
             <EmptyState onPick={handleSend} hasContext={contextItems.length > 0} />
@@ -104,10 +173,85 @@ export function ChatView() {
       </div>
 
       {/* Right: studio */}
-      <div className="hidden w-[280px] shrink-0 border-l border-border/70 bg-white/40 xl:block">
-        <StudioPanel />
-      </div>
+      {studioOpen ? (
+        <div className="hidden w-[280px] shrink-0 border-l border-border/70 bg-card/40 xl:block">
+          <StudioPanel onCollapse={() => setStudioOpen(false)} />
+        </div>
+      ) : (
+        <CollapsedRail
+          side="right"
+          label="Studio"
+          icon={Sparkles}
+          onClick={() => setStudioOpen(true)}
+          className="hidden xl:flex"
+        />
+      )}
     </div>
+  );
+}
+
+function PanelButton({
+  active,
+  label,
+  icon: Icon,
+  onClick
+}: {
+  active: boolean;
+  label: string;
+  icon: any;
+  onClick: () => void;
+}) {
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <button
+          onClick={onClick}
+          className={cn(
+            'flex h-8 w-8 items-center justify-center rounded-lg transition-colors',
+            active
+              ? 'text-foreground hover:bg-secondary'
+              : 'text-muted-foreground hover:bg-secondary hover:text-foreground'
+          )}
+        >
+          <Icon className="h-[18px] w-[18px]" />
+        </button>
+      </TooltipTrigger>
+      <TooltipContent side="bottom">{label}</TooltipContent>
+    </Tooltip>
+  );
+}
+
+function CollapsedRail({
+  side,
+  label,
+  icon: Icon,
+  onClick,
+  className
+}: {
+  side: 'left' | 'right';
+  label: string;
+  icon: any;
+  onClick: () => void;
+  className?: string;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      title={`Expand ${label}`}
+      className={cn(
+        'w-11 shrink-0 flex-col items-center gap-3 bg-card/40 py-4 text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground',
+        side === 'left' ? 'border-r border-border/70' : 'border-l border-border/70',
+        className
+      )}
+    >
+      <Icon className="h-[18px] w-[18px]" />
+      <span
+        className="text-[11px] font-medium uppercase tracking-wide"
+        style={{ writingMode: 'vertical-rl' }}
+      >
+        {label}
+      </span>
+    </button>
   );
 }
 
@@ -137,7 +281,7 @@ function EmptyState({
             <button
               key={i}
               onClick={() => onPick(s.text)}
-              className="group flex items-start gap-3 rounded-2xl border border-border/70 bg-white p-4 text-left shadow-soft transition-all duration-150 hover:-translate-y-0.5 hover:shadow-float"
+              className="group flex items-start gap-3 rounded-2xl border border-border/70 bg-card p-4 text-left shadow-soft transition-all duration-150 hover:-translate-y-0.5 hover:shadow-float"
             >
               <Icon className="mt-0.5 h-[18px] w-[18px] shrink-0 text-accent" />
               <span className="text-[13px] font-medium leading-snug text-foreground/90">

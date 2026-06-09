@@ -88,7 +88,7 @@ export function PromptsView() {
           {prompts.map((p) => (
             <div
               key={p.id}
-              className="group flex flex-col rounded-2xl border border-border/70 bg-white p-4 shadow-soft transition-all hover:shadow-float"
+              className="group flex flex-col rounded-2xl border border-border/70 bg-card p-4 shadow-soft transition-all hover:shadow-float"
             >
               <div className="flex items-start justify-between">
                 <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-secondary text-xl">
@@ -161,7 +161,7 @@ export function PromptsView() {
                 <Label>Icon</Label>
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
-                    <button className="flex h-10 w-12 items-center justify-center rounded-xl border border-input bg-white text-xl">
+                    <button className="flex h-10 w-12 items-center justify-center rounded-xl border border-input bg-card text-xl">
                       {icon}
                     </button>
                   </DropdownMenuTrigger>

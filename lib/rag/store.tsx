@@ -10,6 +10,7 @@ import {
 } from 'react';
 import { MediaItem, Prompt, ChatMessage, QueryScope, MediaType } from './types';
 import { MOCK_MEDIA, MOCK_PROMPTS } from './mock-data';
+import { DEFAULT_MODEL_ID } from './models';
 
 interface RagState {
   media: MediaItem[];
@@ -17,6 +18,7 @@ interface RagState {
   selectedIds: Set<string>;
   scope: QueryScope;
   activePromptId: string | null;
+  modelId: string;
   messages: ChatMessage[];
 
   // selection
@@ -24,6 +26,7 @@ interface RagState {
   selectAll: (ids: string[]) => void;
   clearSelection: () => void;
   setScope: (s: QueryScope) => void;
+  setModel: (id: string) => void;
 
   // media
   addMedia: (item: Omit<MediaItem, 'id' | 'status' | 'chunks'>) => void;
@@ -57,6 +60,7 @@ export function RagProvider({ children }: { children: ReactNode }) {
   );
   const [scope, setScope] = useState<QueryScope>('selected');
   const [activePromptId, setActivePromptId] = useState<string | null>('p1');
+  const [modelId, setModelId] = useState<string>(DEFAULT_MODEL_ID);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
 
   const toggleSelect = useCallback((id: string) => {
@@ -152,11 +156,13 @@ export function RagProvider({ children }: { children: ReactNode }) {
     selectedIds,
     scope,
     activePromptId,
+    modelId,
     messages,
     toggleSelect,
     selectAll,
     clearSelection,
     setScope,
+    setModel: setModelId,
     addMedia,
     updateMedia,
     deleteMedia,

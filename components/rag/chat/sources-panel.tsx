@@ -6,9 +6,9 @@ import { useRag } from '@/lib/rag/store';
 import { Checkbox } from '@/components/ui/checkbox';
 import { MediaIcon, StatusBadge } from '@/components/rag/shared';
 import { cn } from '@/lib/utils';
-import { Layers, Plus } from 'lucide-react';
+import { Layers, Plus, PanelLeftClose } from 'lucide-react';
 
-export function SourcesPanel() {
+export function SourcesPanel({ onCollapse }: { onCollapse?: () => void }) {
   const { media, selectedIds, toggleSelect, selectAll, scope, setScope } = useRag();
 
   const indexedIds = useMemo(
@@ -25,12 +25,23 @@ export function SourcesPanel() {
         <h2 className="text-[13px] font-semibold uppercase tracking-wide text-muted-foreground">
           Sources
         </h2>
-        <Link
-          href="/library"
-          className="flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-medium text-accent transition-colors hover:bg-accent/10"
-        >
-          <Plus className="h-3.5 w-3.5" /> Add
-        </Link>
+        <div className="flex items-center gap-1">
+          <Link
+            href="/library"
+            className="flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-medium text-accent transition-colors hover:bg-accent/10"
+          >
+            <Plus className="h-3.5 w-3.5" /> Add
+          </Link>
+          {onCollapse && (
+            <button
+              onClick={onCollapse}
+              title="Collapse sources"
+              className="flex h-7 w-7 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+            >
+              <PanelLeftClose className="h-4 w-4" />
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Scope segmented control */}
@@ -41,7 +52,7 @@ export function SourcesPanel() {
             className={cn(
               'flex-1 rounded-[10px] py-1.5 transition-all',
               scope === 'selected'
-                ? 'bg-white text-foreground shadow-soft'
+                ? 'bg-card text-foreground shadow-soft'
                 : 'text-muted-foreground hover:text-foreground'
             )}
           >
@@ -52,7 +63,7 @@ export function SourcesPanel() {
             className={cn(
               'flex-1 rounded-[10px] py-1.5 transition-all',
               scope === 'everything'
-                ? 'bg-white text-foreground shadow-soft'
+                ? 'bg-card text-foreground shadow-soft'
                 : 'text-muted-foreground hover:text-foreground'
             )}
           >

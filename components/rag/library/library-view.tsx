@@ -123,7 +123,7 @@ export function LibraryView() {
       {/* Selection bar */}
       {selectedIds.size > 0 && (
         <div className="pointer-events-none fixed inset-x-0 bottom-6 z-40 flex justify-center px-4">
-          <div className="pointer-events-auto flex items-center gap-3 rounded-2xl border border-border/70 bg-white px-3 py-2 shadow-float">
+          <div className="pointer-events-auto flex items-center gap-3 rounded-2xl border border-border/70 bg-card px-3 py-2 shadow-float">
             <span className="pl-1 text-[13px] font-medium">
               {selectedIds.size} selected
             </span>

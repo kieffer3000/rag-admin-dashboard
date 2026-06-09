@@ -48,7 +48,7 @@ export function MediaRow({ item }: { item: MediaItem }) {
   return (
     <div
       className={cn(
-        'group flex items-center gap-3.5 rounded-2xl border border-border/70 bg-white px-4 py-3 shadow-soft transition-all',
+        'group flex items-center gap-3.5 rounded-2xl border border-border/70 bg-card px-4 py-3 shadow-soft transition-all',
         checked && 'ring-1 ring-accent/40'
       )}
     >

@@ -135,7 +135,7 @@ export function UploadDialog({
                 className={cn(
                   'flex flex-col items-center gap-1 rounded-lg py-2 text-[11px] font-medium transition-all',
                   method === m.key
-                    ? 'bg-white text-foreground shadow-soft'
+                    ? 'bg-card text-foreground shadow-soft'
                     : 'text-muted-foreground hover:text-foreground'
                 )}
               >

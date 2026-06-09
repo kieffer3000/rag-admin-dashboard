@@ -9,7 +9,8 @@ import {
   Layers3,
   GitCompareArrows,
   FileText,
-  Sparkles
+  Sparkles,
+  PanelRightClose
 } from 'lucide-react';
 
 const TILES = [
@@ -57,7 +58,7 @@ const TILES = [
   }
 ];
 
-export function StudioPanel() {
+export function StudioPanel({ onCollapse }: { onCollapse?: () => void }) {
   const { contextItems } = useRag();
   const ready = contextItems.length > 0;
 
@@ -68,6 +69,15 @@ export function StudioPanel() {
         <h2 className="text-[13px] font-semibold uppercase tracking-wide text-muted-foreground">
           Studio
         </h2>
+        {onCollapse && (
+          <button
+            onClick={onCollapse}
+            title="Collapse studio"
+            className="ml-auto flex h-7 w-7 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+          >
+            <PanelRightClose className="h-4 w-4" />
+          </button>
+        )}
       </div>
       <p className="px-4 pt-1 text-[12px] leading-relaxed text-muted-foreground">
         Generate from your {ready ? `${contextItems.length} source(s)` : 'sources'}.
@@ -81,7 +91,7 @@ export function StudioPanel() {
               key={t.key}
               disabled={!ready}
               className={cn(
-                'group flex w-full items-center gap-3 rounded-2xl border border-border/70 bg-white p-3 text-left shadow-soft transition-all duration-150',
+                'group flex w-full items-center gap-3 rounded-2xl border border-border/70 bg-card p-3 text-left shadow-soft transition-all duration-150',
                 ready ? 'hover:-translate-y-0.5 hover:shadow-float' : 'opacity-50'
               )}
             >

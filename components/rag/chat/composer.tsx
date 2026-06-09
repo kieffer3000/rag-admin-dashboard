@@ -3,11 +3,14 @@
 import { useRef, useState } from 'react';
 import { useRag } from '@/lib/rag/store';
 import { cn } from '@/lib/utils';
-import { ArrowUp, Paperclip, Sparkles, X, ChevronDown } from 'lucide-react';
+import { LLM_MODELS, PROVIDER_META, LlmProvider } from '@/lib/rag/models';
+import { ArrowUp, Paperclip, Sparkles, X, ChevronDown, Check } from 'lucide-react';
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu';
 
@@ -17,7 +20,9 @@ interface ComposerProps {
 }
 
 export function Composer({ onSend, busy }: ComposerProps) {
-  const { prompts, activePromptId, setActivePrompt, contextItems } = useRag();
+  const { prompts, activePromptId, setActivePrompt, contextItems, modelId, setModel } =
+    useRag();
+  const activeModel = LLM_MODELS.find((m) => m.id === modelId) ?? LLM_MODELS[0];
   const [text, setText] = useState('');
   const [attachment, setAttachment] = useState<string | undefined>();
   const fileRef = useRef<HTMLInputElement>(null);
@@ -44,7 +49,7 @@ export function Composer({ onSend, busy }: ComposerProps) {
   return (
     <div className="px-4 pb-4 pt-2 sm:px-8">
       <div className="mx-auto max-w-3xl">
-        <div className="rounded-[22px] border border-border/80 bg-white shadow-float transition-shadow focus-within:border-accent/50">
+        <div className="rounded-[22px] border border-border/80 bg-card shadow-float transition-shadow focus-within:border-accent/50">
           {/* attachment chip */}
           {attachment && (
             <div className="flex items-center justify-between px-4 pt-3">
@@ -129,6 +134,51 @@ export function Composer({ onSend, busy }: ComposerProps) {
                     <span>{p.icon ?? '✨'}</span>
                     <span className="truncate">{p.title}</span>
                   </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+
+            {/* model picker */}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button className="flex h-9 items-center gap-1.5 rounded-xl border border-border/70 px-2.5 text-[13px] font-medium text-foreground transition-colors hover:bg-secondary">
+                  <span
+                    className={cn(
+                      'h-2 w-2 rounded-full',
+                      PROVIDER_META[activeModel.provider].dot
+                    )}
+                  />
+                  <span className="max-w-[120px] truncate">{activeModel.label}</span>
+                  <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start" className="w-72">
+                {(['claude', 'gemini'] as LlmProvider[]).map((prov) => (
+                  <div key={prov}>
+                    <DropdownMenuLabel className="flex items-center gap-1.5 text-[11px] uppercase tracking-wide text-muted-foreground">
+                      <span className={cn('h-2 w-2 rounded-full', PROVIDER_META[prov].dot)} />
+                      {PROVIDER_META[prov].label}
+                    </DropdownMenuLabel>
+                    {LLM_MODELS.filter((m) => m.provider === prov).map((m) => (
+                      <DropdownMenuItem
+                        key={m.id}
+                        onClick={() => setModel(m.id)}
+                        className="flex items-start gap-2"
+                      >
+                        <Check
+                          className={cn(
+                            'mt-0.5 h-3.5 w-3.5 shrink-0',
+                            modelId === m.id ? 'opacity-100 text-accent' : 'opacity-0'
+                          )}
+                        />
+                        <div className="min-w-0">
+                          <div className="text-[13px] font-medium">{m.label}</div>
+                          <div className="text-[11px] text-muted-foreground">{m.blurb}</div>
+                        </div>
+                      </DropdownMenuItem>
+                    ))}
+                    {prov === 'claude' && <DropdownMenuSeparator />}
+                  </div>
                 ))}
               </DropdownMenuContent>
             </DropdownMenu>

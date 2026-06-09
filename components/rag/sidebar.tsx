@@ -15,7 +15,7 @@ export function Sidebar() {
   const pathname = usePathname();
 
   return (
-    <aside className="hidden w-[228px] shrink-0 flex-col border-r border-border/70 bg-white/40 px-3 py-4 lg:flex">
+    <aside className="hidden w-[228px] shrink-0 flex-col border-r border-border/70 bg-card/40 px-3 py-4 lg:flex">
       <Link href="/" className="mb-6 flex items-center gap-2.5 px-2">
         <div className="flex h-8 w-8 items-center justify-center rounded-[10px] bg-gradient-to-br from-blue-500 to-indigo-600 text-white shadow-sm">
           <Boxes className="h-[18px] w-[18px]" strokeWidth={2.25} />
@@ -40,8 +40,8 @@ export function Sidebar() {
               className={cn(
                 'group flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium transition-all duration-150',
                 active
-                  ? 'bg-white text-foreground shadow-soft'
-                  : 'text-muted-foreground hover:bg-white/70 hover:text-foreground'
+                  ? 'bg-card text-foreground shadow-soft'
+                  : 'text-muted-foreground hover:bg-card/70 hover:text-foreground'
               )}
             >
               <Icon
@@ -57,7 +57,7 @@ export function Sidebar() {
         })}
       </nav>
 
-      <div className="mt-auto rounded-2xl border border-border/70 bg-white/60 p-3.5">
+      <div className="mt-auto rounded-2xl border border-border/70 bg-card/60 p-3.5">
         <div className="flex items-center gap-2 text-[13px] font-medium">
           <span className="flex h-2 w-2 rounded-full bg-emerald-500" />
           Vector store

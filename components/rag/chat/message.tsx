@@ -102,7 +102,7 @@ export function Message({ msg }: { msg: ChatMessage }) {
                   return (
                     <div
                       key={i}
-                      className="flex items-center gap-2 rounded-xl border border-border/70 bg-white px-2.5 py-1.5 shadow-soft"
+                      className="flex items-center gap-2 rounded-xl border border-border/70 bg-card px-2.5 py-1.5 shadow-soft"
                     >
                       <span
                         className={cn(
