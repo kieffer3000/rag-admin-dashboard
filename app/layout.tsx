@@ -1,11 +1,19 @@
 import './globals.css';
 
+import type { Metadata } from 'next';
+import { Inter } from 'next/font/google';
 import { Analytics } from '@vercel/analytics/react';
 
-export const metadata = {
-  title: 'Next.js App Router + NextAuth + Tailwind CSS',
+const inter = Inter({
+  subsets: ['latin'],
+  display: 'swap',
+  variable: '--font-inter'
+});
+
+export const metadata: Metadata = {
+  title: 'Atlas — Knowledge Base',
   description:
-    'A user admin dashboard configured with Next.js, Postgres, NextAuth, Tailwind CSS, TypeScript, and Prettier.'
+    'A beautiful RAG knowledge base. Chat with your documents, videos, audio and notes — grounded answers with citations.'
 };
 
 export default function RootLayout({
@@ -14,8 +22,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en">
-      <body className="flex min-h-screen w-full flex-col">{children}</body>
+    <html lang="en" className={inter.variable}>
+      <body className="min-h-screen font-sans">{children}</body>
       <Analytics />
     </html>
   );
