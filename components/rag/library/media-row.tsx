@@ -49,7 +49,7 @@ export function MediaRow({ item }: { item: MediaItem }) {
     <div
       className={cn(
         'card-glass group flex items-center gap-3.5 rounded-[18px] px-4 py-3 transition-all hover:border-[rgb(var(--hairline)/0.16)]',
-        checked && 'ring-1 ring-accent/40'
+        checked && 'ring-1 ring-accent/25'
       )}
     >
       <Checkbox

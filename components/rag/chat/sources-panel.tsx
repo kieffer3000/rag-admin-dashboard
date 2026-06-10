@@ -98,14 +98,19 @@ export function SourcesPanel({ onCollapse }: { onCollapse?: () => void }) {
               disabled={disabled}
               className={cn(
                 'flex w-full items-center gap-3 rounded-xl px-2 py-2 text-left transition-colors',
-                checked ? 'bg-accent/5' : 'hover:bg-[rgb(var(--hairline)/0.05)]',
+                checked ? 'bg-accent/[0.06]' : 'hover:bg-[rgb(var(--hairline)/0.05)]',
                 disabled && scope !== 'everything' && 'opacity-55'
               )}
             >
               <Checkbox checked={checked} className={cn(disabled && 'opacity-60')} />
               <MediaIcon type={m.type} size="sm" />
               <div className="min-w-0 flex-1">
-                <div className="truncate text-[13px] font-medium leading-tight">
+                <div
+                  className={cn(
+                    'truncate text-[13px] leading-tight',
+                    checked ? 'font-semibold' : 'font-medium'
+                  )}
+                >
                   {m.name}
                 </div>
                 <div className="mt-0.5 flex items-center gap-1.5">

@@ -55,13 +55,13 @@ export function StudioPanel({ onCollapse }: { onCollapse?: () => void }) {
               key={t.key}
               disabled={!ready}
               className={cn(
-                'card-glass group flex w-full items-center gap-3 rounded-[18px] p-3 text-left',
+                'card-glass group flex w-full items-center gap-3.5 rounded-[18px] p-4 text-left',
                 ready ? 'hover-glow' : 'opacity-45'
               )}
             >
-              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[13px] bg-card shadow-soft dark:bg-[rgb(255_255_255_/_0.05)] dark:shadow-none">
+              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[11px] bg-card shadow-soft dark:bg-[rgb(255_255_255_/_0.05)] dark:shadow-none">
                 <Icon
-                  className={cn('h-[18px] w-[18px] transition-all', t.color)}
+                  className={cn('h-[17px] w-[17px] transition-all', t.color)}
                   style={{ filter: `drop-shadow(0 0 6px rgb(${t.glow} / 0.55))` }}
                 />
               </span>
