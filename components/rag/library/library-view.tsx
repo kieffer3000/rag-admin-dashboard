@@ -73,8 +73,8 @@ export function LibraryView() {
           </div>
         </div>
 
-        {/* Type tabs */}
-        <div className="scroll-clean -mb-px mt-4 flex gap-1 overflow-x-auto">
+        {/* Type filter — segmented pills, no underline */}
+        <div className="scroll-clean mt-4 flex gap-1.5 overflow-x-auto pb-4">
           {tabs.map((t) => {
             const active = filter === t.key;
             const meta = t.key !== 'all' ? MEDIA_TYPES[t.key as MediaType] : null;
@@ -84,18 +84,18 @@ export function LibraryView() {
                 key={t.key}
                 onClick={() => setFilter(t.key)}
                 className={cn(
-                  'flex items-center gap-1.5 whitespace-nowrap border-b-2 px-3 py-2.5 text-[13px] font-medium transition-colors',
+                  'flex items-center gap-1.5 whitespace-nowrap rounded-full px-3.5 py-1.5 text-[13px] font-medium transition-all',
                   active
-                    ? 'border-accent text-foreground'
-                    : 'border-transparent text-muted-foreground hover:text-foreground'
+                    ? 'bg-accent/[0.08] text-accent shadow-[0_1px_2px_rgba(0,0,0,0.03)] dark:bg-accent/[0.14] dark:shadow-none'
+                    : 'text-muted-foreground hover:text-foreground'
                 )}
               >
-                {Icon && <Icon className={cn('h-4 w-4', active && meta?.text)} />}
+                {Icon && <Icon className="h-4 w-4" />}
                 {t.label}
                 <span
                   className={cn(
                     'rounded-full px-1.5 text-[11px] tabular-nums',
-                    active ? 'bg-accent/10 text-accent' : 'bg-secondary text-muted-foreground'
+                    active ? 'text-accent/70' : 'text-muted-foreground/60'
                   )}
                 >
                   {t.count}

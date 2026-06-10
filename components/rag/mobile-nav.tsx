@@ -40,7 +40,7 @@ export function MobileNav() {
                 href={item.href}
                 className={cn(
                   'flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium',
-                  active ? 'bg-secondary text-foreground' : 'text-muted-foreground'
+                  active ? 'bg-accent/[0.08] font-semibold text-accent' : 'text-muted-foreground'
                 )}
               >
                 <Icon className="h-[18px] w-[18px]" />

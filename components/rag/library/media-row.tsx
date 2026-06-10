@@ -50,8 +50,10 @@ export function MediaRow({ item }: { item: MediaItem }) {
   return (
     <div
       className={cn(
-        'card-glass group flex items-center gap-3.5 rounded-[18px] px-4 py-3 transition-all hover:border-[rgb(var(--hairline)/0.16)]',
-        checked && 'ring-1 ring-accent/25'
+        'group flex items-center gap-3.5 rounded-[18px] bg-card px-4 py-3.5 transition-all',
+        'shadow-[0_1px_2px_rgba(0,0,0,0.03),0_4px_14px_rgba(0,0,0,0.04)] hover:shadow-[0_2px_4px_rgba(0,0,0,0.04),0_8px_24px_rgba(0,0,0,0.07)]',
+        'dark:bg-[rgb(255_255_255_/_0.03)] dark:shadow-none dark:ring-1 dark:ring-white/[0.06]',
+        checked && 'ring-1 ring-accent/25 dark:ring-accent/40'
       )}
     >
       <Checkbox
@@ -107,10 +109,10 @@ export function MediaRow({ item }: { item: MediaItem }) {
             <div className="flex items-center gap-2">
               <span className="truncate text-sm font-medium">{item.name}</span>
             </div>
-            <div className="mt-0.5 truncate text-[12px] text-muted-foreground">
+            <div className="mt-0.5 truncate text-[13px] text-muted-foreground">
               {item.description || 'No description'}
             </div>
-            <div className="mt-1 flex items-center gap-2.5 text-[11px] text-muted-foreground">
+            <div className="mt-1 flex items-center gap-2.5 text-[11px] text-muted-foreground/60">
               <span>{item.date}</span>
               <span className="text-border">·</span>
               <span>

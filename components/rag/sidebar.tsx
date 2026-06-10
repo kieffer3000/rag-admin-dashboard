@@ -222,7 +222,7 @@ export function Sidebar() {
               className={cn(
                 'group flex items-center gap-3 rounded-[14px] px-3 py-2.5 text-sm font-medium transition-all duration-150',
                 active
-                  ? 'bg-card text-foreground shadow-[0_1px_3px_rgba(0,0,0,0.08)] dark:bg-[rgb(255_255_255_/_0.08)] dark:shadow-none dark:ring-1 dark:ring-inset dark:ring-white/10'
+                  ? 'bg-accent/[0.08] font-semibold text-accent dark:bg-accent/[0.14]'
                   : 'text-muted-foreground hover:bg-[rgb(var(--hairline)/0.05)] hover:text-foreground'
               )}
             >

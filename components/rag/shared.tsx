@@ -37,7 +37,7 @@ export function MediaIcon({
 export function StatusBadge({ status }: { status: MediaStatus }) {
   if (status === 'processing') {
     return (
-      <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-medium text-amber-700">
+      <span className="inline-flex items-center gap-1 rounded-full bg-[#FF9F0A]/10 px-2.5 py-0.5 text-[11px] font-medium text-[#9A6B00] dark:text-[#FFD60A]">
         <Loader2 className="h-3 w-3 animate-spin" />
         Processing
       </span>
@@ -45,14 +45,14 @@ export function StatusBadge({ status }: { status: MediaStatus }) {
   }
   if (status === 'failed') {
     return (
-      <span className="inline-flex items-center gap-1 rounded-full bg-red-50 px-2 py-0.5 text-[11px] font-medium text-red-700">
+      <span className="inline-flex items-center gap-1 rounded-full bg-[#FF3B30]/10 px-2.5 py-0.5 text-[11px] font-medium text-[#C0271D] dark:text-[#FF6961]">
         <CircleAlert className="h-3 w-3" />
         Failed
       </span>
     );
   }
   return (
-    <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-medium text-emerald-700">
+    <span className="inline-flex items-center gap-1 rounded-full bg-[#34C759]/10 px-2.5 py-0.5 text-[11px] font-medium text-[#248A3D] dark:text-[#30D158]">
       <CircleCheck className="h-3 w-3" />
       Indexed
     </span>
