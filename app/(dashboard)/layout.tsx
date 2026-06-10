@@ -15,7 +15,7 @@ export default function DashboardLayout({
       <div className="flex h-screen w-full overflow-hidden bg-background">
         <Sidebar />
         <div className="flex min-w-0 flex-1 flex-col">
-          <header className="glass sticky top-0 z-30 flex h-14 shrink-0 items-center gap-3 border-b border-[rgb(var(--hairline)/0.08)] px-4">
+          <header className="sticky top-0 z-30 flex h-14 shrink-0 items-center gap-3 bg-transparent px-4">
             <MobileNav />
             <div className="flex-1" />
             <ThemeToggle />

@@ -21,7 +21,7 @@
     --secondary-foreground: 240 6% 9%;
 
     --muted: 240 10% 95.5%;
-    --muted-foreground: 240 4% 44%;
+    --muted-foreground: 240 3% 57%; /* Apple system gray ~#8E8E93 */
 
     --accent: 235 86% 62%;
     --accent-foreground: 0 0% 100%;
@@ -39,7 +39,7 @@
     --glass-bg: 255 255 255;
     --glass-alpha: 0.66;
     --hairline: 0 0 0;
-    --hairline-alpha: 0.07;
+    --hairline-alpha: 0.05;
     --highlight-alpha: 0.6;
 
     --m-youtube: 0 84% 62%;
@@ -154,27 +154,35 @@
       inset 0 1px 0 rgb(255 255 255 / 0.05);
   }
 
-  /* Inner card on glass — hairline + top highlight */
+  /* Inner card — NO drawn border. Light: quiet off-white fill (#F5F5F7).
+     Dark: faint glass fill + hairline (reads correctly on midnight). */
   .card-glass {
-    background-color: rgb(var(--glass-bg) / 0.5);
-    border: 1px solid rgb(var(--hairline) / var(--hairline-alpha));
-    box-shadow: inset 0 1px 0 rgb(var(--hairline) / var(--highlight-alpha));
+    background-color: hsl(240 16% 96.5%);
+    border: 1px solid transparent;
     transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1),
-      box-shadow 0.25s ease, border-color 0.25s ease;
+      box-shadow 0.25s ease, border-color 0.25s ease, background-color 0.2s ease;
   }
   .dark .card-glass {
-    background-color: rgb(255 255 255 / 0.025);
+    background-color: rgb(255 255 255 / 0.03);
+    border-color: rgb(255 255 255 / 0.06);
+    box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.05);
   }
 
-  /* Hover: gentle lift, brighter hairline, soft colored glow */
+  /* Hover — Light: lift with a soft shadow + a touch darker fill (no lines).
+     Dark: gentle scale, brighter hairline, soft accent glow. */
   .hover-glow:hover {
+    transform: translateY(-1px);
+    background-color: hsl(240 14% 94%);
+    box-shadow: 0 8px 28px rgba(0, 0, 0, 0.1);
+  }
+  .dark .hover-glow:hover {
     transform: scale(1.02);
-    border-color: rgb(var(--hairline) / 0.16);
+    background-color: rgb(255 255 255 / 0.05);
+    border-color: rgb(255 255 255 / 0.16);
     box-shadow:
-      inset 0 1px 0 rgb(var(--hairline) / 0.12),
-      0 10px 36px rgba(0, 0, 0, 0.22),
-      0 0 0 1px hsl(var(--accent) / 0.10),
-      0 8px 40px hsl(var(--accent) / 0.14);
+      inset 0 1px 0 rgb(255 255 255 / 0.12),
+      0 10px 36px rgba(0, 0, 0, 0.4),
+      0 8px 40px hsl(var(--accent) / 0.16);
   }
 
   .hairline {

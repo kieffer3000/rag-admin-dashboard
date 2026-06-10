@@ -118,7 +118,7 @@ export function ChatView() {
       {/* Center: chat */}
       <div className="panel relative flex min-w-0 flex-1 flex-col overflow-hidden rounded-[26px]">
         {/* Panel toolbar */}
-        <div className="hidden h-12 shrink-0 items-center px-3 md:flex">
+        <div className="hidden h-16 shrink-0 items-center px-4 pt-2 md:flex">
           <div>
             <PanelButton
               active={sourcesOpen}

@@ -20,7 +20,7 @@ interface ComposerProps {
 }
 
 const PILL_BTN =
-  'flex h-9 items-center gap-1.5 rounded-full border border-[rgb(var(--hairline)/0.08)] bg-[rgb(var(--glass-bg)/0.5)] px-3 text-[13px] font-medium text-foreground transition-all hover:border-[rgb(var(--hairline)/0.18)] hover:bg-[rgb(var(--glass-bg)/0.8)]';
+  'flex h-9 items-center gap-1.5 rounded-full bg-card px-3 text-[13px] font-medium text-foreground shadow-soft transition-all hover:brightness-95 dark:bg-[rgb(255_255_255_/_0.06)] dark:shadow-none dark:hover:bg-[rgb(255_255_255_/_0.1)]';
 
 export function Composer({ onSend, busy }: ComposerProps) {
   const { prompts, activePromptId, setActivePrompt, contextItems, modelId, setModel } =
@@ -54,10 +54,10 @@ export function Composer({ onSend, busy }: ComposerProps) {
       <div className="mx-auto max-w-3xl">
         <div
           className={cn(
-            'glass rounded-[28px] border border-[rgb(var(--hairline)/0.1)] transition-all duration-200',
-            'shadow-[inset_0_2px_8px_rgba(0,0,0,0.14),0_10px_36px_rgba(0,0,0,0.16)]',
-            'dark:shadow-[inset_0_2px_10px_rgba(0,0,0,0.6),0_16px_48px_rgba(0,0,0,0.5)]',
-            'focus-within:border-[rgb(var(--hairline)/0.22)]'
+            'rounded-[26px] border border-transparent transition-all duration-200',
+            'bg-[hsl(240_16%_96.5%)] shadow-[inset_0_1px_2px_rgba(0,0,0,0.05)]',
+            'dark:bg-[rgb(255_255_255_/_0.03)] dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]',
+            'focus-within:bg-[hsl(240_14%_94%)] dark:focus-within:bg-[rgb(255_255_255_/_0.05)]'
           )}
         >
           {attachment && (
@@ -110,7 +110,7 @@ export function Composer({ onSend, busy }: ComposerProps) {
             />
             <button
               onClick={() => fileRef.current?.click()}
-              className="flex h-9 w-9 items-center justify-center rounded-full border border-[rgb(var(--hairline)/0.08)] bg-[rgb(var(--glass-bg)/0.5)] text-muted-foreground transition-all hover:border-[rgb(var(--hairline)/0.18)] hover:text-foreground"
+              className="flex h-9 w-9 items-center justify-center rounded-full bg-card text-muted-foreground shadow-soft transition-all hover:text-foreground hover:brightness-95 dark:bg-[rgb(255_255_255_/_0.06)] dark:shadow-none dark:hover:bg-[rgb(255_255_255_/_0.1)]"
               title="Attach a file to answer against your sources"
             >
               <Paperclip className="h-[17px] w-[17px]" />
@@ -197,7 +197,7 @@ export function Composer({ onSend, busy }: ComposerProps) {
                 'flex h-9 w-9 items-center justify-center rounded-full transition-all duration-200',
                 canSend
                   ? 'bg-accent text-white shadow-[0_0_22px_hsl(var(--accent)/0.55)] hover:brightness-110'
-                  : 'border border-[rgb(var(--hairline)/0.08)] bg-[rgb(var(--glass-bg)/0.5)] text-muted-foreground'
+                  : 'bg-card text-muted-foreground shadow-soft dark:bg-[rgb(255_255_255_/_0.06)] dark:shadow-none'
               )}
             >
               <ArrowUp className="h-[18px] w-[18px]" />

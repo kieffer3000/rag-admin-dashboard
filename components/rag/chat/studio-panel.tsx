@@ -59,7 +59,7 @@ export function StudioPanel({ onCollapse }: { onCollapse?: () => void }) {
                 ready ? 'hover-glow' : 'opacity-45'
               )}
             >
-              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[13px] border border-[rgb(var(--hairline)/0.08)] bg-[rgb(var(--glass-bg)/0.6)]">
+              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[13px] bg-card shadow-soft dark:bg-[rgb(255_255_255_/_0.05)] dark:shadow-none">
                 <Icon
                   className={cn('h-[18px] w-[18px] transition-all', t.color)}
                   style={{ filter: `drop-shadow(0 0 6px rgb(${t.glow} / 0.55))` }}

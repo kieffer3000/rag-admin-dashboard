@@ -15,7 +15,7 @@ export function Sidebar() {
   const pathname = usePathname();
 
   return (
-    <aside className="glass hidden w-[228px] shrink-0 flex-col border-r border-[rgb(var(--hairline)/0.08)] px-3 py-4 lg:flex">
+    <aside className="hidden w-[228px] shrink-0 flex-col bg-transparent px-3 py-4 lg:flex">
       <Link href="/" className="mb-7 flex items-center gap-2.5 px-2">
         <div className="relative flex h-9 w-9 items-center justify-center rounded-[12px] bg-gradient-to-br from-indigo-500 to-violet-600 text-white shadow-[0_4px_16px_hsl(var(--accent)/0.4)]">
           <Boxes className="h-[19px] w-[19px]" />
