@@ -23,15 +23,6 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <ClerkProvider
-      appearance={{
-        variables: {
-          colorPrimary: '#5E5CE6',
-          borderRadius: '0.875rem',
-          fontFamily: 'var(--font-inter), system-ui, sans-serif'
-        }
-      }}
-    >
     <html lang="en" className={inter.variable} suppressHydrationWarning>
       <head>
         <script
@@ -40,9 +31,21 @@ export default function RootLayout({
           }}
         />
       </head>
-      <body className="min-h-screen font-sans">{children}</body>
+      <body className="min-h-screen font-sans">
+        {/* Clerk rule: provider inside <body>, not wrapping <html> */}
+        <ClerkProvider
+          appearance={{
+            variables: {
+              colorPrimary: '#5E5CE6',
+              borderRadius: '0.875rem',
+              fontFamily: 'var(--font-inter), system-ui, sans-serif'
+            }
+          }}
+        >
+          {children}
+        </ClerkProvider>
+      </body>
       <Analytics />
     </html>
-    </ClerkProvider>
   );
 }
