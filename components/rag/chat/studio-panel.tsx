@@ -13,13 +13,15 @@ import {
   PanelRightClose
 } from 'lucide-react';
 
+// Resting state is monochrome grey-glass; each tool's jewel tone is
+// revealed only on hover (Apple Pro pattern). Muted tones, not primaries.
 const TILES = [
-  { key: 'audio', label: 'Audio Overview', desc: 'Two AI hosts discuss your sources', icon: AudioLines, color: 'text-orange-400', glow: '249 115 22' },
-  { key: 'mindmap', label: 'Mind Map', desc: 'Explore an interactive topic tree', icon: Network, color: 'text-violet-400', glow: '167 139 250' },
-  { key: 'quiz', label: 'Quiz', desc: 'Test yourself, with explanations', icon: ListChecks, color: 'text-emerald-400', glow: '52 211 153' },
-  { key: 'flashcards', label: 'Flashcards', desc: 'Spaced-repetition Q&A cards', icon: Layers3, color: 'text-sky-400', glow: '56 189 248' },
-  { key: 'compare', label: 'Compare', desc: 'Diff two or more sources', icon: GitCompareArrows, color: 'text-amber-400', glow: '251 191 36' },
-  { key: 'brief', label: 'Briefing Doc', desc: 'A clean executive summary', icon: FileText, color: 'text-zinc-300', glow: '161 161 170' }
+  { key: 'audio', label: 'Audio Overview', desc: 'Two AI hosts discuss your sources', icon: AudioLines, hover: 'group-hover:text-[#E58B22]', glow: '229 139 34' },
+  { key: 'mindmap', label: 'Mind Map', desc: 'Explore an interactive topic tree', icon: Network, hover: 'group-hover:text-[#5E5CE6]', glow: '94 92 230' },
+  { key: 'quiz', label: 'Quiz', desc: 'Test yourself, with explanations', icon: ListChecks, hover: 'group-hover:text-[#34C759]', glow: '52 199 89' },
+  { key: 'flashcards', label: 'Flashcards', desc: 'Spaced-repetition Q&A cards', icon: Layers3, hover: 'group-hover:text-[#32ADE6]', glow: '50 173 230' },
+  { key: 'compare', label: 'Compare', desc: 'Diff two or more sources', icon: GitCompareArrows, hover: 'group-hover:text-[#FF9F0A]', glow: '255 159 10' },
+  { key: 'brief', label: 'Briefing Doc', desc: 'A clean executive summary', icon: FileText, hover: 'group-hover:text-[#8E8E93]', glow: '142 142 147' }
 ];
 
 export function StudioPanel({ onCollapse }: { onCollapse?: () => void }) {
@@ -59,10 +61,17 @@ export function StudioPanel({ onCollapse }: { onCollapse?: () => void }) {
                 ready ? 'hover-glow' : 'opacity-45'
               )}
             >
-              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[11px] bg-card shadow-soft dark:bg-[rgb(255_255_255_/_0.05)] dark:shadow-none">
+              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[11px] bg-[hsl(240_16%_96.5%)] dark:bg-[rgb(255_255_255_/_0.05)]">
                 <Icon
-                  className={cn('h-[17px] w-[17px] transition-all', t.color)}
-                  style={{ filter: `drop-shadow(0 0 6px rgb(${t.glow} / 0.55))` }}
+                  className={cn(
+                    'tile-icon h-[17px] w-[17px] text-muted-foreground transition-all duration-300',
+                    t.hover
+                  )}
+                  style={
+                    {
+                      '--tile-glow': `rgb(${t.glow} / 0.5)`
+                    } as React.CSSProperties
+                  }
                 />
               </span>
               <div className="min-w-0">

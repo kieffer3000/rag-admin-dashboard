@@ -5,7 +5,7 @@
 @layer base {
   :root {
     /* Light — airy, premium */
-    --background: 240 30% 99%;
+    --background: 225 22% 96.5%; /* #F4F5F8 — cool 2% indigo whisper, makes white panels pop */
     --foreground: 240 4% 12%; /* rich off-black ~#1D1D1F, not pure black */
 
     --card: 0 0% 100%;
@@ -23,7 +23,7 @@
     --muted: 240 10% 95.5%;
     --muted-foreground: 240 3% 57%; /* Apple system gray ~#8E8E93 */
 
-    --accent: 235 72% 59%; /* serene indigo, slightly desaturated */
+    --accent: 241 73% 63%; /* #5E5CE6 — Apple system indigo, THE brand thread */
     --accent-foreground: 0 0% 100%;
 
     --destructive: 4 90% 58%;
@@ -31,7 +31,7 @@
 
     --border: 240 8% 90%;
     --input: 240 8% 88%;
-    --ring: 235 72% 59%;
+    --ring: 241 73% 63%;
 
     --radius: 1rem;
 
@@ -70,7 +70,7 @@
     --muted: 240 8% 13%;
     --muted-foreground: 0 0% 62%;
 
-    --accent: 235 90% 66%;
+    --accent: 241 80% 68%; /* system indigo, lifted for dark */
     --accent-foreground: 0 0% 100%;
 
     --destructive: 4 90% 60%;
@@ -78,7 +78,7 @@
 
     --border: 240 10% 18%;
     --input: 240 10% 20%;
-    --ring: 235 90% 66%;
+    --ring: 241 80% 68%;
 
     /* Glass material (dark) — frosted near-black */
     --glass-bg: 20 20 24;
@@ -236,6 +236,11 @@
 input[type='search']::-webkit-search-cancel-button {
   -webkit-appearance: none;
   appearance: none;
+}
+
+/* Studio tiles: jewel-tone glow revealed only on hover */
+.group:hover .tile-icon {
+  filter: drop-shadow(0 0 8px var(--tile-glow, transparent));
 }
 
 @keyframes fade-up {
