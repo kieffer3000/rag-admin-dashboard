@@ -19,6 +19,9 @@ interface ComposerProps {
   busy: boolean;
 }
 
+const PILL_BTN =
+  'flex h-9 items-center gap-1.5 rounded-full border border-[rgb(var(--hairline)/0.08)] bg-[rgb(var(--glass-bg)/0.5)] px-3 text-[13px] font-medium text-foreground transition-all hover:border-[rgb(var(--hairline)/0.18)] hover:bg-[rgb(var(--glass-bg)/0.8)]';
+
 export function Composer({ onSend, busy }: ComposerProps) {
   const { prompts, activePromptId, setActivePrompt, contextItems, modelId, setModel } =
     useRag();
@@ -47,21 +50,27 @@ export function Composer({ onSend, busy }: ComposerProps) {
   }
 
   return (
-    <div className="px-4 pb-4 pt-2 sm:px-8">
+    <div className="px-4 pb-5 pt-2 sm:px-8">
       <div className="mx-auto max-w-3xl">
-        <div className="rounded-[22px] border border-border/80 bg-card shadow-float transition-shadow focus-within:border-accent/50">
-          {/* attachment chip */}
+        <div
+          className={cn(
+            'glass rounded-[28px] border border-[rgb(var(--hairline)/0.1)] transition-all duration-200',
+            'shadow-[inset_0_2px_8px_rgba(0,0,0,0.14),0_10px_36px_rgba(0,0,0,0.16)]',
+            'dark:shadow-[inset_0_2px_10px_rgba(0,0,0,0.6),0_16px_48px_rgba(0,0,0,0.5)]',
+            'focus-within:border-[rgb(var(--hairline)/0.22)]'
+          )}
+        >
           {attachment && (
-            <div className="flex items-center justify-between px-4 pt-3">
-              <span className="inline-flex items-center gap-1.5 rounded-lg bg-blue-50 px-2.5 py-1 text-xs font-medium text-blue-700">
+            <div className="flex items-center justify-between px-5 pt-3.5">
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-accent/20 bg-accent/10 px-3 py-1 text-xs font-medium text-accent">
                 <Paperclip className="h-3 w-3" />
                 {attachment}
-                <button onClick={() => setAttachment(undefined)} className="ml-1 hover:text-blue-900">
+                <button onClick={() => setAttachment(undefined)} className="ml-1 opacity-70 hover:opacity-100">
                   <X className="h-3 w-3" />
                 </button>
               </span>
               <span className="text-[11px] text-muted-foreground">
-                will be answered against your sources
+                answered against your sources
               </span>
             </div>
           )}
@@ -85,10 +94,10 @@ export function Composer({ onSend, busy }: ComposerProps) {
                 ? 'Ask anything about your sources…'
                 : 'Select sources, then ask anything…'
             }
-            className="scroll-clean max-h-[200px] w-full resize-none bg-transparent px-4 pt-3.5 text-[15px] leading-relaxed outline-none placeholder:text-muted-foreground"
+            className="scroll-clean max-h-[200px] w-full resize-none bg-transparent px-5 pt-4 text-[15px] leading-relaxed outline-none placeholder:text-muted-foreground/70"
           />
 
-          <div className="flex items-center gap-2 px-3 pb-3 pt-1">
+          <div className="flex items-center gap-2 px-3 pb-3 pt-1.5">
             <input
               ref={fileRef}
               type="file"
@@ -101,18 +110,18 @@ export function Composer({ onSend, busy }: ComposerProps) {
             />
             <button
               onClick={() => fileRef.current?.click()}
-              className="flex h-9 w-9 items-center justify-center rounded-xl text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+              className="flex h-9 w-9 items-center justify-center rounded-full border border-[rgb(var(--hairline)/0.08)] bg-[rgb(var(--glass-bg)/0.5)] text-muted-foreground transition-all hover:border-[rgb(var(--hairline)/0.18)] hover:text-foreground"
               title="Attach a file to answer against your sources"
             >
-              <Paperclip className="h-[18px] w-[18px]" />
+              <Paperclip className="h-[17px] w-[17px]" />
             </button>
 
             {/* prompt picker */}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <button className="flex h-9 items-center gap-1.5 rounded-xl border border-border/70 px-2.5 text-[13px] font-medium text-foreground transition-colors hover:bg-secondary">
+                <button className={PILL_BTN}>
                   <Sparkles className="h-3.5 w-3.5 text-accent" />
-                  <span className="max-w-[140px] truncate">
+                  <span className="max-w-[130px] truncate">
                     {activePrompt ? activePrompt.title : 'No prompt'}
                   </span>
                   <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
@@ -141,14 +150,10 @@ export function Composer({ onSend, busy }: ComposerProps) {
             {/* model picker */}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <button className="flex h-9 items-center gap-1.5 rounded-xl border border-border/70 px-2.5 text-[13px] font-medium text-foreground transition-colors hover:bg-secondary">
-                  <span
-                    className={cn(
-                      'h-2 w-2 rounded-full',
-                      PROVIDER_META[activeModel.provider].dot
-                    )}
-                  />
-                  <span className="max-w-[120px] truncate">{activeModel.label}</span>
+                <button className={PILL_BTN}>
+                  <span className={cn('h-2 w-2 rounded-full', PROVIDER_META[activeModel.provider].dot)} />
+                  <span className="hidden max-w-[120px] truncate sm:inline">{activeModel.label}</span>
+                  <span className="sm:hidden">{activeModel.short}</span>
                   <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
                 </button>
               </DropdownMenuTrigger>
@@ -189,17 +194,17 @@ export function Composer({ onSend, busy }: ComposerProps) {
               onClick={submit}
               disabled={!canSend}
               className={cn(
-                'flex h-9 w-9 items-center justify-center rounded-full transition-all duration-150',
+                'flex h-9 w-9 items-center justify-center rounded-full transition-all duration-200',
                 canSend
-                  ? 'bg-accent text-white shadow-sm hover:brightness-105'
-                  : 'bg-secondary text-muted-foreground'
+                  ? 'bg-accent text-white shadow-[0_0_22px_hsl(var(--accent)/0.55)] hover:brightness-110'
+                  : 'border border-[rgb(var(--hairline)/0.08)] bg-[rgb(var(--glass-bg)/0.5)] text-muted-foreground'
               )}
             >
-              <ArrowUp className="h-[18px] w-[18px]" strokeWidth={2.5} />
+              <ArrowUp className="h-[18px] w-[18px]" />
             </button>
           </div>
         </div>
-        <p className="mt-2 text-center text-[11px] text-muted-foreground">
+        <p className="mt-2.5 text-center text-[11px] text-muted-foreground/70">
           Atlas answers only from your selected sources, with citations.
         </p>
       </div>

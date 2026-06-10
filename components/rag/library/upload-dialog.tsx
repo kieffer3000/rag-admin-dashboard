@@ -229,7 +229,7 @@ export function UploadDialog({
         </div>
 
         {/* metadata */}
-        <div className="space-y-3 border-t border-border/70 pt-4">
+        <div className="space-y-3 border-t border-[rgb(var(--hairline)/0.08)] pt-4">
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
               <Label>Name</Label>

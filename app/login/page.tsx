@@ -20,7 +20,7 @@ export default function LoginPage() {
           </p>
         </div>
 
-        <div className="mt-8 rounded-3xl border border-border/70 bg-card p-6 shadow-float">
+        <div className="panel mt-8 rounded-[26px] p-6">
           <form
             action={async () => {
               'use server';

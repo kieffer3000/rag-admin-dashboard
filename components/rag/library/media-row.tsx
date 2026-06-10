@@ -48,7 +48,7 @@ export function MediaRow({ item }: { item: MediaItem }) {
   return (
     <div
       className={cn(
-        'group flex items-center gap-3.5 rounded-2xl border border-border/70 bg-card px-4 py-3 shadow-soft transition-all',
+        'card-glass group flex items-center gap-3.5 rounded-[18px] px-4 py-3 transition-all hover:border-[rgb(var(--hairline)/0.16)]',
         checked && 'ring-1 ring-accent/40'
       )}
     >
@@ -94,7 +94,7 @@ export function MediaRow({ item }: { item: MediaItem }) {
                   setDesc(item.description);
                   setDate(item.date);
                 }}
-                className="rounded-lg px-2.5 py-1 text-xs font-medium text-muted-foreground hover:bg-secondary"
+                className="rounded-lg px-2.5 py-1 text-xs font-medium text-muted-foreground hover:bg-[rgb(var(--hairline)/0.06)]"
               >
                 Cancel
               </button>
@@ -138,7 +138,7 @@ export function MediaRow({ item }: { item: MediaItem }) {
 
           <button
             onClick={copyContent}
-            className="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground opacity-0 transition-all hover:bg-secondary hover:text-foreground group-hover:opacity-100"
+            className="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground opacity-0 transition-all hover:bg-[rgb(var(--hairline)/0.06)] hover:text-foreground group-hover:opacity-100"
             title="Copy content"
           >
             {copied ? (
@@ -150,7 +150,7 @@ export function MediaRow({ item }: { item: MediaItem }) {
 
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <button className="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground">
+              <button className="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-[rgb(var(--hairline)/0.06)] hover:text-foreground">
                 <MoreHorizontal className="h-4 w-4" />
               </button>
             </DropdownMenuTrigger>

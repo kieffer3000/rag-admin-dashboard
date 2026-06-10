@@ -68,7 +68,7 @@ export function PromptsView() {
 
   return (
     <div className="flex h-full flex-col">
-      <div className="border-b border-border/70 px-6 pt-6 lg:px-8">
+      <div className="border-b border-[rgb(var(--hairline)/0.08)] px-6 pt-6 lg:px-8">
         <div className="flex items-start justify-between gap-4">
           <div>
             <h1 className="text-[22px] font-semibold tracking-tight">Prompts</h1>
@@ -88,7 +88,7 @@ export function PromptsView() {
           {prompts.map((p) => (
             <div
               key={p.id}
-              className="group flex flex-col rounded-2xl border border-border/70 bg-card p-4 shadow-soft transition-all hover:shadow-float"
+              className="card-glass hover-glow group flex flex-col rounded-[18px] p-4"
             >
               <div className="flex items-start justify-between">
                 <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-secondary text-xl">
@@ -96,7 +96,7 @@ export function PromptsView() {
                 </div>
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
-                    <button className="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground opacity-0 transition-all hover:bg-secondary group-hover:opacity-100">
+                    <button className="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground opacity-0 transition-all hover:bg-[rgb(var(--hairline)/0.06)] group-hover:opacity-100">
                       <MoreHorizontal className="h-4 w-4" />
                     </button>
                   </DropdownMenuTrigger>
@@ -170,7 +170,7 @@ export function PromptsView() {
                       <button
                         key={e}
                         onClick={() => setIcon(e)}
-                        className="flex h-8 w-8 items-center justify-center rounded-lg text-lg hover:bg-secondary"
+                        className="flex h-8 w-8 items-center justify-center rounded-lg text-lg hover:bg-[rgb(var(--hairline)/0.06)]"
                       >
                         {e}
                       </button>

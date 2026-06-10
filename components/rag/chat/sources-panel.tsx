@@ -36,7 +36,7 @@ export function SourcesPanel({ onCollapse }: { onCollapse?: () => void }) {
             <button
               onClick={onCollapse}
               title="Collapse sources"
-              className="flex h-7 w-7 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+              className="flex h-7 w-7 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-[rgb(var(--hairline)/0.06)] hover:text-foreground"
             >
               <PanelLeftClose className="h-4 w-4" />
             </button>
@@ -77,7 +77,7 @@ export function SourcesPanel({ onCollapse }: { onCollapse?: () => void }) {
         onClick={() => selectAll(indexedIds)}
         disabled={scope === 'everything'}
         className={cn(
-          'mx-4 mt-3 flex items-center gap-2.5 rounded-lg px-2 py-1.5 text-[13px] text-muted-foreground transition-colors hover:bg-secondary disabled:opacity-40',
+          'mx-4 mt-3 flex items-center gap-2.5 rounded-lg px-2 py-1.5 text-[13px] text-muted-foreground transition-colors hover:bg-[rgb(var(--hairline)/0.06)] disabled:opacity-40',
           scope === 'everything' && 'pointer-events-none'
         )}
       >
@@ -98,7 +98,7 @@ export function SourcesPanel({ onCollapse }: { onCollapse?: () => void }) {
               disabled={disabled}
               className={cn(
                 'flex w-full items-center gap-3 rounded-xl px-2 py-2 text-left transition-colors',
-                checked ? 'bg-accent/5' : 'hover:bg-secondary/70',
+                checked ? 'bg-accent/5' : 'hover:bg-[rgb(var(--hairline)/0.05)]',
                 disabled && scope !== 'everything' && 'opacity-55'
               )}
             >
@@ -124,7 +124,7 @@ export function SourcesPanel({ onCollapse }: { onCollapse?: () => void }) {
       </div>
 
       {/* Context summary */}
-      <div className="border-t border-border/70 px-4 py-3">
+      <div className="border-t border-[rgb(var(--hairline)/0.08)] px-4 py-3">
         <div className="flex items-center gap-2 text-[13px]">
           <Layers className="h-4 w-4 text-accent" />
           <span className="font-medium">

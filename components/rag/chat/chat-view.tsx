@@ -99,12 +99,12 @@ export function ChatView() {
   const empty = messages.length === 0 && !streaming;
 
   return (
-    <div className="flex h-full">
+    <div className="flex h-full gap-2.5 p-2.5">
       {/* Left: sources */}
       {sourcesOpen ? (
-        <div className="hidden w-[300px] shrink-0 border-r border-border/70 bg-card/40 md:block">
+        <aside className="panel hidden w-[300px] shrink-0 overflow-hidden rounded-[26px] md:block">
           <SourcesPanel onCollapse={() => setSourcesOpen(false)} />
-        </div>
+        </aside>
       ) : (
         <CollapsedRail
           side="left"
@@ -116,10 +116,10 @@ export function ChatView() {
       )}
 
       {/* Center: chat */}
-      <div className="flex min-w-0 flex-1 flex-col">
+      <div className="panel relative flex min-w-0 flex-1 flex-col overflow-hidden rounded-[26px]">
         {/* Panel toolbar */}
-        <div className="hidden h-11 shrink-0 items-center border-b border-border/70 px-2 md:flex">
-          <div className="hidden md:block">
+        <div className="hidden h-12 shrink-0 items-center px-3 md:flex">
+          <div>
             <PanelButton
               active={sourcesOpen}
               label={sourcesOpen ? 'Hide sources' : 'Show sources'}
@@ -131,13 +131,9 @@ export function ChatView() {
           <div className="flex flex-1 justify-center">
             <button
               onClick={toggleAll}
-              className="hidden items-center gap-1.5 rounded-lg border border-border/70 px-2.5 py-1.5 text-[12px] font-medium text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground md:inline-flex"
+              className="inline-flex items-center gap-1.5 rounded-full border border-[rgb(var(--hairline)/0.1)] bg-[rgb(var(--glass-bg)/0.4)] px-3 py-1.5 text-[12px] font-medium text-muted-foreground transition-all hover:text-foreground hover:border-[rgb(var(--hairline)/0.2)]"
             >
-              {allOpen ? (
-                <Minimize2 className="h-3.5 w-3.5" />
-              ) : (
-                <Maximize2 className="h-3.5 w-3.5" />
-              )}
+              {allOpen ? <Minimize2 className="h-3.5 w-3.5" /> : <Maximize2 className="h-3.5 w-3.5" />}
               {allOpen ? 'Collapse panels' : 'Expand panels'}
             </button>
           </div>
@@ -156,7 +152,7 @@ export function ChatView() {
           {empty ? (
             <EmptyState onPick={handleSend} hasContext={contextItems.length > 0} />
           ) : (
-            <div className="py-4">
+            <div className="py-4 pb-40">
               {messages.map((m) => (
                 <Message key={m.id} msg={m} />
               ))}
@@ -169,14 +165,20 @@ export function ChatView() {
             </div>
           )}
         </div>
-        <Composer onSend={handleSend} busy={busy} />
+
+        {/* Floating composer — detached pill over the glass */}
+        <div className="pointer-events-none absolute inset-x-0 bottom-0">
+          <div className="pointer-events-auto bg-gradient-to-t from-[rgb(var(--glass-bg)/0.9)] via-[rgb(var(--glass-bg)/0.6)] to-transparent pt-8">
+            <Composer onSend={handleSend} busy={busy} />
+          </div>
+        </div>
       </div>
 
       {/* Right: studio */}
       {studioOpen ? (
-        <div className="hidden w-[280px] shrink-0 border-l border-border/70 bg-card/40 xl:block">
+        <aside className="panel hidden w-[284px] shrink-0 overflow-hidden rounded-[26px] xl:block">
           <StudioPanel onCollapse={() => setStudioOpen(false)} />
-        </div>
+        </aside>
       ) : (
         <CollapsedRail
           side="right"
@@ -207,10 +209,10 @@ function PanelButton({
         <button
           onClick={onClick}
           className={cn(
-            'flex h-8 w-8 items-center justify-center rounded-lg transition-colors',
+            'flex h-8 w-8 items-center justify-center rounded-xl transition-all',
             active
-              ? 'text-foreground hover:bg-secondary'
-              : 'text-muted-foreground hover:bg-secondary hover:text-foreground'
+              ? 'text-foreground hover:bg-[rgb(var(--hairline)/0.06)]'
+              : 'text-muted-foreground hover:bg-[rgb(var(--hairline)/0.06)] hover:text-foreground'
           )}
         >
           <Icon className="h-[18px] w-[18px]" />
@@ -239,8 +241,7 @@ function CollapsedRail({
       onClick={onClick}
       title={`Expand ${label}`}
       className={cn(
-        'w-11 shrink-0 flex-col items-center gap-3 bg-card/40 py-4 text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground',
-        side === 'left' ? 'border-r border-border/70' : 'border-l border-border/70',
+        'panel w-12 shrink-0 flex-col items-center gap-3 rounded-[22px] py-4 text-muted-foreground transition-all hover:text-foreground',
         className
       )}
     >
@@ -263,25 +264,30 @@ function EmptyState({
   hasContext: boolean;
 }) {
   return (
-    <div className="flex h-full flex-col items-center justify-center px-6">
-      <div className="mb-5 flex h-16 w-16 items-center justify-center rounded-3xl bg-gradient-to-br from-blue-500 to-indigo-600 text-white shadow-float">
-        <Boxes className="h-8 w-8" strokeWidth={2} />
+    <div className="flex h-full flex-col items-center justify-center px-6 pb-24">
+      <div className="relative mb-6">
+        <div className="absolute inset-0 -z-10 rounded-[28px] bg-accent/30 blur-2xl" />
+        <div className="flex h-16 w-16 items-center justify-center rounded-[22px] bg-gradient-to-br from-indigo-500 to-violet-600 text-white shadow-float">
+          <Boxes className="h-8 w-8" />
+        </div>
       </div>
-      <h1 className="text-2xl font-semibold tracking-tight">Chat with your knowledge</h1>
-      <p className="mt-2 max-w-md text-center text-[15px] leading-relaxed text-muted-foreground">
+      <h1 className="text-gradient text-[32px] font-semibold leading-tight tracking-tight">
+        Chat with your knowledge
+      </h1>
+      <p className="mt-3 max-w-md text-center text-[15px] leading-relaxed text-muted-foreground">
         {hasContext
-          ? 'Ask a question and Atlas answers from your selected sources — with citations to the exact page or timestamp.'
-          : 'Select sources on the left, pick a prompt, then ask. Or attach a file to answer it against your library.'}
+          ? 'Ask anything — answered only from your selected sources, with citations to the exact page or timestamp.'
+          : 'Select sources, pick a prompt, then ask. Or attach a file to answer it against your library.'}
       </p>
 
-      <div className="mt-8 grid w-full max-w-xl grid-cols-1 gap-2.5 sm:grid-cols-2">
+      <div className="mt-10 grid w-full max-w-xl grid-cols-1 gap-2.5 sm:grid-cols-2">
         {SUGGESTIONS.map((s, i) => {
           const Icon = s.icon;
           return (
             <button
               key={i}
               onClick={() => onPick(s.text)}
-              className="group flex items-start gap-3 rounded-2xl border border-border/70 bg-card p-4 text-left shadow-soft transition-all duration-150 hover:-translate-y-0.5 hover:shadow-float"
+              className="card-glass hover-glow group flex items-start gap-3 rounded-[18px] p-4 text-left"
             >
               <Icon className="mt-0.5 h-[18px] w-[18px] shrink-0 text-accent" />
               <span className="text-[13px] font-medium leading-snug text-foreground/90">

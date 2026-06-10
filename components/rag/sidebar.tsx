@@ -15,33 +15,31 @@ export function Sidebar() {
   const pathname = usePathname();
 
   return (
-    <aside className="hidden w-[228px] shrink-0 flex-col border-r border-border/70 bg-card/40 px-3 py-4 lg:flex">
-      <Link href="/" className="mb-6 flex items-center gap-2.5 px-2">
-        <div className="flex h-8 w-8 items-center justify-center rounded-[10px] bg-gradient-to-br from-blue-500 to-indigo-600 text-white shadow-sm">
-          <Boxes className="h-[18px] w-[18px]" strokeWidth={2.25} />
+    <aside className="glass hidden w-[228px] shrink-0 flex-col border-r border-[rgb(var(--hairline)/0.08)] px-3 py-4 lg:flex">
+      <Link href="/" className="mb-7 flex items-center gap-2.5 px-2">
+        <div className="relative flex h-9 w-9 items-center justify-center rounded-[12px] bg-gradient-to-br from-indigo-500 to-violet-600 text-white shadow-[0_4px_16px_hsl(var(--accent)/0.4)]">
+          <Boxes className="h-[19px] w-[19px]" />
         </div>
         <div className="leading-tight">
           <div className="text-[15px] font-semibold tracking-tight">Atlas</div>
-          <div className="text-[11px] text-muted-foreground">Knowledge Base</div>
+          <div className="text-[11px] text-muted-foreground/70">Knowledge Base</div>
         </div>
       </Link>
 
       <nav className="flex flex-col gap-1">
         {NAV.map((item) => {
           const active =
-            item.href === '/'
-              ? pathname === '/'
-              : pathname.startsWith(item.href);
+            item.href === '/' ? pathname === '/' : pathname.startsWith(item.href);
           const Icon = item.icon;
           return (
             <Link
               key={item.href}
               href={item.href}
               className={cn(
-                'group flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium transition-all duration-150',
+                'group flex items-center gap-3 rounded-[14px] px-3 py-2.5 text-sm font-medium transition-all duration-150',
                 active
-                  ? 'bg-card text-foreground shadow-soft'
-                  : 'text-muted-foreground hover:bg-card/70 hover:text-foreground'
+                  ? 'border border-[rgb(var(--hairline)/0.1)] bg-[rgb(var(--hairline)/0.06)] text-foreground shadow-[inset_0_1px_0_rgb(var(--hairline)/0.08)]'
+                  : 'border border-transparent text-muted-foreground hover:bg-[rgb(var(--hairline)/0.04)] hover:text-foreground'
               )}
             >
               <Icon
@@ -49,7 +47,6 @@ export function Sidebar() {
                   'h-[18px] w-[18px] transition-colors',
                   active ? 'text-accent' : 'text-muted-foreground group-hover:text-foreground'
                 )}
-                strokeWidth={2.1}
               />
               {item.label}
             </Link>
@@ -57,13 +54,16 @@ export function Sidebar() {
         })}
       </nav>
 
-      <div className="mt-auto rounded-2xl border border-border/70 bg-card/60 p-3.5">
+      <div className="card-glass mt-auto rounded-[18px] p-3.5">
         <div className="flex items-center gap-2 text-[13px] font-medium">
-          <span className="flex h-2 w-2 rounded-full bg-emerald-500" />
+          <span className="relative flex h-2 w-2">
+            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-60" />
+            <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500" />
+          </span>
           Vector store
         </div>
-        <p className="mt-1 text-[11px] leading-relaxed text-muted-foreground">
-          Gemini Embedding 2 · Pinecone
+        <p className="mt-1.5 text-[11px] leading-relaxed text-muted-foreground/70">
+          Gemini Embedding · Pinecone
         </p>
       </div>
     </aside>

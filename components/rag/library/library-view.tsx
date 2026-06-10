@@ -43,7 +43,7 @@ export function LibraryView() {
   return (
     <div className="flex h-full flex-col">
       {/* Header */}
-      <div className="border-b border-border/70 px-6 pt-6 lg:px-8">
+      <div className="border-b border-[rgb(var(--hairline)/0.08)] px-6 pt-6 lg:px-8">
         <div className="flex items-start justify-between gap-4">
           <div>
             <h1 className="text-[22px] font-semibold tracking-tight">Library</h1>
@@ -123,7 +123,7 @@ export function LibraryView() {
       {/* Selection bar */}
       {selectedIds.size > 0 && (
         <div className="pointer-events-none fixed inset-x-0 bottom-6 z-40 flex justify-center px-4">
-          <div className="pointer-events-auto flex items-center gap-3 rounded-2xl border border-border/70 bg-card px-3 py-2 shadow-float">
+          <div className="panel pointer-events-auto flex items-center gap-3 rounded-full px-3 py-2">
             <span className="pl-1 text-[13px] font-medium">
               {selectedIds.size} selected
             </span>
@@ -134,7 +134,7 @@ export function LibraryView() {
             </Link>
             <button
               onClick={clearSelection}
-              className="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground hover:bg-secondary"
+              className="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground hover:bg-[rgb(var(--hairline)/0.06)]"
             >
               <X className="h-4 w-4" />
             </button>
