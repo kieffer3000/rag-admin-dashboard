@@ -67,7 +67,8 @@ export function PromptsView() {
   }
 
   return (
-    <div className="flex h-full flex-col">
+    <div className="h-full p-2.5">
+      <div className="panel flex h-full flex-col overflow-hidden rounded-[26px]">
       <div className="border-b border-[rgb(var(--hairline)/0.08)] px-6 pt-6 lg:px-8">
         <div className="flex items-start justify-between gap-4">
           <div>
@@ -204,6 +205,7 @@ export function PromptsView() {
           </div>
         </DialogContent>
       </Dialog>
+      </div>
     </div>
   );
 }

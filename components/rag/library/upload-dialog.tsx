@@ -22,15 +22,16 @@ import {
   Type,
   FileText,
   AudioLines,
-  Image as ImageIcon
+  Image as ImageIcon,
+  X
 } from 'lucide-react';
 
 type Method = 'file' | 'youtube' | 'website' | 'text';
 
 const METHODS: { key: Method; label: string; icon: any }[] = [
-  { key: 'file', label: 'Upload file', icon: UploadCloud },
+  { key: 'file', label: 'Upload files', icon: UploadCloud },
   { key: 'youtube', label: 'YouTube', icon: Youtube },
-  { key: 'website', label: 'Website', icon: Globe },
+  { key: 'website', label: 'Websites', icon: Globe },
   { key: 'text', label: 'Paste text', icon: Type }
 ];
 
@@ -45,6 +46,16 @@ function inferFileType(name: string): MediaType {
   return 'document';
 }
 
+function nameFromUrl(url: string) {
+  try {
+    const u = new URL(url);
+    const path = u.pathname.replace(/\/$/, '').split('/').pop();
+    return path ? decodeURIComponent(path).replace(/[-_]/g, ' ') : u.hostname;
+  } catch {
+    return url.slice(0, 48);
+  }
+}
+
 export function UploadDialog({
   open,
   onOpenChange
@@ -57,70 +68,94 @@ export function UploadDialog({
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [date, setDate] = useState(today());
-  const [url, setUrl] = useState('');
+  const [urls, setUrls] = useState('');
   const [body, setBody] = useState('');
-  const [fileName, setFileName] = useState('');
-  const [fileType, setFileType] = useState<MediaType>('document');
+  const [files, setFiles] = useState<string[]>([]);
   const [dragOver, setDragOver] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
+
+  const urlList = urls
+    .split('\n')
+    .map((u) => u.trim())
+    .filter(Boolean);
+  const single = method === 'file' ? files.length === 1 : method === 'text' ? true : urlList.length === 1;
 
   function reset() {
     setName('');
     setDescription('');
     setDate(today());
-    setUrl('');
+    setUrls('');
     setBody('');
-    setFileName('');
+    setFiles([]);
     setMethod('file');
   }
 
-  function pickFile(f: File) {
-    setFileName(f.name);
-    setFileType(inferFileType(f.name));
-    if (!name) setName(f.name.replace(/\.[^.]+$/, ''));
+  function pickFiles(list: FileList | File[]) {
+    const names = Array.from(list).map((f) => f.name);
+    setFiles((prev) => Array.from(new Set([...prev, ...names])));
+    if (names.length === 1 && !name) setName(names[0].replace(/\.[^.]+$/, ''));
   }
 
   const canSubmit =
-    name.trim().length > 0 &&
-    ((method === 'file' && fileName) ||
-      (method === 'youtube' && url) ||
-      (method === 'website' && url) ||
-      (method === 'text' && body));
+    (method === 'file' && files.length > 0) ||
+    ((method === 'youtube' || method === 'website') && urlList.length > 0) ||
+    (method === 'text' && body.trim().length > 0 && name.trim().length > 0);
 
   function submit() {
     if (!canSubmit) return;
-    const type: MediaType =
-      method === 'youtube'
-        ? 'youtube'
-        : method === 'website'
-          ? 'website'
-          : method === 'text'
-            ? 'text'
-            : fileType;
-    addMedia({
-      type,
-      name: name.trim(),
-      description: description.trim(),
-      date,
-      content:
-        method === 'text'
-          ? body.slice(0, 400)
-          : method === 'file'
-            ? `Extracted content from ${fileName}…`
-            : `Content fetched from ${url}…`,
-      source: method === 'file' ? fileName : url || undefined
-    });
+
+    if (method === 'file') {
+      files.forEach((f) => {
+        addMedia({
+          type: inferFileType(f),
+          name: single && name.trim() ? name.trim() : f.replace(/\.[^.]+$/, ''),
+          description: description.trim(),
+          date,
+          content: `Extracted content from ${f}…`,
+          source: f
+        });
+      });
+    } else if (method === 'youtube' || method === 'website') {
+      urlList.forEach((u) => {
+        addMedia({
+          type: method === 'youtube' ? 'youtube' : 'website',
+          name: single && name.trim() ? name.trim() : nameFromUrl(u),
+          description: description.trim(),
+          date,
+          content: `Content fetched from ${u}…`,
+          source: u
+        });
+      });
+    } else {
+      addMedia({
+        type: 'text',
+        name: name.trim(),
+        description: description.trim(),
+        date,
+        content: body.slice(0, 400)
+      });
+    }
     reset();
     onOpenChange(false);
   }
 
+  const count =
+    method === 'file' ? files.length : method === 'text' ? 1 : urlList.length;
+
   return (
-    <Dialog open={open} onOpenChange={(o) => { if (!o) reset(); onOpenChange(o); }}>
+    <Dialog
+      open={open}
+      onOpenChange={(o) => {
+        if (!o) reset();
+        onOpenChange(o);
+      }}
+    >
       <DialogContent className="max-w-xl">
         <DialogHeader>
           <DialogTitle>Add to your knowledge base</DialogTitle>
           <DialogDescription>
-            Upload media or paste a link. Gemini extracts and indexes it automatically.
+            Upload media in bulk or paste links — Gemini extracts and indexes everything
+            automatically.
           </DialogDescription>
         </DialogHeader>
 
@@ -149,68 +184,97 @@ export function UploadDialog({
         {/* method body */}
         <div className="min-h-[120px]">
           {method === 'file' && (
-            <div
-              onDragOver={(e) => {
-                e.preventDefault();
-                setDragOver(true);
-              }}
-              onDragLeave={() => setDragOver(false)}
-              onDrop={(e) => {
-                e.preventDefault();
-                setDragOver(false);
-                const f = e.dataTransfer.files?.[0];
-                if (f) pickFile(f);
-              }}
-              onClick={() => fileRef.current?.click()}
-              className={cn(
-                'flex cursor-pointer flex-col items-center justify-center rounded-2xl border-2 border-dashed px-4 py-8 text-center transition-colors',
-                dragOver ? 'border-accent bg-accent/5' : 'border-border hover:border-accent/50'
-              )}
-            >
-              <input
-                ref={fileRef}
-                type="file"
-                className="hidden"
-                onChange={(e) => {
-                  const f = e.target.files?.[0];
-                  if (f) pickFile(f);
+            <div className="space-y-2.5">
+              <div
+                onDragOver={(e) => {
+                  e.preventDefault();
+                  setDragOver(true);
                 }}
-              />
-              {fileName ? (
-                <div className="flex items-center gap-2 text-sm font-medium">
-                  <FileText className="h-4 w-4 text-accent" />
-                  {fileName}
+                onDragLeave={() => setDragOver(false)}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  setDragOver(false);
+                  if (e.dataTransfer.files?.length) pickFiles(e.dataTransfer.files);
+                }}
+                onClick={() => fileRef.current?.click()}
+                className={cn(
+                  'flex cursor-pointer flex-col items-center justify-center rounded-2xl border-2 border-dashed px-4 py-7 text-center transition-colors',
+                  dragOver ? 'border-accent bg-accent/5' : 'border-border hover:border-accent/50'
+                )}
+              >
+                <input
+                  ref={fileRef}
+                  type="file"
+                  multiple
+                  className="hidden"
+                  onChange={(e) => {
+                    if (e.target.files?.length) pickFiles(e.target.files);
+                    e.target.value = '';
+                  }}
+                />
+                <UploadCloud className="mb-2 h-7 w-7 text-muted-foreground" />
+                <p className="text-sm font-medium">
+                  Drop files (multiple welcome) or click to browse
+                </p>
+                <p className="mt-1 flex items-center gap-2 text-[11px] text-muted-foreground">
+                  <span className="inline-flex items-center gap-1">
+                    <FileText className="h-3 w-3" />
+                    PDF · DOCX · TXT
+                  </span>
+                  <span className="inline-flex items-center gap-1">
+                    <AudioLines className="h-3 w-3" />
+                    MP3 · M4A
+                  </span>
+                  <span className="inline-flex items-center gap-1">
+                    <ImageIcon className="h-3 w-3" />
+                    PNG · JPG
+                  </span>
+                </p>
+              </div>
+
+              {files.length > 0 && (
+                <div className="flex flex-wrap gap-1.5">
+                  {files.map((f) => (
+                    <span
+                      key={f}
+                      className="inline-flex items-center gap-1.5 rounded-full bg-accent/10 px-2.5 py-1 text-[11px] font-medium text-accent"
+                    >
+                      <FileText className="h-3 w-3" />
+                      {f}
+                      <button
+                        onClick={() => setFiles((prev) => prev.filter((x) => x !== f))}
+                        className="opacity-70 hover:opacity-100"
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    </span>
+                  ))}
                 </div>
-              ) : (
-                <>
-                  <UploadCloud className="mb-2 h-7 w-7 text-muted-foreground" />
-                  <p className="text-sm font-medium">Drop a file or click to browse</p>
-                  <p className="mt-1 flex items-center gap-2 text-[11px] text-muted-foreground">
-                    <span className="inline-flex items-center gap-1"><FileText className="h-3 w-3" />PDF · DOCX · TXT</span>
-                    <span className="inline-flex items-center gap-1"><AudioLines className="h-3 w-3" />MP3 · M4A</span>
-                    <span className="inline-flex items-center gap-1"><ImageIcon className="h-3 w-3" />PNG · JPG</span>
-                  </p>
-                </>
               )}
             </div>
           )}
 
           {(method === 'youtube' || method === 'website') && (
             <div className="space-y-1.5">
-              <Label>{method === 'youtube' ? 'YouTube URL' : 'Website URL'}</Label>
-              <Input
-                value={url}
-                onChange={(e) => setUrl(e.target.value)}
+              <Label>
+                {method === 'youtube' ? 'YouTube URLs' : 'Website URLs'}{' '}
+                <span className="normal-case text-muted-foreground">(one per line)</span>
+              </Label>
+              <Textarea
+                value={urls}
+                onChange={(e) => setUrls(e.target.value)}
                 placeholder={
                   method === 'youtube'
-                    ? 'https://youtube.com/watch?v=…'
-                    : 'https://…'
+                    ? 'https://youtube.com/watch?v=…\nhttps://youtube.com/watch?v=…'
+                    : 'https://…\nhttps://…'
                 }
+                className="min-h-[90px] font-mono text-[12px]"
               />
               <p className="text-[11px] text-muted-foreground">
+                {urlList.length > 0 && `${urlList.length} URL${urlList.length > 1 ? 's' : ''} · `}
                 {method === 'youtube'
-                  ? 'We fetch the transcript and index it.'
-                  : 'We fetch and clean the page content.'}
+                  ? 'We fetch each transcript and index it.'
+                  : 'We fetch and clean each page.'}
               </p>
             </div>
           )}
@@ -232,8 +296,20 @@ export function UploadDialog({
         <div className="space-y-3 border-t border-[rgb(var(--hairline)/0.08)] pt-4">
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
-              <Label>Name</Label>
-              <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Give it a title" />
+              <Label>
+                Name{' '}
+                {!single && (
+                  <span className="normal-case text-muted-foreground">
+                    (auto per item for bulk)
+                  </span>
+                )}
+              </Label>
+              <Input
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder={single ? 'Give it a title' : 'Names set automatically'}
+                disabled={!single}
+              />
             </div>
             <div className="space-y-1.5">
               <Label>Date</Label>
@@ -241,7 +317,9 @@ export function UploadDialog({
             </div>
           </div>
           <div className="space-y-1.5">
-            <Label>Description <span className="normal-case text-muted-foreground">(optional)</span></Label>
+            <Label>
+              Description <span className="normal-case text-muted-foreground">(optional)</span>
+            </Label>
             <Input
               value={description}
               onChange={(e) => setDescription(e.target.value)}
@@ -255,7 +333,7 @@ export function UploadDialog({
             Cancel
           </Button>
           <Button variant="accent" disabled={!canSubmit} onClick={submit}>
-            Add source
+            Add {count > 1 ? `${count} sources` : 'source'}
           </Button>
         </div>
       </DialogContent>

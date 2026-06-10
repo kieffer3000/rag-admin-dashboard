@@ -51,6 +51,21 @@ export interface Citation {
   snippet: string;
 }
 
+/** How an attachment participates: one-off discussion vs permanent indexing. */
+export type AttachmentMode = 'discuss' | 'index';
+
+export interface ChatAttachment {
+  name: string;
+  mode: AttachmentMode;
+  kind: 'image' | 'file';
+}
+
+/** A mock generated image (NanoBanana / Kling) shown as a card in chat. */
+export interface GeneratedImage {
+  prompt: string;
+  model: 'nanobanana' | 'kling';
+}
+
 export interface ChatMessage {
   id: string;
   role: 'user' | 'assistant';
@@ -58,7 +73,35 @@ export interface ChatMessage {
   citations?: Citation[];
   /** Media ids that were in context when this message was sent. */
   contextIds?: string[];
-  /** Optional attached comparison file name (e.g. an uploaded quiz). */
-  attachment?: string;
+  attachment?: ChatAttachment;
+  image?: GeneratedImage;
+  createdAt: string;
+}
+
+export interface Conversation {
+  id: string;
+  projectId: string;
+  title: string;
+  pinned: boolean;
+  messages: ChatMessage[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface Project {
+  id: string;
+  name: string;
+  icon: string;
+  description: string;
+  /** Which library sources belong to this project. */
+  sourceIds: string[];
+  createdAt: string;
+}
+
+export interface Note {
+  id: string;
+  projectId: string;
+  content: string;
+  citations?: Citation[];
   createdAt: string;
 }

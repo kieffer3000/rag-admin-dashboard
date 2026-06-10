@@ -1,4 +1,4 @@
-import { MediaItem, Citation } from './types';
+import { MediaItem, Citation, ChatAttachment } from './types';
 
 const LOCATORS: Record<string, () => string> = {
   document: () => `p. ${Math.floor(10 + Math.random() * 280)}`,
@@ -19,9 +19,21 @@ function fmtTime() {
 export function generateMockAnswer(
   query: string,
   context: MediaItem[],
-  attachment?: string
+  attachment?: ChatAttachment
 ): { content: string; citations: Citation[] } {
   const indexed = context.filter((c) => c.status === 'indexed');
+
+  // Ephemeral discussion of an image — multimodal chat, no retrieval needed.
+  if (attachment?.mode === 'discuss' && attachment.kind === 'image') {
+    return {
+      content:
+        `I looked at **${attachment.name}** directly — nothing was added to your knowledge base.\n\n` +
+        `The image shows a clear central subject with supporting detail around it. I can describe any region in more depth, extract any visible text, or compare it against your indexed sources` +
+        (indexed.length ? ` (you have ${indexed.length} in context)` : '') +
+        `. What would you like to know about it?`,
+      citations: []
+    };
+  }
 
   if (indexed.length === 0) {
     return {
@@ -45,7 +57,7 @@ export function generateMockAnswer(
   let content: string;
   if (attachment) {
     content =
-      `I read **${attachment}** and answered each item against ${indexed.length} selected source${indexed.length > 1 ? 's' : ''}.\n\n` +
+      `I read **${attachment.name}** and answered each item against ${indexed.length} selected source${indexed.length > 1 ? 's' : ''}.\n\n` +
       `**Q1.** The concept maps directly to the framework described in ${names[0]} ${cite(1)} — the answer is grounded in that passage.\n\n` +
       `**Q2.** Comparing across your sources, ${names[0]}${names[1] ? ` and ${names[1]}` : ''} ${cite(2)} converge on the same conclusion, so this one is well-supported.\n\n` +
       (names[2]

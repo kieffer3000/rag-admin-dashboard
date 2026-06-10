@@ -15,7 +15,8 @@ import Link from 'next/link';
 type Filter = 'all' | MediaType;
 
 export function LibraryView() {
-  const { media, selectedIds, clearSelection } = useRag();
+  const { media, selectedIds, clearSelection, activeProject, addSourcesToProject } =
+    useRag();
   const [filter, setFilter] = useState<Filter>('all');
   const [query, setQuery] = useState('');
   const [uploadOpen, setUploadOpen] = useState(false);
@@ -41,7 +42,8 @@ export function LibraryView() {
   ];
 
   return (
-    <div className="flex h-full flex-col">
+    <div className="h-full p-2.5">
+      <div className="panel flex h-full flex-col overflow-hidden rounded-[26px]">
       {/* Header */}
       <div className="border-b border-[rgb(var(--hairline)/0.08)] px-6 pt-6 lg:px-8">
         <div className="flex items-start justify-between gap-4">
@@ -127,8 +129,23 @@ export function LibraryView() {
             <span className="pl-1 text-[13px] font-medium">
               {selectedIds.size} selected
             </span>
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-1.5 rounded-xl"
+              onClick={() => addSourcesToProject(activeProject.id, Array.from(selectedIds))}
+            >
+              {activeProject.icon} Add to {activeProject.name}
+            </Button>
             <Link href="/">
-              <Button variant="accent" size="sm" className="gap-1.5 rounded-xl">
+              <Button
+                variant="accent"
+                size="sm"
+                className="gap-1.5 rounded-xl"
+                onClick={() =>
+                  addSourcesToProject(activeProject.id, Array.from(selectedIds))
+                }
+              >
                 <MessagesSquare className="h-4 w-4" /> Chat with selection
               </Button>
             </Link>
@@ -143,6 +160,7 @@ export function LibraryView() {
       )}
 
       <UploadDialog open={uploadOpen} onOpenChange={setUploadOpen} />
+      </div>
     </div>
   );
 }

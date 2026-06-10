@@ -2,6 +2,7 @@ import { Analytics } from '@vercel/analytics/react';
 import { Sidebar } from '@/components/rag/sidebar';
 import { MobileNav } from '@/components/rag/mobile-nav';
 import { ThemeToggle } from '@/components/rag/theme-toggle';
+import { SourceViewer } from '@/components/rag/source-viewer';
 import { User } from './user';
 import Providers from './providers';
 
@@ -23,6 +24,7 @@ export default function DashboardLayout({
           </header>
           <main className="min-h-0 flex-1 overflow-hidden">{children}</main>
         </div>
+        <SourceViewer />
       </div>
       <Analytics />
     </Providers>

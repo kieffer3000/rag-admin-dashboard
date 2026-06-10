@@ -8,18 +8,34 @@ import {
   useMemo,
   ReactNode
 } from 'react';
-import { MediaItem, Prompt, ChatMessage, QueryScope, MediaType } from './types';
-import { MOCK_MEDIA, MOCK_PROMPTS } from './mock-data';
+import {
+  MediaItem,
+  Prompt,
+  ChatMessage,
+  QueryScope,
+  MediaType,
+  Project,
+  Conversation,
+  Note,
+  Citation
+} from './types';
+import { MOCK_MEDIA, MOCK_PROMPTS, MOCK_PROJECTS, MOCK_NOTES } from './mock-data';
 import { DEFAULT_MODEL_ID } from './models';
 
 interface RagState {
   media: MediaItem[];
   prompts: Prompt[];
+  projects: Project[];
+  activeProjectId: string;
+  conversations: Conversation[];
+  activeConversationId: string | null;
+  notes: Note[];
   selectedIds: Set<string>;
   scope: QueryScope;
   activePromptId: string | null;
   modelId: string;
-  messages: ChatMessage[];
+  /** Citation currently open in the source viewer sheet. */
+  viewerCitation: Citation | null;
 
   // selection
   toggleSelect: (id: string) => void;
@@ -29,9 +45,30 @@ interface RagState {
   setModel: (id: string) => void;
 
   // media
-  addMedia: (item: Omit<MediaItem, 'id' | 'status' | 'chunks'>) => void;
+  addMedia: (item: Omit<MediaItem, 'id' | 'status' | 'chunks'>) => string;
   updateMedia: (id: string, patch: Partial<MediaItem>) => void;
   deleteMedia: (id: string) => void;
+  reindexMedia: (id: string) => void;
+
+  // projects
+  setActiveProject: (id: string) => void;
+  addProject: (p: { name: string; icon: string; description: string }) => void;
+  updateProject: (id: string, patch: Partial<Project>) => void;
+  deleteProject: (id: string) => void;
+  addSourcesToProject: (projectId: string, sourceIds: string[]) => void;
+  removeSourceFromProject: (projectId: string, sourceId: string) => void;
+
+  // conversations
+  newConversation: () => string;
+  setActiveConversation: (id: string) => void;
+  togglePinConversation: (id: string) => void;
+  deleteConversation: (id: string) => void;
+  renameConversation: (id: string, title: string) => void;
+  addMessage: (m: ChatMessage) => void;
+
+  // notes
+  addNote: (content: string, citations?: Citation[]) => void;
+  deleteNote: (id: string) => void;
 
   // prompts
   setActivePrompt: (id: string | null) => void;
@@ -39,11 +76,16 @@ interface RagState {
   updatePrompt: (id: string, patch: Partial<Prompt>) => void;
   deletePrompt: (id: string) => void;
 
-  // chat
-  addMessage: (m: ChatMessage) => void;
-  resetChat: () => void;
+  // viewer
+  openViewer: (c: Citation) => void;
+  closeViewer: () => void;
 
   // derived
+  activeProject: Project;
+  projectMedia: MediaItem[];
+  projectConversations: Conversation[];
+  projectNotes: Note[];
+  activeConversation: Conversation | null;
   contextItems: MediaItem[];
 }
 
@@ -51,18 +93,25 @@ const Ctx = createContext<RagState | null>(null);
 
 let idCounter = 1000;
 const nextId = (prefix: string) => `${prefix}${++idCounter}`;
+const now = () => new Date().toISOString();
 
 export function RagProvider({ children }: { children: ReactNode }) {
   const [media, setMedia] = useState<MediaItem[]>(MOCK_MEDIA);
   const [prompts, setPrompts] = useState<Prompt[]>(MOCK_PROMPTS);
+  const [projects, setProjects] = useState<Project[]>(MOCK_PROJECTS);
+  const [activeProjectId, setActiveProjectId] = useState<string>(MOCK_PROJECTS[0].id);
+  const [conversations, setConversations] = useState<Conversation[]>([]);
+  const [activeConversationId, setActiveConversationId] = useState<string | null>(null);
+  const [notes, setNotes] = useState<Note[]>(MOCK_NOTES);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(
     () => new Set(['m1', 'm4'])
   );
   const [scope, setScope] = useState<QueryScope>('selected');
   const [activePromptId, setActivePromptId] = useState<string | null>('p1');
   const [modelId, setModelId] = useState<string>(DEFAULT_MODEL_ID);
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [viewerCitation, setViewerCitation] = useState<Citation | null>(null);
 
+  // ---- selection ----
   const toggleSelect = useCallback((id: string) => {
     setSelectedIds((prev) => {
       const next = new Set(prev);
@@ -85,32 +134,34 @@ export function RagProvider({ children }: { children: ReactNode }) {
 
   const clearSelection = useCallback(() => setSelectedIds(new Set()), []);
 
+  // ---- media ----
+  const simulateIndexing = useCallback((id: string) => {
+    setTimeout(() => {
+      setMedia((prev) =>
+        prev.map((m) =>
+          m.id === id
+            ? { ...m, status: 'indexed', chunks: Math.floor(20 + Math.random() * 200) }
+            : m
+        )
+      );
+    }, 2600);
+  }, []);
+
   const addMedia = useCallback(
     (item: Omit<MediaItem, 'id' | 'status' | 'chunks'>) => {
       const id = nextId('m');
-      const newItem: MediaItem = {
-        ...item,
-        id,
-        status: 'processing',
-        chunks: 0
-      };
+      const newItem: MediaItem = { ...item, id, status: 'processing', chunks: 0 };
       setMedia((prev) => [newItem, ...prev]);
-      // Simulate async indexing for the demo.
-      setTimeout(() => {
-        setMedia((prev) =>
-          prev.map((m) =>
-            m.id === id
-              ? {
-                  ...m,
-                  status: 'indexed',
-                  chunks: Math.floor(20 + Math.random() * 200)
-                }
-              : m
-          )
-        );
-      }, 2600);
+      // New sources join the active project automatically.
+      setProjects((prev) =>
+        prev.map((p) =>
+          p.id === activeProjectId ? { ...p, sourceIds: [...p.sourceIds, id] } : p
+        )
+      );
+      simulateIndexing(id);
+      return id;
     },
-    []
+    [activeProjectId, simulateIndexing]
   );
 
   const updateMedia = useCallback((id: string, patch: Partial<MediaItem>) => {
@@ -119,6 +170,9 @@ export function RagProvider({ children }: { children: ReactNode }) {
 
   const deleteMedia = useCallback((id: string) => {
     setMedia((prev) => prev.filter((m) => m.id !== id));
+    setProjects((prev) =>
+      prev.map((p) => ({ ...p, sourceIds: p.sourceIds.filter((s) => s !== id) }))
+    );
     setSelectedIds((prev) => {
       const next = new Set(prev);
       next.delete(id);
@@ -126,6 +180,186 @@ export function RagProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
+  const reindexMedia = useCallback(
+    (id: string) => {
+      setMedia((prev) =>
+        prev.map((m) => (m.id === id ? { ...m, status: 'processing', chunks: 0 } : m))
+      );
+      simulateIndexing(id);
+    },
+    [simulateIndexing]
+  );
+
+  // ---- projects ----
+  const setActiveProject = useCallback((id: string) => {
+    setActiveProjectId(id);
+    setActiveConversationId(null);
+    setSelectedIds(new Set());
+  }, []);
+
+  const addProject = useCallback(
+    (p: { name: string; icon: string; description: string }) => {
+      const id = nextId('proj');
+      setProjects((prev) => [
+        ...prev,
+        { ...p, id, sourceIds: [], createdAt: now().slice(0, 10) }
+      ]);
+      setActiveProjectId(id);
+      setActiveConversationId(null);
+      setSelectedIds(new Set());
+    },
+    []
+  );
+
+  const updateProject = useCallback((id: string, patch: Partial<Project>) => {
+    setProjects((prev) => prev.map((p) => (p.id === id ? { ...p, ...patch } : p)));
+  }, []);
+
+  const deleteProject = useCallback(
+    (id: string) => {
+      setProjects((prev) => {
+        const remaining = prev.filter((p) => p.id !== id);
+        if (remaining.length === 0) {
+          const fallback: Project = {
+            id: nextId('proj'),
+            name: 'My Knowledge Base',
+            icon: '📚',
+            description: '',
+            sourceIds: [],
+            createdAt: now().slice(0, 10)
+          };
+          setActiveProjectId(fallback.id);
+          return [fallback];
+        }
+        if (id === activeProjectId) setActiveProjectId(remaining[0].id);
+        return remaining;
+      });
+      setConversations((prev) => prev.filter((c) => c.projectId !== id));
+      setNotes((prev) => prev.filter((n) => n.projectId !== id));
+      setActiveConversationId(null);
+    },
+    [activeProjectId]
+  );
+
+  const addSourcesToProject = useCallback((projectId: string, sourceIds: string[]) => {
+    setProjects((prev) =>
+      prev.map((p) =>
+        p.id === projectId
+          ? { ...p, sourceIds: Array.from(new Set([...p.sourceIds, ...sourceIds])) }
+          : p
+      )
+    );
+  }, []);
+
+  const removeSourceFromProject = useCallback(
+    (projectId: string, sourceId: string) => {
+      setProjects((prev) =>
+        prev.map((p) =>
+          p.id === projectId
+            ? { ...p, sourceIds: p.sourceIds.filter((s) => s !== sourceId) }
+            : p
+        )
+      );
+    },
+    []
+  );
+
+  // ---- conversations ----
+  const newConversation = useCallback(() => {
+    const id = nextId('conv');
+    const conv: Conversation = {
+      id,
+      projectId: activeProjectId,
+      title: 'New chat',
+      pinned: false,
+      messages: [],
+      createdAt: now(),
+      updatedAt: now()
+    };
+    setConversations((prev) => [conv, ...prev]);
+    setActiveConversationId(id);
+    return id;
+  }, [activeProjectId]);
+
+  const setActiveConversation = useCallback((id: string) => {
+    setActiveConversationId(id);
+  }, []);
+
+  const togglePinConversation = useCallback((id: string) => {
+    setConversations((prev) =>
+      prev.map((c) => (c.id === id ? { ...c, pinned: !c.pinned } : c))
+    );
+  }, []);
+
+  const deleteConversation = useCallback(
+    (id: string) => {
+      setConversations((prev) => prev.filter((c) => c.id !== id));
+      setActiveConversationId((cur) => (cur === id ? null : cur));
+    },
+    []
+  );
+
+  const renameConversation = useCallback((id: string, title: string) => {
+    setConversations((prev) =>
+      prev.map((c) => (c.id === id ? { ...c, title } : c))
+    );
+  }, []);
+
+  const addMessage = useCallback(
+    (m: ChatMessage) => {
+      setConversations((prev) => {
+        let targetId = activeConversationId;
+        let list = prev;
+        // Lazily create a conversation on first message.
+        if (!targetId || !prev.some((c) => c.id === targetId)) {
+          targetId = nextId('conv');
+          const conv: Conversation = {
+            id: targetId,
+            projectId: activeProjectId,
+            title: 'New chat',
+            pinned: false,
+            messages: [],
+            createdAt: now(),
+            updatedAt: now()
+          };
+          list = [conv, ...prev];
+          setActiveConversationId(targetId);
+        }
+        return list.map((c) => {
+          if (c.id !== targetId) return c;
+          const title =
+            c.title === 'New chat' && m.role === 'user'
+              ? m.content.slice(0, 48) + (m.content.length > 48 ? '…' : '')
+              : c.title;
+          return { ...c, title, messages: [...c.messages, m], updatedAt: now() };
+        });
+      });
+    },
+    [activeConversationId, activeProjectId]
+  );
+
+  // ---- notes ----
+  const addNote = useCallback(
+    (content: string, citations?: Citation[]) => {
+      setNotes((prev) => [
+        {
+          id: nextId('n'),
+          projectId: activeProjectId,
+          content,
+          citations,
+          createdAt: now().slice(0, 10)
+        },
+        ...prev
+      ]);
+    },
+    [activeProjectId]
+  );
+
+  const deleteNote = useCallback((id: string) => {
+    setNotes((prev) => prev.filter((n) => n.id !== id));
+  }, []);
+
+  // ---- prompts ----
   const addPrompt = useCallback((p: Omit<Prompt, 'id'>) => {
     setPrompts((prev) => [{ ...p, id: nextId('p') }, ...prev]);
   }, []);
@@ -139,25 +373,58 @@ export function RagProvider({ children }: { children: ReactNode }) {
     setActivePromptId((cur) => (cur === id ? null : cur));
   }, []);
 
-  const addMessage = useCallback((m: ChatMessage) => {
-    setMessages((prev) => [...prev, m]);
-  }, []);
+  // ---- viewer ----
+  const openViewer = useCallback((c: Citation) => setViewerCitation(c), []);
+  const closeViewer = useCallback(() => setViewerCitation(null), []);
 
-  const resetChat = useCallback(() => setMessages([]), []);
+  // ---- derived ----
+  const activeProject = useMemo(
+    () => projects.find((p) => p.id === activeProjectId) ?? projects[0],
+    [projects, activeProjectId]
+  );
+
+  const projectMedia = useMemo(
+    () => media.filter((m) => activeProject.sourceIds.includes(m.id)),
+    [media, activeProject]
+  );
+
+  const projectConversations = useMemo(
+    () =>
+      conversations
+        .filter((c) => c.projectId === activeProjectId)
+        .sort((a, b) => Number(b.pinned) - Number(a.pinned) || b.updatedAt.localeCompare(a.updatedAt)),
+    [conversations, activeProjectId]
+  );
+
+  const projectNotes = useMemo(
+    () => notes.filter((n) => n.projectId === activeProjectId),
+    [notes, activeProjectId]
+  );
+
+  const activeConversation = useMemo(
+    () => conversations.find((c) => c.id === activeConversationId) ?? null,
+    [conversations, activeConversationId]
+  );
 
   const contextItems = useMemo(() => {
-    if (scope === 'everything') return media.filter((m) => m.status === 'indexed');
-    return media.filter((m) => selectedIds.has(m.id));
-  }, [media, selectedIds, scope]);
+    if (scope === 'everything')
+      return projectMedia.filter((m) => m.status === 'indexed');
+    return projectMedia.filter((m) => selectedIds.has(m.id));
+  }, [projectMedia, selectedIds, scope]);
 
   const value: RagState = {
     media,
     prompts,
+    projects,
+    activeProjectId,
+    conversations,
+    activeConversationId,
+    notes,
     selectedIds,
     scope,
     activePromptId,
     modelId,
-    messages,
+    viewerCitation,
     toggleSelect,
     selectAll,
     clearSelection,
@@ -166,12 +433,32 @@ export function RagProvider({ children }: { children: ReactNode }) {
     addMedia,
     updateMedia,
     deleteMedia,
+    reindexMedia,
+    setActiveProject,
+    addProject,
+    updateProject,
+    deleteProject,
+    addSourcesToProject,
+    removeSourceFromProject,
+    newConversation,
+    setActiveConversation,
+    togglePinConversation,
+    deleteConversation,
+    renameConversation,
+    addMessage,
+    addNote,
+    deleteNote,
     setActivePrompt: setActivePromptId,
     addPrompt,
     updatePrompt,
     deletePrompt,
-    addMessage,
-    resetChat,
+    openViewer,
+    closeViewer,
+    activeProject,
+    projectMedia,
+    projectConversations,
+    projectNotes,
+    activeConversation,
     contextItems
   };
 

@@ -1,4 +1,4 @@
-import { MediaItem, Prompt } from './types';
+import { MediaItem, Prompt, Project, Note } from './types';
 
 export const MOCK_MEDIA: MediaItem[] = [
   {
@@ -164,5 +164,44 @@ export const MOCK_PROMPTS: Prompt[] = [
     icon: '🃏',
     builtIn: false,
     body: 'Create 15 question/answer flashcards covering the most testable facts in the selected sources. Format as Q: / A: pairs and cite the source for each answer.'
+  }
+];
+
+export const MOCK_PROJECTS: Project[] = [
+  {
+    id: 'proj1',
+    name: 'Learning Science',
+    icon: '🧠',
+    description: 'Habits, memory and study technique research.',
+    sourceIds: ['m1', 'm2', 'm4', 'm5', 'm6', 'm7', 'm8', 'm9', 'm10'],
+    createdAt: '2026-05-30'
+  },
+  {
+    id: 'proj2',
+    name: 'Startup Playbook',
+    icon: '🚀',
+    description: 'Lean methodology and product strategy.',
+    sourceIds: ['m3'],
+    createdAt: '2026-06-01'
+  }
+];
+
+export const MOCK_NOTES: Note[] = [
+  {
+    id: 'n1',
+    projectId: 'proj1',
+    content:
+      'Key insight: habit formation is governed by the basal ganglia and dopamine reward prediction — and the best execution window is early in the day. Pair this with Atomic Habits\' systems-over-goals framing for the exam answer.',
+    citations: [
+      {
+        mediaId: 'm4',
+        mediaName: 'How to Build Habits — Andrew Huberman',
+        type: 'youtube',
+        locator: '12:40',
+        snippet:
+          'There is a neuroscience to habit formation that involves the basal ganglia and dopamine reward prediction.'
+      }
+    ],
+    createdAt: '2026-06-08'
   }
 ];

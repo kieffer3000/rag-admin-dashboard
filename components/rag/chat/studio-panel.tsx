@@ -10,12 +10,14 @@ import {
   GitCompareArrows,
   FileText,
   Sparkles,
-  PanelRightClose
+  PanelRightClose,
+  ImagePlus
 } from 'lucide-react';
 
 // Resting state is monochrome grey-glass; each tool's jewel tone is
 // revealed only on hover (Apple Pro pattern). Muted tones, not primaries.
 const TILES = [
+  { key: 'image', label: 'Generate Image', desc: 'NanoBanana & Kling, grounded in sources', icon: ImagePlus, hover: 'group-hover:text-[#5E5CE6]', glow: '94 92 230' },
   { key: 'audio', label: 'Audio Overview', desc: 'Two AI hosts discuss your sources', icon: AudioLines, hover: 'group-hover:text-[#E58B22]', glow: '229 139 34' },
   { key: 'mindmap', label: 'Mind Map', desc: 'Explore an interactive topic tree', icon: Network, hover: 'group-hover:text-[#5E5CE6]', glow: '94 92 230' },
   { key: 'quiz', label: 'Quiz', desc: 'Test yourself, with explanations', icon: ListChecks, hover: 'group-hover:text-[#34C759]', glow: '52 199 89' },
@@ -24,7 +26,13 @@ const TILES = [
   { key: 'brief', label: 'Briefing Doc', desc: 'A clean executive summary', icon: FileText, hover: 'group-hover:text-[#8E8E93]', glow: '142 142 147' }
 ];
 
-export function StudioPanel({ onCollapse }: { onCollapse?: () => void }) {
+export function StudioPanel({
+  onCollapse,
+  onGenerateImage
+}: {
+  onCollapse?: () => void;
+  onGenerateImage?: () => void;
+}) {
   const { contextItems } = useRag();
   const ready = contextItems.length > 0;
 
@@ -55,10 +63,11 @@ export function StudioPanel({ onCollapse }: { onCollapse?: () => void }) {
           return (
             <button
               key={t.key}
-              disabled={!ready}
+              disabled={t.key === 'image' ? false : !ready}
+              onClick={t.key === 'image' ? onGenerateImage : undefined}
               className={cn(
                 'card-glass group flex w-full items-center gap-3.5 rounded-[18px] p-4 text-left',
-                ready ? 'hover-glow' : 'opacity-45'
+                t.key === 'image' || ready ? 'hover-glow' : 'opacity-45'
               )}
             >
               <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[11px] bg-[hsl(240_16%_96.5%)] dark:bg-[rgb(255_255_255_/_0.05)]">

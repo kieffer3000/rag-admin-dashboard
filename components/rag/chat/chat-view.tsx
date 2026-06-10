@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { useRag } from '@/lib/rag/store';
-import { ChatMessage } from '@/lib/rag/types';
+import { ChatMessage, ChatAttachment } from '@/lib/rag/types';
 import { generateMockAnswer, streamText } from '@/lib/rag/mock-answer';
 import { SourcesPanel } from './sources-panel';
 import { StudioPanel } from './studio-panel';
@@ -19,13 +19,37 @@ import {
   PanelRight,
   Minimize2,
   Maximize2,
-  Layers
+  Layers,
+  History,
+  Plus,
+  Pin,
+  Trash2,
+  ChevronDown,
+  ImagePlus
 } from 'lucide-react';
 import {
   Tooltip,
   TooltipContent,
   TooltipTrigger
 } from '@/components/ui/tooltip';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger
+} from '@/components/ui/dropdown-menu';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription
+} from '@/components/ui/dialog';
+import { Button } from '@/components/ui/button';
+import { Textarea } from '@/components/ui/textarea';
+import { Label } from '@/components/ui/label';
 
 let msgId = 0;
 const newId = () => `msg${++msgId}`;
@@ -38,13 +62,28 @@ const SUGGESTIONS = [
 ];
 
 export function ChatView() {
-  const { messages, addMessage, contextItems, prompts, activePromptId } = useRag();
+  const {
+    activeProject,
+    activeConversation,
+    projectConversations,
+    newConversation,
+    setActiveConversation,
+    togglePinConversation,
+    deleteConversation,
+    addMessage,
+    addMedia,
+    contextItems,
+    prompts,
+    activePromptId,
+  } = useRag();
   const [busy, setBusy] = useState(false);
   const [streaming, setStreaming] = useState<ChatMessage | null>(null);
   const [sourcesOpen, setSourcesOpen] = useState(true);
   const [studioOpen, setStudioOpen] = useState(true);
+  const [imageGenOpen, setImageGenOpen] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
 
+  const messages = activeConversation?.messages ?? [];
   const allOpen = sourcesOpen && studioOpen;
   function toggleAll() {
     const next = !allOpen;
@@ -54,10 +93,23 @@ export function ChatView() {
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
-  }, [messages, streaming]);
+  }, [messages.length, streaming]);
 
-  function handleSend(text: string, attachment?: string) {
+  function handleSend(text: string, attachment?: ChatAttachment) {
     const activePrompt = prompts.find((p) => p.id === activePromptId);
+
+    // "Add to library" attachments also become permanent indexed sources.
+    if (attachment?.mode === 'index') {
+      addMedia({
+        type: attachment.kind === 'image' ? 'image' : 'document',
+        name: attachment.name.replace(/\.[^.]+$/, ''),
+        description: 'Added from chat',
+        date: new Date().toISOString().slice(0, 10),
+        content: `Extracted content from ${attachment.name}…`,
+        source: attachment.name
+      });
+    }
+
     const userMsg: ChatMessage = {
       id: newId(),
       role: 'user',
@@ -96,8 +148,28 @@ export function ChatView() {
     }, 550);
   }
 
-  const empty = messages.length === 0 && !streaming;
+  function handleGenerateImage(prompt: string, model: 'nanobanana' | 'kling') {
+    addMessage({
+      id: newId(),
+      role: 'user',
+      content: `Generate an image: ${prompt}`,
+      createdAt: new Date().toISOString()
+    });
+    setBusy(true);
+    setTimeout(() => {
+      addMessage({
+        id: newId(),
+        role: 'assistant',
+        content:
+          'Here is a preview of your generated image. Once the backend is wired, this will render the actual output — grounded in your selected sources when you reference them.',
+        image: { prompt, model },
+        createdAt: new Date().toISOString()
+      });
+      setBusy(false);
+    }, 1200);
+  }
 
+  const empty = messages.length === 0 && !streaming;
   return (
     <div className="flex h-full gap-2.5 p-2.5">
       {/* Left: sources */}
@@ -118,15 +190,74 @@ export function ChatView() {
       {/* Center: chat */}
       <div className="panel relative flex min-w-0 flex-1 flex-col overflow-hidden rounded-[26px]">
         {/* Panel toolbar */}
-        <div className="hidden h-20 shrink-0 items-center px-4 md:flex">
-          <div>
-            <PanelButton
-              active={sourcesOpen}
-              label={sourcesOpen ? 'Hide sources' : 'Show sources'}
-              icon={PanelLeft}
-              onClick={() => setSourcesOpen((v) => !v)}
-            />
-          </div>
+        <div className="hidden h-20 shrink-0 items-center gap-2 px-4 md:flex">
+          <PanelButton
+            active={sourcesOpen}
+            label={sourcesOpen ? 'Hide sources' : 'Show sources'}
+            icon={PanelLeft}
+            onClick={() => setSourcesOpen((v) => !v)}
+          />
+
+          {/* Conversation switcher */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button className="flex max-w-[260px] items-center gap-1.5 rounded-full bg-[hsl(240_16%_96.5%)] px-3 py-1.5 text-[12px] font-medium text-foreground transition-all hover:brightness-95 dark:bg-[rgb(255_255_255_/_0.05)] dark:hover:bg-[rgb(255_255_255_/_0.08)]">
+                <History className="h-3.5 w-3.5 text-muted-foreground" />
+                <span className="truncate">
+                  {activeConversation ? activeConversation.title : 'New chat'}
+                </span>
+                <ChevronDown className="h-3 w-3 shrink-0 text-muted-foreground" />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" className="w-72">
+              <DropdownMenuItem onClick={() => newConversation()} className="gap-2 text-accent">
+                <Plus className="h-3.5 w-3.5" /> New chat
+              </DropdownMenuItem>
+              {projectConversations.length > 0 && (
+                <>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuLabel className="text-[11px] uppercase tracking-wide text-muted-foreground">
+                    {activeProject.name} — history
+                  </DropdownMenuLabel>
+                  {projectConversations.map((c) => (
+                    <DropdownMenuItem
+                      key={c.id}
+                      onClick={() => setActiveConversation(c.id)}
+                      className={cn(
+                        'group/conv gap-2',
+                        c.id === activeConversation?.id && 'bg-secondary'
+                      )}
+                    >
+                      {c.pinned ? (
+                        <Pin className="h-3 w-3 shrink-0 text-accent" />
+                      ) : (
+                        <History className="h-3 w-3 shrink-0 text-muted-foreground" />
+                      )}
+                      <span className="min-w-0 flex-1 truncate text-[13px]">{c.title}</span>
+                      <span
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          togglePinConversation(c.id);
+                        }}
+                        className="rounded p-1 text-muted-foreground opacity-0 transition-opacity hover:text-accent group-hover/conv:opacity-100"
+                      >
+                        <Pin className="h-3 w-3" />
+                      </span>
+                      <span
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          deleteConversation(c.id);
+                        }}
+                        className="rounded p-1 text-muted-foreground opacity-0 transition-opacity hover:text-red-500 group-hover/conv:opacity-100"
+                      >
+                        <Trash2 className="h-3 w-3" />
+                      </span>
+                    </DropdownMenuItem>
+                  ))}
+                </>
+              )}
+            </DropdownMenuContent>
+          </DropdownMenu>
 
           <div className="flex flex-1 justify-center">
             <button
@@ -150,23 +281,23 @@ export function ChatView() {
 
         <div ref={scrollRef} className="scroll-clean min-h-0 flex-1 overflow-y-auto">
           {empty ? (
-            <EmptyState onPick={handleSend} hasContext={contextItems.length > 0} />
+            <EmptyState
+              onPick={handleSend}
+              hasContext={contextItems.length > 0}
+              projectName={activeProject.name}
+            />
           ) : (
             <div className="py-4 pb-40">
               {messages.map((m) => (
                 <Message key={m.id} msg={m} />
               ))}
               {streaming &&
-                (streaming.content ? (
-                  <Message msg={streaming} />
-                ) : (
-                  <TypingIndicator />
-                ))}
+                (streaming.content ? <Message msg={streaming} /> : <TypingIndicator />)}
             </div>
           )}
         </div>
 
-        {/* Floating composer — detached pill over the glass */}
+        {/* Floating composer */}
         <div className="pointer-events-none absolute inset-x-0 bottom-0">
           <div className="pointer-events-auto bg-gradient-to-t from-[rgb(var(--glass-bg)/0.9)] via-[rgb(var(--glass-bg)/0.6)] to-transparent pt-8">
             <Composer onSend={handleSend} busy={busy} />
@@ -177,7 +308,10 @@ export function ChatView() {
       {/* Right: studio */}
       {studioOpen ? (
         <aside className="panel hidden w-[284px] shrink-0 overflow-hidden rounded-[26px] xl:block">
-          <StudioPanel onCollapse={() => setStudioOpen(false)} />
+          <StudioPanel
+            onCollapse={() => setStudioOpen(false)}
+            onGenerateImage={() => setImageGenOpen(true)}
+          />
         </aside>
       ) : (
         <CollapsedRail
@@ -188,7 +322,94 @@ export function ChatView() {
           className="hidden xl:flex"
         />
       )}
+
+      {/* Image generation dialog */}
+      <ImageGenDialog
+        open={imageGenOpen}
+        onOpenChange={setImageGenOpen}
+        onGenerate={handleGenerateImage}
+      />
     </div>
+  );
+}
+
+function ImageGenDialog({
+  open,
+  onOpenChange,
+  onGenerate
+}: {
+  open: boolean;
+  onOpenChange: (o: boolean) => void;
+  onGenerate: (prompt: string, model: 'nanobanana' | 'kling') => void;
+}) {
+  const [prompt, setPrompt] = useState('');
+  const [model, setModel] = useState<'nanobanana' | 'kling'>('nanobanana');
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <ImagePlus className="h-4 w-4 text-accent" /> Generate an image
+          </DialogTitle>
+          <DialogDescription>
+            Describe what you want. Reference your sources and the generation will be
+            grounded in them.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-4">
+          <div className="space-y-1.5">
+            <Label>Prompt</Label>
+            <Textarea
+              value={prompt}
+              onChange={(e) => setPrompt(e.target.value)}
+              placeholder="e.g. A clean diagram of the habit loop as described in Atomic Habits"
+              className="min-h-[90px]"
+              autoFocus
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label>Model</Label>
+            <div className="grid grid-cols-2 gap-2">
+              {(
+                [
+                  { id: 'nanobanana', name: 'NanoBanana', desc: 'Images & infographics' },
+                  { id: 'kling', name: 'Kling', desc: 'Short video clips' }
+                ] as const
+              ).map((m) => (
+                <button
+                  key={m.id}
+                  onClick={() => setModel(m.id)}
+                  className={cn(
+                    'card-glass rounded-[14px] p-3 text-left transition-all',
+                    model === m.id && 'ring-1 ring-accent'
+                  )}
+                >
+                  <div className="text-[13px] font-semibold">{m.name}</div>
+                  <div className="text-[11px] text-muted-foreground">{m.desc}</div>
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+        <div className="flex justify-end gap-2 pt-1">
+          <Button variant="ghost" onClick={() => onOpenChange(false)}>
+            Cancel
+          </Button>
+          <Button
+            variant="accent"
+            disabled={!prompt.trim()}
+            onClick={() => {
+              onGenerate(prompt.trim(), model);
+              setPrompt('');
+              onOpenChange(false);
+            }}
+          >
+            Generate
+          </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -258,10 +479,12 @@ function CollapsedRail({
 
 function EmptyState({
   onPick,
-  hasContext
+  hasContext,
+  projectName
 }: {
   onPick: (t: string) => void;
   hasContext: boolean;
+  projectName: string;
 }) {
   return (
     <div className="flex h-full flex-col items-center justify-center px-6 pb-24">
@@ -272,7 +495,7 @@ function EmptyState({
         </div>
       </div>
       <h1 className="text-gradient text-[32px] font-semibold leading-tight tracking-tight">
-        Chat with your knowledge
+        Chat with {projectName}
       </h1>
       <p className="mt-3 max-w-md text-center text-[15px] leading-relaxed text-muted-foreground">
         {hasContext

@@ -4,7 +4,17 @@ import { useRef, useState } from 'react';
 import { useRag } from '@/lib/rag/store';
 import { cn } from '@/lib/utils';
 import { LLM_MODELS, PROVIDER_META, LlmProvider } from '@/lib/rag/models';
-import { ArrowUp, Paperclip, Sparkles, X, ChevronDown, Check } from 'lucide-react';
+import { ChatAttachment, AttachmentMode } from '@/lib/rag/types';
+import {
+  ArrowUp,
+  Paperclip,
+  Sparkles,
+  X,
+  ChevronDown,
+  Check,
+  MessageSquareDashed,
+  DatabaseZap
+} from 'lucide-react';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -15,9 +25,11 @@ import {
 } from '@/components/ui/dropdown-menu';
 
 interface ComposerProps {
-  onSend: (text: string, attachment?: string) => void;
+  onSend: (text: string, attachment?: ChatAttachment) => void;
   busy: boolean;
 }
+
+const IMG_EXT = ['png', 'jpg', 'jpeg', 'gif', 'webp', 'heic'];
 
 const PILL_BTN =
   'flex h-9 items-center gap-1.5 rounded-full bg-card px-3 text-[13px] font-medium text-foreground shadow-soft transition-all hover:brightness-95 dark:bg-[rgb(255_255_255_/_0.06)] dark:shadow-none dark:hover:bg-[rgb(255_255_255_/_0.1)]';
@@ -27,7 +39,7 @@ export function Composer({ onSend, busy }: ComposerProps) {
     useRag();
   const activeModel = LLM_MODELS.find((m) => m.id === modelId) ?? LLM_MODELS[0];
   const [text, setText] = useState('');
-  const [attachment, setAttachment] = useState<string | undefined>();
+  const [attachment, setAttachment] = useState<ChatAttachment | undefined>();
   const fileRef = useRef<HTMLInputElement>(null);
   const taRef = useRef<HTMLTextAreaElement>(null);
 
@@ -61,16 +73,44 @@ export function Composer({ onSend, busy }: ComposerProps) {
           )}
         >
           {attachment && (
-            <div className="flex items-center justify-between px-5 pt-3.5">
-              <span className="inline-flex items-center gap-1.5 rounded-full border border-accent/20 bg-accent/10 px-3 py-1 text-xs font-medium text-accent">
+            <div className="flex flex-wrap items-center gap-2 px-5 pt-3.5">
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-accent/10 px-3 py-1 text-xs font-medium text-accent">
                 <Paperclip className="h-3 w-3" />
-                {attachment}
-                <button onClick={() => setAttachment(undefined)} className="ml-1 opacity-70 hover:opacity-100">
+                {attachment.name}
+                <button
+                  onClick={() => setAttachment(undefined)}
+                  className="ml-1 opacity-70 hover:opacity-100"
+                >
                   <X className="h-3 w-3" />
                 </button>
               </span>
-              <span className="text-[11px] text-muted-foreground">
-                answered against your sources
+
+              {/* discuss vs index segmented toggle */}
+              <span className="ml-auto flex rounded-full bg-card p-0.5 text-[11px] font-medium shadow-soft dark:bg-[rgb(255_255_255_/_0.06)] dark:shadow-none">
+                {(
+                  [
+                    { mode: 'discuss', label: 'Just discuss', icon: MessageSquareDashed },
+                    { mode: 'index', label: 'Add to library', icon: DatabaseZap }
+                  ] as { mode: AttachmentMode; label: string; icon: any }[]
+                ).map((opt) => {
+                  const Icon = opt.icon;
+                  const active = attachment.mode === opt.mode;
+                  return (
+                    <button
+                      key={opt.mode}
+                      onClick={() => setAttachment({ ...attachment, mode: opt.mode })}
+                      className={cn(
+                        'flex items-center gap-1 rounded-full px-2.5 py-1 transition-all',
+                        active
+                          ? 'bg-accent text-white shadow-sm'
+                          : 'text-muted-foreground hover:text-foreground'
+                      )}
+                    >
+                      <Icon className="h-3 w-3" />
+                      {opt.label}
+                    </button>
+                  );
+                })}
               </span>
             </div>
           )}
@@ -104,7 +144,14 @@ export function Composer({ onSend, busy }: ComposerProps) {
               className="hidden"
               onChange={(e) => {
                 const f = e.target.files?.[0];
-                if (f) setAttachment(f.name);
+                if (f) {
+                  const ext = f.name.split('.').pop()?.toLowerCase() ?? '';
+                  setAttachment({
+                    name: f.name,
+                    mode: 'discuss',
+                    kind: IMG_EXT.includes(ext) ? 'image' : 'file'
+                  });
+                }
                 e.target.value = '';
               }}
             />

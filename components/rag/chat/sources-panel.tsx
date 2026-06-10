@@ -9,11 +9,11 @@ import { cn } from '@/lib/utils';
 import { Layers, Plus, PanelLeftClose } from 'lucide-react';
 
 export function SourcesPanel({ onCollapse }: { onCollapse?: () => void }) {
-  const { media, selectedIds, toggleSelect, selectAll, scope, setScope } = useRag();
+  const { projectMedia, selectedIds, toggleSelect, selectAll, scope, setScope } = useRag();
 
   const indexedIds = useMemo(
-    () => media.filter((m) => m.status === 'indexed').map((m) => m.id),
-    [media]
+    () => projectMedia.filter((m) => m.status === 'indexed').map((m) => m.id),
+    [projectMedia]
   );
   const allSelected =
     indexedIds.length > 0 && indexedIds.every((id) => selectedIds.has(id));
@@ -87,7 +87,7 @@ export function SourcesPanel({ onCollapse }: { onCollapse?: () => void }) {
 
       {/* List */}
       <div className="scroll-clean mt-1 flex-1 space-y-0.5 overflow-y-auto px-2 pb-4">
-        {media.map((m) => {
+        {projectMedia.map((m) => {
           const inEverything = scope === 'everything' && m.status === 'indexed';
           const checked = scope === 'everything' ? inEverything : selectedIds.has(m.id);
           const disabled = scope === 'everything' || m.status !== 'indexed';

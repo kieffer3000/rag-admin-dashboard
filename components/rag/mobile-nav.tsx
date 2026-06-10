@@ -2,16 +2,11 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { MessagesSquare, Library, Sparkles, Menu, Boxes } from 'lucide-react';
+import { Menu, Boxes } from 'lucide-react';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
-
-const NAV = [
-  { href: '/', label: 'Chat', icon: MessagesSquare },
-  { href: '/library', label: 'Library', icon: Library },
-  { href: '/prompts', label: 'Prompts', icon: Sparkles }
-];
+import { NAV, ProjectSwitcher } from './sidebar';
 
 export function MobileNav() {
   const pathname = usePathname();
@@ -23,12 +18,15 @@ export function MobileNav() {
         </Button>
       </SheetTrigger>
       <SheetContent side="left" className="w-64 p-4">
-        <Link href="/" className="mb-6 flex items-center gap-2.5">
-          <div className="flex h-8 w-8 items-center justify-center rounded-[10px] bg-gradient-to-br from-blue-500 to-indigo-600 text-white">
+        <Link href="/" className="mb-5 flex items-center gap-2.5">
+          <div className="flex h-8 w-8 items-center justify-center rounded-[10px] bg-gradient-to-br from-indigo-500 to-violet-600 text-white">
             <Boxes className="h-[18px] w-[18px]" />
           </div>
           <span className="text-[15px] font-semibold">Atlas</span>
         </Link>
+        <div className="mb-4">
+          <ProjectSwitcher />
+        </div>
         <nav className="flex flex-col gap-1">
           {NAV.map((item) => {
             const active =
