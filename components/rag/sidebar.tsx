@@ -38,8 +38,8 @@ export function Sidebar() {
               className={cn(
                 'group flex items-center gap-3 rounded-[14px] px-3 py-2.5 text-sm font-medium transition-all duration-150',
                 active
-                  ? 'border border-[rgb(var(--hairline)/0.1)] bg-[rgb(var(--hairline)/0.06)] text-foreground shadow-[inset_0_1px_0_rgb(var(--hairline)/0.08)]'
-                  : 'border border-transparent text-muted-foreground hover:bg-[rgb(var(--hairline)/0.04)] hover:text-foreground'
+                  ? 'bg-card text-foreground shadow-[0_1px_3px_rgba(0,0,0,0.08)] dark:bg-[rgb(255_255_255_/_0.08)] dark:shadow-none dark:ring-1 dark:ring-inset dark:ring-white/10'
+                  : 'text-muted-foreground hover:bg-[rgb(var(--hairline)/0.05)] hover:text-foreground'
               )}
             >
               <Icon
@@ -54,7 +54,7 @@ export function Sidebar() {
         })}
       </nav>
 
-      <div className="card-glass mt-auto rounded-[18px] p-3.5">
+      <div className="panel mt-auto rounded-[20px] p-3.5">
         <div className="flex items-center gap-2 text-[13px] font-medium">
           <span className="relative flex h-2 w-2">
             <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-60" />

@@ -52,7 +52,7 @@ export function SourcesPanel({ onCollapse }: { onCollapse?: () => void }) {
             className={cn(
               'flex-1 rounded-[10px] py-1.5 transition-all',
               scope === 'selected'
-                ? 'bg-card text-foreground shadow-soft'
+                ? 'bg-card text-foreground shadow-[0_1px_2px_rgba(0,0,0,0.1)] dark:shadow-none'
                 : 'text-muted-foreground hover:text-foreground'
             )}
           >
@@ -63,7 +63,7 @@ export function SourcesPanel({ onCollapse }: { onCollapse?: () => void }) {
             className={cn(
               'flex-1 rounded-[10px] py-1.5 transition-all',
               scope === 'everything'
-                ? 'bg-card text-foreground shadow-soft'
+                ? 'bg-card text-foreground shadow-[0_1px_2px_rgba(0,0,0,0.1)] dark:shadow-none'
                 : 'text-muted-foreground hover:text-foreground'
             )}
           >
