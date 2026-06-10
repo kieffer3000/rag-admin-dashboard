@@ -10,6 +10,7 @@ import {
   Boxes,
   StickyNote,
   Activity,
+  Users,
   ChevronsUpDown,
   Plus,
   Check,
@@ -17,6 +18,7 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useRag } from '@/lib/rag/store';
+import { useIsAdmin } from '@/lib/rag/use-role';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -41,8 +43,9 @@ export const NAV = [
   { href: '/library', label: 'Library', icon: Library },
   { href: '/prompts', label: 'Prompts', icon: Sparkles },
   { href: '/notes', label: 'Notes', icon: StickyNote },
-  { href: '/health', label: 'Health', icon: Activity }
-];
+  { href: '/health', label: 'Health', icon: Activity, adminOnly: true },
+  { href: '/members', label: 'Team', icon: Users }
+] as { href: string; label: string; icon: any; adminOnly?: boolean }[];
 
 const PROJECT_EMOJIS = ['🧠', '🚀', '📚', '⚖️', '🔬', '💼', '🎓', '🏥', '🎨', '🏗️'];
 
@@ -189,6 +192,7 @@ export function ProjectSwitcher({ compact = false }: { compact?: boolean }) {
 
 export function Sidebar() {
   const pathname = usePathname();
+  const isAdmin = useIsAdmin();
 
   return (
     <aside className="hidden w-[228px] shrink-0 flex-col bg-transparent px-3 py-4 lg:flex">
@@ -207,7 +211,7 @@ export function Sidebar() {
       </div>
 
       <nav className="flex flex-col gap-1">
-        {NAV.map((item) => {
+        {NAV.filter((i) => isAdmin || !i.adminOnly).map((item) => {
           const active =
             item.href === '/' ? pathname === '/' : pathname.startsWith(item.href);
           const Icon = item.icon;

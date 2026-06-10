@@ -7,9 +7,11 @@ import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { NAV, ProjectSwitcher } from './sidebar';
+import { useIsAdmin } from '@/lib/rag/use-role';
 
 export function MobileNav() {
   const pathname = usePathname();
+  const isAdmin = useIsAdmin();
   return (
     <Sheet>
       <SheetTrigger asChild>
@@ -28,7 +30,7 @@ export function MobileNav() {
           <ProjectSwitcher />
         </div>
         <nav className="flex flex-col gap-1">
-          {NAV.map((item) => {
+          {NAV.filter((i) => isAdmin || !i.adminOnly).map((item) => {
             const active =
               item.href === '/' ? pathname === '/' : pathname.startsWith(item.href);
             const Icon = item.icon;

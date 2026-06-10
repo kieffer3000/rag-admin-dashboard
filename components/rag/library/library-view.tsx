@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from 'react';
 import { useRag, mediaTypeCounts } from '@/lib/rag/store';
+import { useIsAdmin } from '@/lib/rag/use-role';
 import { MediaType } from '@/lib/rag/types';
 import { MEDIA_TYPES, MEDIA_TYPE_ORDER } from '@/lib/rag/media-config';
 import { MediaRow } from './media-row';
@@ -20,6 +21,7 @@ export function LibraryView() {
   const [filter, setFilter] = useState<Filter>('all');
   const [query, setQuery] = useState('');
   const [uploadOpen, setUploadOpen] = useState(false);
+  const isAdmin = useIsAdmin();
 
   const counts = useMemo(() => mediaTypeCounts(media), [media]);
 
@@ -63,9 +65,11 @@ export function LibraryView() {
                 className="h-9 w-56 rounded-xl pl-9"
               />
             </div>
-            <Button variant="accent" className="gap-1.5 rounded-xl" onClick={() => setUploadOpen(true)}>
-              <Plus className="h-4 w-4" /> Add source
-            </Button>
+            {isAdmin && (
+              <Button variant="accent" className="gap-1.5 rounded-xl" onClick={() => setUploadOpen(true)}>
+                <Plus className="h-4 w-4" /> Add source
+              </Button>
+            )}
           </div>
         </div>
 

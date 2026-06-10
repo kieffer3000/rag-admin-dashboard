@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { MediaItem } from '@/lib/rag/types';
 import { useRag } from '@/lib/rag/store';
+import { useIsAdmin } from '@/lib/rag/use-role';
 import { Checkbox } from '@/components/ui/checkbox';
 import { MediaIcon, StatusBadge } from '@/components/rag/shared';
 import {
@@ -29,6 +30,7 @@ export function MediaRow({ item }: { item: MediaItem }) {
   const [desc, setDesc] = useState(item.description);
   const [date, setDate] = useState(item.date);
   const [copied, setCopied] = useState(false);
+  const isAdmin = useIsAdmin();
 
   const checked = selectedIds.has(item.id);
 
@@ -148,6 +150,7 @@ export function MediaRow({ item }: { item: MediaItem }) {
             )}
           </button>
 
+          {isAdmin && (
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <button className="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-[rgb(var(--hairline)/0.06)] hover:text-foreground">
@@ -170,6 +173,7 @@ export function MediaRow({ item }: { item: MediaItem }) {
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
+          )}
         </div>
       )}
     </div>

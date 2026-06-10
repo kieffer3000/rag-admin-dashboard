@@ -3,6 +3,7 @@ import './globals.css';
 import type { Metadata } from 'next';
 import { Inter } from 'next/font/google';
 import { Analytics } from '@vercel/analytics/react';
+import { ClerkProvider } from '@clerk/nextjs';
 
 const inter = Inter({
   subsets: ['latin'],
@@ -22,6 +23,15 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
+    <ClerkProvider
+      appearance={{
+        variables: {
+          colorPrimary: '#5E5CE6',
+          borderRadius: '0.875rem',
+          fontFamily: 'var(--font-inter), system-ui, sans-serif'
+        }
+      }}
+    >
     <html lang="en" className={inter.variable} suppressHydrationWarning>
       <head>
         <script
@@ -33,5 +43,6 @@ export default function RootLayout({
       <body className="min-h-screen font-sans">{children}</body>
       <Analytics />
     </html>
+    </ClerkProvider>
   );
 }
