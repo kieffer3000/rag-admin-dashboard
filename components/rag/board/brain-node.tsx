@@ -6,6 +6,7 @@ import { cn } from '@/lib/utils';
 import { useBoard } from '@/lib/rag/board/store';
 import { useRag } from '@/lib/rag/store';
 import { generateMockAnswer, streamText } from '@/lib/rag/mock-answer';
+import { askBrain } from '@/lib/rag/board/ask';
 import { ChatMessage } from '@/lib/rag/types';
 import { MediaIcon } from '@/components/rag/shared';
 import { Boxes, ArrowUp, Loader2, Unplug } from 'lucide-react';
@@ -35,7 +36,7 @@ function BrainNodeInner({ id, data, selected }: NodeProps) {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight });
   }, [messages]);
 
-  function send() {
+  async function send() {
     const q = question.trim();
     if (!q || busy) return;
     setQuestion('');
@@ -55,13 +56,23 @@ function BrainNodeInner({ id, data, selected }: NodeProps) {
       createdAt: new Date().toISOString()
     });
 
-    // P3 swaps this for the live Query webhook via /api/query.
-    const ctxNote = scope.contextTexts.length
-      ? `\n\n(Context from wired text nodes: ${scope.contextTexts.join(' · ')})`
-      : '';
-    const { content, citations } = generateMockAnswer(q, scope.items);
+    // Live RAG: the wired graph IS the scope. Falls back to a clearly
+    // labelled mock if the webhook proxy is unreachable (e.g. local dev
+    // without MAKE_QUERY_WEBHOOK_URL).
+    let content: string;
+    let citations;
+    try {
+      const r = await askBrain(q, scope.items, scope.contextTexts);
+      content = r.answer;
+      citations = r.citations;
+    } catch {
+      const mock = generateMockAnswer(q, scope.items);
+      content = `⚠︎ Live RAG unreachable — mock answer.\n\n${mock.content}`;
+      citations = mock.citations;
+    }
+
     streamText(
-      content + ctxNote,
+      content,
       (soFar) => updateBrainMessage(id, asstId, { content: soFar }),
       () => {
         updateBrainMessage(id, asstId, { citations });

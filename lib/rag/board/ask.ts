@@ -1,0 +1,65 @@
+import { Citation, MediaItem } from '../types';
+
+interface RawCitation {
+  source_name: string;
+  source_id: string;
+  snippet: string;
+  score: number;
+  /** schema v2 — present once chunking lands. */
+  page?: number | null;
+  timestamp?: string | null;
+}
+
+export interface AskResult {
+  answer: string;
+  citations: Citation[];
+  live: boolean;
+}
+
+/**
+ * Ask the live RAG backend (Make.com Query scenario via /api/query).
+ * The brain's wired connectivity arrives here as source_ids — the Board
+ * is a visual source_ids assembler, nothing more.
+ */
+export async function askBrain(
+  question: string,
+  items: MediaItem[],
+  contextTexts: string[],
+  modelId?: string
+): Promise<AskResult> {
+  const res = await fetch('/api/query', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      question,
+      source_ids: items.map((m) => m.id),
+      context_texts: contextTexts,
+      model: modelId
+    })
+  });
+
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error ?? `Query failed (${res.status})`);
+  }
+
+  const data = await res.json();
+  const byId = new Map(items.map((m) => [m.id, m]));
+
+  const citations: Citation[] = (data.citations as RawCitation[]).map((c) => {
+    const m = byId.get(c.source_id);
+    return {
+      mediaId: c.source_id,
+      mediaName: c.source_name || m?.name || c.source_id,
+      type: m?.type ?? 'document',
+      locator: c.page
+        ? `p. ${c.page}`
+        : c.timestamp
+          ? c.timestamp
+          : `${Math.round((c.score ?? 0) * 100)}% match`,
+      snippet: c.snippet ?? ''
+    };
+  });
+
+  return { answer: data.answer, citations, live: true };
+}

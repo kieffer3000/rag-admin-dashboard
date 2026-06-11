@@ -58,7 +58,7 @@ function retile(nodes: BoardNode[], hubId: string): BoardNode[] {
 
 function BoardCanvasInner() {
   const { board, setBoard, nextBoardId } = useBoard();
-  const { media, addMedia } = useRag();
+  const { media, addMedia, updateMedia } = useRag();
   const { getIntersectingNodes, screenToFlowPosition } = useReactFlow();
   const wrapRef = useRef<HTMLDivElement>(null);
 
@@ -267,21 +267,41 @@ function BoardCanvasInner() {
           })
         }
         onNewSource={(type, name, source) => {
-          // P4 swaps this mock for the real Indexing webhook (/api/index).
-          const id = addMedia({
-            type,
-            name,
-            description: '',
-            date: new Date().toISOString().slice(0, 10),
-            content: source || name,
-            source: source || undefined
-          });
+          // Optimistic chip now; real status when the Indexing webhook
+          // (Gemini embed → Pinecone upsert) answers. v1 embeds the given
+          // text/URL as-is — transcript/crawl extraction is Scenario A v2.
+          const id = addMedia(
+            {
+              type,
+              name,
+              description: '',
+              date: new Date().toISOString().slice(0, 10),
+              content: source || name,
+              source: source || undefined
+            },
+            { simulate: false }
+          );
           pushNode({
             id: nextBoardId('chip'),
             type: 'chip',
             position: centerPos(),
             data: { mediaId: id }
           });
+          fetch('/api/index', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              source_id: id,
+              name,
+              type,
+              text: source ? `${name}\n${source}` : name
+            })
+          })
+            .then((r) => {
+              if (!r.ok) throw new Error();
+              updateMedia(id, { status: 'indexed' });
+            })
+            .catch(() => updateMedia(id, { status: 'failed' }));
         }}
         onAddBrain={() =>
           pushNode({
