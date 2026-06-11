@@ -1,13 +1,15 @@
 import { auth } from '@clerk/nextjs/server';
 
-// Speech-to-text for the Board: push-to-talk question dictation (Tier 2)
-// and voice-memos-as-sources (Tier 3, Scenario A v2).
-//
-// Target model: Microsoft MAI-Transcribe-1.5 via the Foundry API
-// (43 languages, 2.4% WER, keyword biasing — bias toward wired source
-// names at call time). SCAFFOLD ONLY until the Foundry account exists:
-// the exact request shape gets wired against the official cookbook docs
-// once MAI_TRANSCRIBE_API_KEY is configured — not guessed from memory.
+// Speech-to-text proxy → Microsoft MAI-Transcribe-1.5 (Foundry LLM Speech API).
+// Contract per learn.microsoft.com/.../mai-transcribe (api-version 2025-10-15):
+//   POST {resource}.cognitiveservices.azure.com/speechtotext/transcriptions:transcribe
+//   header  Ocp-Apim-Subscription-Key: <key>
+//   body    multipart/form-data: audio=@file  +  definition={...JSON}
+//   audio   WAV / MP3 / FLAC, < 300 MB
+// `phraseList.phrases` = entity biasing (we pass the brain's wired source names).
+// NOTE: MAI-Transcribe is in public preview.
+
+export const runtime = 'nodejs';
 
 export async function POST(req: Request) {
   const { userId } = await auth();
@@ -15,22 +17,81 @@ export async function POST(req: Request) {
     return Response.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  const apiKey = process.env.MAI_TRANSCRIBE_API_KEY;
+  const key = process.env.MAI_TRANSCRIBE_API_KEY;
   const endpoint = process.env.MAI_TRANSCRIBE_ENDPOINT;
-  if (!apiKey || !endpoint) {
+  if (!key || !endpoint) {
     return Response.json(
       {
         error:
-          'Transcription not configured — set MAI_TRANSCRIBE_API_KEY and MAI_TRANSCRIBE_ENDPOINT (Foundry).'
+          'Transcription not configured — set MAI_TRANSCRIBE_API_KEY and MAI_TRANSCRIBE_ENDPOINT (Foundry Speech resource).'
       },
       { status: 503 }
     );
   }
 
-  // TODO(foundry): multipart audio upload + keyword biasing per the
-  // MAI-Transcribe cookbook. Wired when the key lands.
-  return Response.json(
-    { error: 'Foundry call not yet wired — pending account setup.' },
-    { status: 501 }
-  );
+  const inForm = await req.formData();
+  const audio = inForm.get('audio');
+  if (!(audio instanceof File)) {
+    return Response.json({ error: 'audio file is required' }, { status: 400 });
+  }
+
+  let phrases: string[] = [];
+  const raw = inForm.get('phrases');
+  if (typeof raw === 'string') {
+    try {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) phrases = parsed.filter((p) => typeof p === 'string');
+    } catch {
+      /* ignore malformed phrase list */
+    }
+  }
+
+  const model = process.env.MAI_TRANSCRIBE_MODEL ?? 'mai-transcribe-1.5';
+  const definition: Record<string, unknown> = {
+    enhancedMode: { enabled: true, model }
+  };
+  // phraseList only supported on mai-transcribe-1.5
+  if (phrases.length && model === 'mai-transcribe-1.5') {
+    definition.phraseList = { phrases: phrases.slice(0, 50) };
+  }
+
+  const apiVersion = process.env.MAI_TRANSCRIBE_API_VERSION ?? '2025-10-15';
+  const url = endpoint.includes('transcriptions:transcribe')
+    ? endpoint
+    : `${endpoint.replace(/\/$/, '')}/speechtotext/transcriptions:transcribe?api-version=${apiVersion}`;
+
+  const outForm = new FormData();
+  outForm.append('audio', audio, audio.name || 'audio.wav');
+  outForm.append('definition', JSON.stringify(definition));
+
+  let res: Response;
+  try {
+    res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Ocp-Apim-Subscription-Key': key }, // fetch sets multipart boundary
+      body: outForm
+    });
+  } catch {
+    return Response.json({ error: 'Could not reach transcription service' }, { status: 502 });
+  }
+
+  if (!res.ok) {
+    const detail = await res.text().catch(() => '');
+    return Response.json(
+      { error: `Transcription service returned ${res.status}`, detail: detail.slice(0, 300) },
+      { status: 502 }
+    );
+  }
+
+  const data = await res.json().catch(() => ({}));
+  // Fast-transcription shape is combinedPhrases[].text; stay defensive.
+  const text =
+    (Array.isArray(data.combinedPhrases)
+      ? data.combinedPhrases.map((p: { text?: string }) => p.text).filter(Boolean).join(' ')
+      : '') ||
+    data.text ||
+    data.displayText ||
+    '';
+
+  return Response.json({ text });
 }

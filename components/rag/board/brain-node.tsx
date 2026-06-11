@@ -7,6 +7,7 @@ import { useBoard } from '@/lib/rag/board/store';
 import { useRag } from '@/lib/rag/store';
 import { generateMockAnswer, streamText } from '@/lib/rag/mock-answer';
 import { askBrain } from '@/lib/rag/board/ask';
+import { WavRecorder, transcribeAudio } from '@/lib/rag/board/dictation';
 import { ChatMessage } from '@/lib/rag/types';
 import { MediaIcon } from '@/components/rag/shared';
 import { LLM_MODELS, PROVIDER_META } from '@/lib/rag/models';
@@ -51,8 +52,12 @@ function BrainNodeInner({ id, data, selected }: NodeProps) {
   const [question, setQuestion] = useState('');
   const [busy, setBusy] = useState(false);
   const [listening, setListening] = useState(false);
+  const [transcribing, setTranscribing] = useState(false);
+  /** False once we learn MAI-Transcribe isn't configured → use Web Speech. */
+  const [maiMode, setMaiMode] = useState(true);
   const scrollRef = useRef<HTMLDivElement>(null);
   const recRef = useRef<any>(null);
+  const wavRef = useRef<WavRecorder | null>(null);
   /** Composer text at the moment dictation started — interim results append to it. */
   const dictBaseRef = useRef('');
 
@@ -61,8 +66,57 @@ function BrainNodeInner({ id, data, selected }: NodeProps) {
   const modelId = (d.modelId as string) ?? BOARD_DEFAULT_MODEL;
   const model = LLM_MODELS.find((m) => m.id === modelId) ?? LLM_MODELS[3];
 
-  /** Browser dictation (Web Speech API) — Poppy-style mic on the composer. */
-  function toggleDictation() {
+  function appendToComposer(text: string) {
+    if (!text) return;
+    setQuestion((q) => (q ? q.trimEnd() + ' ' : '') + text);
+  }
+
+  /**
+   * Mic dispatcher: MAI-Transcribe (record WAV → high-accuracy transcript,
+   * biased toward wired source names) when available; auto-falls back to the
+   * browser's Web Speech API if MAI isn't configured.
+   */
+  async function toggleMic() {
+    if (transcribing) return;
+    if (!maiMode) return toggleWebSpeech();
+
+    if (listening) {
+      // Stop recording → transcribe.
+      setListening(false);
+      setTranscribing(true);
+      try {
+        const blob = await wavRef.current!.stop();
+        const phrases = scope.items.map((i) => i.name);
+        appendToComposer(await transcribeAudio(blob, phrases));
+      } catch (e: any) {
+        if (e?.status === 503 || e?.status === 501) {
+          // Not configured yet — drop to free browser dictation for the session.
+          setMaiMode(false);
+          window.alert(
+            'High-accuracy transcription isn’t configured yet — using browser dictation. Tap the mic again.'
+          );
+        } else {
+          window.alert(e?.message ?? 'Transcription failed.');
+        }
+      } finally {
+        setTranscribing(false);
+      }
+      return;
+    }
+
+    // Start recording.
+    try {
+      const rec = new WavRecorder();
+      await rec.start();
+      wavRef.current = rec;
+      setListening(true);
+    } catch {
+      window.alert('Microphone permission is needed to dictate.');
+    }
+  }
+
+  /** Free browser dictation (Web Speech API) — fallback engine. */
+  function toggleWebSpeech() {
     if (listening) {
       recRef.current?.stop();
       return;
@@ -70,7 +124,7 @@ function BrainNodeInner({ id, data, selected }: NodeProps) {
     const SR =
       (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
     if (!SR) {
-      window.alert('Dictation needs Chrome/Edge/Safari (Web Speech API).');
+      window.alert('Dictation needs Chrome/Edge/Safari, or configure MAI-Transcribe.');
       return;
     }
     const rec = new SR();
@@ -216,12 +270,25 @@ function BrainNodeInner({ id, data, selected }: NodeProps) {
               }
             }}
             rows={1}
-            placeholder={listening ? 'Listening…' : 'Ask your wired sources…'}
+            placeholder={
+              transcribing
+                ? 'Transcribing…'
+                : listening
+                  ? 'Listening…'
+                  : 'Ask your wired sources…'
+            }
             className="max-h-24 min-h-[30px] flex-1 resize-none bg-transparent py-1 text-[12.5px] outline-none placeholder:text-muted-foreground/50"
           />
           <button
-            onClick={toggleDictation}
-            title={listening ? 'Stop dictation' : 'Dictate your question'}
+            onClick={toggleMic}
+            disabled={transcribing}
+            title={
+              listening
+                ? 'Stop & transcribe'
+                : maiMode
+                  ? 'Dictate (MAI-Transcribe)'
+                  : 'Dictate your question'
+            }
             className={cn(
               'flex h-7 w-7 shrink-0 items-center justify-center rounded-[10px] transition-all',
               listening
@@ -229,7 +296,11 @@ function BrainNodeInner({ id, data, selected }: NodeProps) {
                 : 'text-muted-foreground/60 hover:bg-black/[0.05] hover:text-foreground dark:hover:bg-white/[0.06]'
             )}
           >
-            <Mic className="h-3.5 w-3.5" />
+            {transcribing ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <Mic className="h-3.5 w-3.5" />
+            )}
           </button>
           <button
             onClick={send}
