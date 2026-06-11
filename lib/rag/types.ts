@@ -26,6 +26,8 @@ export interface MediaItem {
   source?: string;
   /** Approximate size label, e.g. "2.4 MB" or "312 pages". */
   sizeLabel?: string;
+  /** User's freeform note on this source (schema v2 `user_note`). */
+  userNote?: string;
   /** For YouTube: duration label like "12:04". For audio: same. */
   durationLabel?: string;
 }
