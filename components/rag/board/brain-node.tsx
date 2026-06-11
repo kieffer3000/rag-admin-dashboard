@@ -9,8 +9,26 @@ import { generateMockAnswer, streamText } from '@/lib/rag/mock-answer';
 import { askBrain } from '@/lib/rag/board/ask';
 import { ChatMessage } from '@/lib/rag/types';
 import { MediaIcon } from '@/components/rag/shared';
-import { Boxes, ArrowUp, Loader2, Unplug } from 'lucide-react';
+import { LLM_MODELS, PROVIDER_META } from '@/lib/rag/models';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger
+} from '@/components/ui/dropdown-menu';
+import {
+  Boxes,
+  ArrowUp,
+  Loader2,
+  Unplug,
+  Mic,
+  Check,
+  ChevronDown
+} from 'lucide-react';
 import type { BrainData } from '@/lib/rag/board/types';
+
+/** v1 generation runs on Gemini in Make — the Board defaults to it. */
+const BOARD_DEFAULT_MODEL = 'gemini-2.5-flash';
 
 let msgCounter = 9000;
 const nextMsgId = () => `bm${++msgCounter}`;
@@ -22,15 +40,56 @@ const nextMsgId = () => `bm${++msgCounter}`;
  */
 function BrainNodeInner({ id, data, selected }: NodeProps) {
   const d = data as BrainData;
-  const { brainMessages, addBrainMessage, updateBrainMessage, resolveBrainScope } =
-    useBoard();
+  const {
+    brainMessages,
+    addBrainMessage,
+    updateBrainMessage,
+    resolveBrainScope,
+    updateBoardNodeData
+  } = useBoard();
   const { openViewer } = useRag();
   const [question, setQuestion] = useState('');
   const [busy, setBusy] = useState(false);
+  const [listening, setListening] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const recRef = useRef<any>(null);
+  /** Composer text at the moment dictation started — interim results append to it. */
+  const dictBaseRef = useRef('');
 
   const messages = brainMessages[id] ?? [];
   const scope = resolveBrainScope(id);
+  const modelId = (d.modelId as string) ?? BOARD_DEFAULT_MODEL;
+  const model = LLM_MODELS.find((m) => m.id === modelId) ?? LLM_MODELS[3];
+
+  /** Browser dictation (Web Speech API) — Poppy-style mic on the composer. */
+  function toggleDictation() {
+    if (listening) {
+      recRef.current?.stop();
+      return;
+    }
+    const SR =
+      (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (!SR) {
+      window.alert('Dictation needs Chrome/Edge/Safari (Web Speech API).');
+      return;
+    }
+    const rec = new SR();
+    rec.continuous = true;
+    rec.interimResults = true;
+    rec.lang = navigator.language || 'en-US';
+    dictBaseRef.current = question ? question.trimEnd() + ' ' : '';
+    rec.onresult = (e: any) => {
+      let transcript = '';
+      for (let i = 0; i < e.results.length; i++)
+        transcript += e.results[i][0].transcript;
+      setQuestion(dictBaseRef.current + transcript);
+    };
+    rec.onend = () => setListening(false);
+    rec.onerror = () => setListening(false);
+    recRef.current = rec;
+    setListening(true);
+    rec.start();
+  }
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight });
@@ -39,6 +98,7 @@ function BrainNodeInner({ id, data, selected }: NodeProps) {
   async function send() {
     const q = question.trim();
     if (!q || busy) return;
+    if (listening) recRef.current?.stop();
     setQuestion('');
     addBrainMessage(id, {
       id: nextMsgId(),
@@ -62,7 +122,7 @@ function BrainNodeInner({ id, data, selected }: NodeProps) {
     let content: string;
     let citations;
     try {
-      const r = await askBrain(q, scope.items, scope.contextTexts);
+      const r = await askBrain(q, scope.items, scope.contextTexts, modelId);
       content = r.answer;
       citations = r.citations;
     } catch {
@@ -156,9 +216,21 @@ function BrainNodeInner({ id, data, selected }: NodeProps) {
               }
             }}
             rows={1}
-            placeholder="Ask your wired sources…"
+            placeholder={listening ? 'Listening…' : 'Ask your wired sources…'}
             className="max-h-24 min-h-[30px] flex-1 resize-none bg-transparent py-1 text-[12.5px] outline-none placeholder:text-muted-foreground/50"
           />
+          <button
+            onClick={toggleDictation}
+            title={listening ? 'Stop dictation' : 'Dictate your question'}
+            className={cn(
+              'flex h-7 w-7 shrink-0 items-center justify-center rounded-[10px] transition-all',
+              listening
+                ? 'bg-red-500 text-white shadow-[0_2px_10px_rgb(239_68_68/0.5)] animate-pulse'
+                : 'text-muted-foreground/60 hover:bg-black/[0.05] hover:text-foreground dark:hover:bg-white/[0.06]'
+            )}
+          >
+            <Mic className="h-3.5 w-3.5" />
+          </button>
           <button
             onClick={send}
             disabled={!question.trim() || busy}
@@ -175,6 +247,58 @@ function BrainNodeInner({ id, data, selected }: NodeProps) {
               <ArrowUp className="h-3.5 w-3.5" />
             )}
           </button>
+        </div>
+
+        {/* model picker */}
+        <div className="mt-1.5 flex items-center justify-between px-1">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button className="nodrag flex items-center gap-1.5 rounded-md px-1.5 py-0.5 text-[10.5px] font-medium text-muted-foreground/80 transition-colors hover:bg-black/[0.04] hover:text-foreground dark:hover:bg-white/[0.06]">
+                <span
+                  className={cn(
+                    'h-1.5 w-1.5 rounded-full',
+                    PROVIDER_META[model.provider].dot
+                  )}
+                />
+                {model.label}
+                <ChevronDown className="h-2.5 w-2.5" />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" className="w-60">
+              {LLM_MODELS.map((m) => (
+                <DropdownMenuItem
+                  key={m.id}
+                  onClick={() => updateBoardNodeData(id, { modelId: m.id })}
+                  className="gap-2.5"
+                >
+                  <span
+                    className={cn(
+                      'h-1.5 w-1.5 shrink-0 rounded-full',
+                      PROVIDER_META[m.provider].dot
+                    )}
+                  />
+                  <span className="min-w-0 flex-1">
+                    <span className="block text-[12.5px] font-medium">
+                      {m.label}
+                    </span>
+                    <span className="block text-[10.5px] text-muted-foreground">
+                      {m.blurb}
+                      {m.provider !== 'gemini' && ' · routes to Gemini for now'}
+                    </span>
+                  </span>
+                  <Check
+                    className={cn(
+                      'h-3.5 w-3.5 text-accent',
+                      m.id === modelId ? 'opacity-100' : 'opacity-0'
+                    )}
+                  />
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
+          <span className="text-[9.5px] uppercase tracking-wide text-muted-foreground/40">
+            cited answers only
+          </span>
         </div>
       </div>
 
