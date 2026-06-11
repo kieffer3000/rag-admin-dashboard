@@ -44,6 +44,10 @@ export async function POST(req: Request) {
     body: JSON.stringify({
       question,
       source_ids: sourceIds,
+      // Pre-built Pinecone metadata filter. Make's Simple Filter UI only
+      // carries scalar values (multi-id arrays get string-coerced -> zero
+      // matches), so the scenario maps this verbatim instead.
+      filter_json: JSON.stringify({ source_id: { $in: sourceIds } }),
       scope: 'selected',
       namespace: process.env.PINECONE_NAMESPACE ?? 'user_kieffer',
       model: body.model ?? 'gemini-2.5-flash'
