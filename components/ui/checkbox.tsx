@@ -12,6 +12,12 @@ interface CheckboxProps {
   'aria-label'?: string;
 }
 
+/**
+ * Renders a <span>, not a <button>: rows often place this inside their own
+ * <button>, and nested buttons are invalid HTML (hydration errors). With
+ * `onCheckedChange` it is its own interactive checkbox (role + keyboard);
+ * without it, it's a purely decorative indicator driven by the parent.
+ */
 export function Checkbox({
   checked = false,
   indeterminate = false,
@@ -19,17 +25,30 @@ export function Checkbox({
   className,
   ...props
 }: CheckboxProps) {
+  const interactive = !!onCheckedChange;
   return (
-    <button
-      type="button"
-      role="checkbox"
-      aria-checked={indeterminate ? 'mixed' : checked}
-      onClick={(e) => {
-        e.stopPropagation();
-        onCheckedChange?.(!checked);
-      }}
+    <span
+      {...(interactive
+        ? {
+            role: 'checkbox',
+            'aria-checked': indeterminate ? ('mixed' as const) : checked,
+            tabIndex: 0,
+            onClick: (e: React.MouseEvent) => {
+              e.stopPropagation();
+              onCheckedChange!(!checked);
+            },
+            onKeyDown: (e: React.KeyboardEvent) => {
+              if (e.key === ' ' || e.key === 'Enter') {
+                e.preventDefault();
+                e.stopPropagation();
+                onCheckedChange!(!checked);
+              }
+            }
+          }
+        : { 'aria-hidden': true })}
       className={cn(
         'flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-[6px] border transition-all duration-150',
+        interactive && 'cursor-pointer',
         checked || indeterminate
           ? 'border-accent bg-accent text-accent-foreground shadow-sm'
           : 'border-input bg-white hover:border-accent/60',
@@ -42,6 +61,6 @@ export function Checkbox({
       ) : checked ? (
         <Check className="h-3 w-3" strokeWidth={3} />
       ) : null}
-    </button>
+    </span>
   );
 }
