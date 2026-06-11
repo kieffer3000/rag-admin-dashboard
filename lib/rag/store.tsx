@@ -45,7 +45,10 @@ interface RagState {
   setModel: (id: string) => void;
 
   // media
-  addMedia: (item: Omit<MediaItem, 'id' | 'status' | 'chunks'>) => string;
+  addMedia: (
+    item: Omit<MediaItem, 'id' | 'status' | 'chunks'>,
+    opts?: { simulate?: boolean }
+  ) => string;
   updateMedia: (id: string, patch: Partial<MediaItem>) => void;
   deleteMedia: (id: string) => void;
   reindexMedia: (id: string) => void;
@@ -148,7 +151,10 @@ export function RagProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const addMedia = useCallback(
-    (item: Omit<MediaItem, 'id' | 'status' | 'chunks'>) => {
+    (
+      item: Omit<MediaItem, 'id' | 'status' | 'chunks'>,
+      opts?: { simulate?: boolean }
+    ) => {
       const id = nextId('m');
       const newItem: MediaItem = { ...item, id, status: 'processing', chunks: 0 };
       setMedia((prev) => [newItem, ...prev]);
@@ -158,7 +164,9 @@ export function RagProvider({ children }: { children: ReactNode }) {
           p.id === activeProjectId ? { ...p, sourceIds: [...p.sourceIds, id] } : p
         )
       );
-      simulateIndexing(id);
+      // Real ingestion (Board → /api/index) reports its own status;
+      // only simulate for the mock-backed flows.
+      if (opts?.simulate !== false) simulateIndexing(id);
       return id;
     },
     [activeProjectId, simulateIndexing]

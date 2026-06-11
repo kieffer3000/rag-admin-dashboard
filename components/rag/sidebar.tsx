@@ -14,7 +14,8 @@ import {
   ChevronsUpDown,
   Plus,
   Check,
-  FolderOpen
+  FolderOpen,
+  Workflow
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useRag } from '@/lib/rag/store';
@@ -39,6 +40,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 
 export const NAV = [
+  { href: '/board', label: 'Board', icon: Workflow },
   { href: '/', label: 'Chat', icon: MessagesSquare },
   { href: '/library', label: 'Library', icon: Library },
   { href: '/prompts', label: 'Prompts', icon: Sparkles },
