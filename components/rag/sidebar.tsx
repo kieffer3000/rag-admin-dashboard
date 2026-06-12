@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
@@ -15,11 +15,18 @@ import {
   Plus,
   Check,
   FolderOpen,
-  Workflow
+  Workflow,
+  PanelLeftClose,
+  PanelLeftOpen
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useRag } from '@/lib/rag/store';
 import { useIsAdmin } from '@/lib/rag/use-role';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger
+} from '@/components/ui/tooltip';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -195,34 +202,79 @@ export function ProjectSwitcher({ compact = false }: { compact?: boolean }) {
 export function Sidebar() {
   const pathname = usePathname();
   const isAdmin = useIsAdmin();
+  const [collapsed, setCollapsed] = useState(false);
+
+  // Persist the collapsed state across navigations/reloads.
+  useEffect(() => {
+    setCollapsed(localStorage.getItem('atlas-sidebar-collapsed') === '1');
+  }, []);
+  function toggle() {
+    setCollapsed((c) => {
+      const next = !c;
+      localStorage.setItem('atlas-sidebar-collapsed', next ? '1' : '0');
+      return next;
+    });
+  }
 
   return (
-    <aside className="hidden w-[228px] shrink-0 flex-col bg-transparent px-3 py-4 lg:flex">
-      <Link href="/" className="mb-5 flex items-center gap-2.5 px-2">
-        <div className="relative flex h-9 w-9 items-center justify-center rounded-[12px] bg-gradient-to-br from-indigo-500 to-violet-600 text-white shadow-[0_4px_16px_hsl(var(--accent)/0.4)]">
-          <Boxes className="h-[19px] w-[19px]" />
-        </div>
-        <div className="leading-tight">
-          <div className="text-[15px] font-semibold tracking-tight">Atlas</div>
-          <div className="text-[11px] text-muted-foreground/70">Knowledge Base</div>
-        </div>
-      </Link>
-
-      <div className="mb-4">
-        <ProjectSwitcher />
+    <aside
+      className={cn(
+        'hidden shrink-0 flex-col bg-transparent py-4 transition-[width] duration-200 lg:flex',
+        collapsed ? 'w-[72px] items-center px-2' : 'w-[228px] px-3'
+      )}
+    >
+      <div
+        className={cn(
+          'mb-5 flex items-center',
+          collapsed ? 'flex-col gap-2' : 'justify-between px-2'
+        )}
+      >
+        <Link href="/" className="flex items-center gap-2.5">
+          <div className="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-[12px] bg-gradient-to-br from-indigo-500 to-violet-600 text-white shadow-[0_4px_16px_hsl(var(--accent)/0.4)]">
+            <Boxes className="h-[19px] w-[19px]" />
+          </div>
+          {!collapsed && (
+            <div className="leading-tight">
+              <div className="text-[15px] font-semibold tracking-tight">Atlas</div>
+              <div className="text-[11px] text-muted-foreground/70">Knowledge Base</div>
+            </div>
+          )}
+        </Link>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <button
+              onClick={toggle}
+              className="flex h-7 w-7 items-center justify-center rounded-[9px] text-muted-foreground transition-colors hover:bg-[rgb(var(--hairline)/0.06)] hover:text-foreground"
+            >
+              {collapsed ? (
+                <PanelLeftOpen className="h-[17px] w-[17px]" />
+              ) : (
+                <PanelLeftClose className="h-[17px] w-[17px]" />
+              )}
+            </button>
+          </TooltipTrigger>
+          <TooltipContent side="right" className="text-[11.5px]">
+            {collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+          </TooltipContent>
+        </Tooltip>
       </div>
 
-      <nav className="flex flex-col gap-1">
+      <div className={cn('mb-4', collapsed && 'flex justify-center')}>
+        <ProjectSwitcher compact={collapsed} />
+      </div>
+
+      <nav className={cn('flex flex-col gap-1', collapsed && 'w-full items-center')}>
         {NAV.filter((i) => isAdmin || !i.adminOnly).map((item) => {
           const active =
             item.href === '/' ? pathname === '/' : pathname.startsWith(item.href);
           const Icon = item.icon;
-          return (
+          const link = (
             <Link
               key={item.href}
               href={item.href}
               className={cn(
-                'group flex items-center gap-3 rounded-[14px] px-3 py-2.5 text-sm font-medium transition-all duration-150',
+                'group flex items-center rounded-[14px] text-sm font-medium transition-all duration-150',
+                collapsed ? 'h-10 w-10 justify-center' : 'gap-3 px-3 py-2.5',
                 active
                   ? 'bg-accent/[0.08] font-semibold text-accent dark:bg-accent/[0.14]'
                   : 'text-muted-foreground hover:bg-[rgb(var(--hairline)/0.05)] hover:text-foreground'
@@ -230,28 +282,40 @@ export function Sidebar() {
             >
               <Icon
                 className={cn(
-                  'h-[18px] w-[18px] transition-colors',
+                  'h-[18px] w-[18px] shrink-0 transition-colors',
                   active ? 'text-accent' : 'text-muted-foreground group-hover:text-foreground'
                 )}
               />
-              {item.label}
+              {!collapsed && item.label}
             </Link>
+          );
+          return collapsed ? (
+            <Tooltip key={item.href}>
+              <TooltipTrigger asChild>{link}</TooltipTrigger>
+              <TooltipContent side="right" className="text-[11.5px]">
+                {item.label}
+              </TooltipContent>
+            </Tooltip>
+          ) : (
+            link
           );
         })}
       </nav>
 
-      <div className="panel mt-auto rounded-[20px] p-3.5">
-        <div className="flex items-center gap-2 text-[13px] font-medium">
-          <span className="relative flex h-2 w-2">
-            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-60" />
-            <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500" />
-          </span>
-          Vector store
+      {!collapsed && (
+        <div className="panel mt-auto rounded-[20px] p-3.5">
+          <div className="flex items-center gap-2 text-[13px] font-medium">
+            <span className="relative flex h-2 w-2">
+              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-60" />
+              <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500" />
+            </span>
+            Vector store
+          </div>
+          <p className="mt-1.5 text-[11px] leading-relaxed text-muted-foreground/70">
+            Gemini Embedding · Pinecone
+          </p>
         </div>
-        <p className="mt-1.5 text-[11px] leading-relaxed text-muted-foreground/70">
-          Gemini Embedding · Pinecone
-        </p>
-      </div>
+      )}
     </aside>
   );
 }
