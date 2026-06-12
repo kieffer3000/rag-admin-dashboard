@@ -187,18 +187,21 @@ export function BoardToolbar(p: BoardToolbarProps) {
         <div className="absolute left-4 top-1/2 z-20 flex max-h-[calc(100%-2rem)] -translate-y-1/2 flex-col gap-0.5 overflow-y-auto rounded-[18px] bg-card p-1.5 shadow-[0_2px_8px_rgb(0_0_0/0.06),0_12px_40px_rgb(0_0_0/0.10)] dark:ring-1 dark:ring-white/[0.08]">
           <RailButton
             label="Collapse toolbar"
+            desc="Tuck this rail away to free up the canvas. A small tab brings it back."
             icon={<PanelLeftClose className="h-[16px] w-[16px]" />}
             onClick={() => setCollapsed(true)}
           />
           <RailDivider />
           <RailButton
-            label="New brain (chat)"
+            label="New brain"
+            desc="Add a chat node. Wire sources or boxes into it and ask — it answers only from what's connected, with citations."
             accent
             icon={<MessageSquarePlus className="h-[17px] w-[17px]" />}
             onClick={p.onAddBrain}
           />
           <RailButton
-            label="Record voice memo → index"
+            label="Record voice memo"
+            desc="Capture audio, transcribe it, and index the transcript as a source you can query."
             icon={<Mic className="h-[17px] w-[17px]" />}
             onClick={() => {
               setRecName('');
@@ -214,7 +217,8 @@ export function BoardToolbar(p: BoardToolbarProps) {
             return (
               <RailButton
                 key={t}
-                label={`Add ${meta.label} → index into RAG`}
+                label={`Add ${meta.label}`}
+                desc={`Ingest a ${meta.label.toLowerCase()} into the knowledge base — it appears as a puzzle piece and turns Indexed when ready.`}
                 icon={<Icon className={cn('h-[17px] w-[17px]', meta.text)} />}
                 onClick={() => {
                   setName('');
@@ -230,6 +234,7 @@ export function BoardToolbar(p: BoardToolbarProps) {
               <span>
                 <RailButton
                   label="Place from Library"
+                  desc="Drop a source you've already indexed back onto the canvas as a piece."
                   icon={<LibraryBig className="h-[17px] w-[17px]" />}
                 />
               </span>
@@ -267,7 +272,8 @@ export function BoardToolbar(p: BoardToolbarProps) {
             </PopoverContent>
           </Popover>
           <RailButton
-            label="New box — a named cluster of any media"
+            label="New box"
+            desc="Create a named cluster of intelligence — a sub-project (SEO, PPC…) holding any mix of pieces. Wire the box to query the whole family together."
             icon={<FolderPlus className="h-[17px] w-[17px]" />}
             onClick={() => {
               setName('');
@@ -276,33 +282,43 @@ export function BoardToolbar(p: BoardToolbarProps) {
           />
           <RailButton
             label="Everything hub"
+            desc="A shortcut that wires every indexed source in this project into a brain at once."
             icon={<Sparkles className="h-[17px] w-[17px] text-accent" />}
             onClick={p.onAddEverything}
           />
           <RailDivider />
           <RailButton
             label="Mind map"
+            desc="Sketch a quick tree of ideas. Enter adds a sibling, Tab adds a child. For thinking, not retrieval."
             icon={<GitFork className="h-[17px] w-[17px]" />}
             onClick={p.onAddMindmap}
           />
           <RailButton
-            label="Context note (not indexed)"
+            label="Context note"
+            desc="A scratch instruction wired into a brain as prompt context — steers the answer but is never indexed."
             icon={<Type className="h-[17px] w-[17px]" />}
             onClick={p.onAddText}
           />
           <RailButton
             label="Annotation"
+            desc="A free-floating label to caption a region of the board. Purely visual."
             icon={<StickyNote className="h-[17px] w-[17px]" />}
             onClick={p.onAddAnnotation}
           />
           <RailDivider />
           <RailButton
-            label="Clean desk — auto-tidy the board"
+            label="Clean desk"
+            desc="Auto-tidy: gently untangles wires and spaces everything out, keeping stacks and boxes intact."
             icon={<Wand2 className="h-[17px] w-[17px]" />}
             onClick={p.onCleanDesk}
           />
           <RailButton
-            label={sound ? 'Sounds on — click to mute' : 'Sounds off — click to enable'}
+            label={sound ? 'Sounds on' : 'Sounds off'}
+            desc={
+              sound
+                ? 'Snap clacks, the thinking hum, and the answer chime are playing. Click to mute.'
+                : 'Board sounds are muted. Click to bring back the snap, hum, and chime.'
+            }
             icon={
               sound ? (
                 <Volume2 className="h-[17px] w-[17px]" />
@@ -502,17 +518,20 @@ export function BoardToolbar(p: BoardToolbarProps) {
 
 function RailButton({
   label,
+  desc,
   icon,
   onClick,
   accent
 }: {
   label: string;
+  /** One-line explanation shown under the title on hover. */
+  desc?: string;
   icon: React.ReactNode;
   onClick?: () => void;
   accent?: boolean;
 }) {
   return (
-    <Tooltip>
+    <Tooltip delayDuration={150}>
       <TooltipTrigger asChild>
         <button
           onClick={onClick}
@@ -526,8 +545,14 @@ function RailButton({
           {icon}
         </button>
       </TooltipTrigger>
-      <TooltipContent side="right" className="text-[11.5px]">
-        {label}
+      {/* Rich tooltip: bold title + a description of what the tool does. */}
+      <TooltipContent side="right" className="max-w-[214px]">
+        <p className="text-[12px] font-semibold leading-tight">{label}</p>
+        {desc && (
+          <p className="mt-0.5 text-[11px] leading-snug text-muted-foreground">
+            {desc}
+          </p>
+        )}
       </TooltipContent>
     </Tooltip>
   );
