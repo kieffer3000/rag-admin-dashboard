@@ -713,12 +713,13 @@ function BoardCanvasInner() {
         selectNodesOnDrag={false}
         defaultEdgeOptions={{
           type: 'scope',
-          // Resting wires: smooth, semi-transparent curves. The dashes are
-          // reserved for the in-progress connection line; flowing light
-          // pulses appear only while a brain is thinking (scope-edge.tsx).
+          // Resting wires: substantial, semi-transparent curves that read as
+          // physical data cables. The dashes are reserved for the in-progress
+          // connection line; flowing light pulses appear only while a brain is
+          // thinking (scope-edge.tsx).
           style: {
-            stroke: 'hsl(var(--accent) / 0.38)',
-            strokeWidth: 1.6
+            stroke: 'hsl(var(--accent) / 0.45)',
+            strokeWidth: 2.5
           }
         }}
         connectionLineStyle={{

@@ -40,6 +40,15 @@ export function ScopeEdge({
 
   return (
     <>
+      {/* soft underglow so the cable feels like it rests ON the desk */}
+      <path
+        d={edgePath}
+        fill="none"
+        stroke="hsl(var(--accent) / 0.22)"
+        strokeWidth={5}
+        strokeLinecap="round"
+        style={{ filter: 'blur(2px)' }}
+      />
       <BaseEdge id={id} path={edgePath} markerEnd={markerEnd} style={style} />
       {/* thinking: energy flows source → brain like an illuminated fiber-optic
           cable — a soft glow under a travelling pulse of light. Renders ONLY

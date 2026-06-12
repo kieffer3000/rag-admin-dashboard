@@ -326,13 +326,16 @@ function BrainNodeInner({ id, data, selected }: NodeProps) {
         minWidth={340}
         minHeight={300}
         isVisible={selected}
-        lineClassName="!border-accent/40"
-        handleClassName="!h-2.5 !w-2.5 !rounded-[3px] !border-accent !bg-card"
+        lineClassName="!border-accent/30"
+        // Frosted-glass grips, not generic blue squares.
+        handleClassName="!h-3 !w-3 !rounded-full !border !border-white/70 !bg-white/60 !shadow-[0_1px_3px_rgb(0_0_0/0.25)] !backdrop-blur-md"
       />
       <div
         className={cn(
           'flex h-full w-full flex-col overflow-hidden rounded-[20px] bg-card',
-          'shadow-[0_2px_6px_rgb(0_0_0/0.05),0_18px_50px_rgb(0_0_0/0.10)]',
+          // The brain is the destination — it sits physically ABOVE the
+          // sources: a tight contact shadow + a wide, soft ambient one.
+          'shadow-[0_1px_2px_rgb(0_0_0/0.10),0_8px_16px_rgb(0_0_0/0.10),0_30px_64px_-12px_rgb(0_0_0/0.22)]',
           'dark:ring-1 dark:ring-white/[0.08]',
           selected && 'ring-2 ring-accent/60 dark:ring-accent/60'
         )}
@@ -569,10 +572,12 @@ function BrainNodeInner({ id, data, selected }: NodeProps) {
 
       </div>
 
+      {/* input RECEPTACLE — a visible port waiting to receive wires, set into
+          the brain's left edge rather than a bare dot on the border */}
       <Handle
         type="target"
         position={Position.Left}
-        className="!h-3.5 !w-3.5 !border-2 !border-card !bg-accent"
+        className="!h-7 !w-3.5 !-left-1 !rounded-full !border-2 !border-card !bg-gradient-to-b !from-accent !to-violet-600 !shadow-[inset_0_1px_2px_rgb(0_0_0/0.3),0_1px_4px_hsl(var(--accent)/0.5)]"
       />
     </div>
   );

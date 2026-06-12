@@ -13,6 +13,7 @@ import {
   type HubData
 } from '@/lib/rag/board/types';
 import { MediaType } from '@/lib/rag/types';
+import { MediaIcon } from '@/components/rag/shared';
 import { Sparkles, Puzzle } from 'lucide-react';
 import { useRag } from '@/lib/rag/store';
 import { useBoard } from '@/lib/rag/board/store';
@@ -70,14 +71,16 @@ function HubNodeInner({ id, data, selected }: NodeProps) {
     <div
       style={size}
       className={cn(
-        // Glassmorphic tray: translucent, frosted, resting ON the dot grid.
+        // Recessed BENTO BOX: a shallow dish carved into the desk. Cooler/
+        // darker than the canvas + an INNER shadow so it reads as a hollow
+        // the pieces sit down inside, not another floating card.
         'relative rounded-[18px] backdrop-blur-xl transition-all',
         everything
           ? 'bg-gradient-to-br from-indigo-500/[0.09] to-violet-500/[0.13] ring-1 ring-accent/25'
-          : 'bg-white/55 ring-1 ring-white/40 shadow-[0_1px_3px_rgb(0_0_0/0.04),0_8px_28px_rgb(0_0_0/0.05)] dark:bg-white/[0.045] dark:ring-white/[0.08]',
-        selected && 'ring-2 ring-accent/60',
+          : 'bg-[hsl(225_18%_95.5%)]/80 ring-1 ring-black/[0.05] shadow-[inset_0_2px_10px_rgb(0_0_0/0.06),0_1px_0_rgb(255_255_255/0.7)] dark:bg-black/[0.18] dark:ring-white/[0.05] dark:shadow-[inset_0_2px_12px_rgb(0_0_0/0.5)]',
+        selected && 'ring-2 ring-accent/55',
         d.glow &&
-          'ring-2 ring-accent shadow-[0_0_0_5px_hsl(var(--accent)/0.14),0_8px_28px_rgb(0_0_0/0.08)]'
+          'ring-2 ring-accent shadow-[inset_0_2px_10px_rgb(0_0_0/0.05),0_0_0_5px_hsl(var(--accent)/0.14)]'
       )}
     >
       {/* magnetic drag-over: the tray lights up from within */}
@@ -91,13 +94,9 @@ function HubNodeInner({ id, data, selected }: NodeProps) {
         />
       )}
 
-      {/* recessed WELL — pieces visibly seat INTO the tray, not onto a card */}
-      {!everything && (
-        <div className="pointer-events-none absolute inset-x-2 bottom-2 top-[40px] rounded-[13px] bg-black/[0.035] shadow-[inset_0_2px_5px_rgb(0_0_0/0.07),inset_0_0_0_1px_rgb(0_0_0/0.025)] dark:bg-black/[0.22] dark:shadow-[inset_0_2px_6px_rgb(0_0_0/0.45),inset_0_0_0_1px_rgb(255_255_255/0.03)]" />
-      )}
-
-      {/* rim header — the box's grab handle */}
-      <div className="relative flex h-[42px] cursor-grab items-center gap-2 px-3 active:cursor-grabbing">
+      {/* rim header — the box's grab handle; a hairline divider separates the
+          title from the recessed chip well below */}
+      <div className="relative flex h-[42px] cursor-grab items-center gap-2 border-b border-black/[0.05] px-3 active:cursor-grabbing dark:border-white/[0.06]">
         <span
           className={cn(
             'flex h-6 w-6 shrink-0 items-center justify-center rounded-lg',
@@ -131,15 +130,21 @@ function HubNodeInner({ id, data, selected }: NodeProps) {
             {d.name}
           </span>
         )}
-        {/* family portrait: one dot per media type living in this cluster */}
+        {/* family portrait: a mini media icon per type living in this cluster */}
         {cluster && memberTypes.length > 0 && (
-          <span className="flex shrink-0 items-center gap-[3px]">
+          <span className="flex shrink-0 items-center gap-1">
             {memberTypes.slice(0, 5).map((t) => (
               <span
                 key={t}
                 title={MEDIA_TYPES[t].plural}
-                className={cn('h-1.5 w-1.5 rounded-full', MEDIA_TYPES[t].solid)}
-              />
+                className={cn(
+                  'flex h-[18px] w-[18px] items-center justify-center rounded-md',
+                  MEDIA_TYPES[t].tint,
+                  MEDIA_TYPES[t].text
+                )}
+              >
+                <MediaIcon type={t} size="sm" className="h-3 w-3" />
+              </span>
             ))}
           </span>
         )}
@@ -171,11 +176,12 @@ function HubNodeInner({ id, data, selected }: NodeProps) {
         </div>
       ) : null}
 
-      {/* THE plug — the one wiring point for the whole family */}
+      {/* THE plug — a pronounced pill-shaped lug, capable of transmitting the
+          whole box's power (vs a piece's tiny dot) */}
       <Handle
         type="source"
         position={Position.Right}
-        className="!h-3 !w-3 !border-2 !border-card !bg-accent"
+        className="!h-6 !w-3 !-right-1.5 !rounded-full !border-2 !border-card !bg-accent !shadow-[0_1px_4px_hsl(var(--accent)/0.5)]"
       />
     </div>
   );

@@ -12,6 +12,7 @@ import {
   CHIP_H,
   CHIP_TAB,
   CHIP_CLIP,
+  CHIP_CLIP_FLATBOTTOM,
   STACK_PITCH,
   type BoardNode,
   type ChipData
@@ -62,7 +63,11 @@ function ChipNodeInner({ id, data, selected, parentId }: NodeProps) {
   if (!item) return null;
 
   const note = item.userNote;
-  const inStack = above || below;
+  // Pieces seated in a tray are organized TILES (flat rounded rects), not
+  // loose puzzle pieces — so the tray reads like a tidy bento box and no
+  // notch/tab ever dangles inside it. Only FREE chips wear the puzzle shape.
+  const docked = !!parentId;
+  const inStack = !docked && (above || below);
   const isTop = inStack && !above;
   const isBottom = inStack && !below;
   const meta = MEDIA_TYPES[item.type];
@@ -70,6 +75,15 @@ function ChipNodeInner({ id, data, selected, parentId }: NodeProps) {
   const peel = !!d.peel;
   const pulse = !!d.pulse; // a citation in some brain is pointing at this piece
   const settle = (d.settle as number) ?? 0;
+
+  // Free chip = full puzzle shape; bottom of a welded column = flat bottom
+  // (no dangling tab); docked tile = clean rounded rectangle (no clip).
+  const clipPath = docked
+    ? undefined
+    : isBottom
+    ? CHIP_CLIP_FLATBOTTOM
+    : CHIP_CLIP;
+  const bodyH = docked ? CHIP_H : CHIP_H + CHIP_TAB;
 
   // Seamless monolith: in-stack pieces drop their individual card shadows —
   // only the block's exposed top/bottom edges cast, so the stack reads as
@@ -83,6 +97,8 @@ function ChipNodeInner({ id, data, selected, parentId }: NodeProps) {
     ? 'drop-shadow(0 2px 4px rgb(0 0 0/0.10)) drop-shadow(0 16px 28px rgb(0 0 0/0.20))'
     : tug
     ? 'drop-shadow(0 0 7px rgb(251 146 60/0.75)) drop-shadow(0 2px 6px rgb(0 0 0/0.10))'
+    : docked
+    ? 'drop-shadow(0 1px 2px rgb(0 0 0/0.10))'
     : inStack
     ? [
         'drop-shadow(0 0 1px rgb(0 0 0/0.05))',
@@ -98,7 +114,7 @@ function ChipNodeInner({ id, data, selected, parentId }: NodeProps) {
       key={`settle-${settle}`}
       style={{
         width: CHIP_W,
-        height: CHIP_H + CHIP_TAB,
+        height: bodyH,
         filter
       }}
       className={cn(
@@ -112,18 +128,31 @@ function ChipNodeInner({ id, data, selected, parentId }: NodeProps) {
       {pulse && (
         <span className="pointer-events-none absolute -inset-1.5 animate-cite-ripple rounded-[16px] border-2 border-accent" />
       )}
-      {/* puzzle-piece body (code.org/Scratch block): notch top, tab bottom */}
+      {/* body — puzzle piece when free, clean tile when seated in a tray */}
       <div
-        style={{ width: CHIP_W, height: CHIP_H + CHIP_TAB, clipPath: CHIP_CLIP }}
-        className="absolute inset-0 bg-card dark:bg-[hsl(240_8%_14%)]"
+        style={{ width: CHIP_W, height: bodyH, clipPath }}
+        className={cn(
+          'absolute inset-0 bg-card dark:bg-[hsl(240_8%_14%)]',
+          docked && 'rounded-[11px] ring-1 ring-black/[0.04] dark:ring-white/[0.06]'
+        )}
       />
+      {/* docked tile: a slim type-colored spine on the left edge keeps the
+          family colour-coded without the puzzle silhouette */}
+      {docked && (
+        <div
+          className={cn(
+            'pointer-events-none absolute bottom-0 left-0 top-0 w-[3px] rounded-l-[11px]',
+            meta.solid
+          )}
+        />
+      )}
       {/* welded-stack treatment: glowing spine rail binding the layers,
           laser-cut seams where pieces meet, faint type wash — and a hover
           illumination on the individual piece (telegraphs separability) */}
       {inStack && (
         <div
           style={{
-            clipPath: CHIP_CLIP,
+            clipPath,
             width: CHIP_W,
             height: CHIP_H + CHIP_TAB
           }}
@@ -161,7 +190,10 @@ function ChipNodeInner({ id, data, selected, parentId }: NodeProps) {
       )}
       <div
         style={{ height: CHIP_H }}
-        className="relative flex items-center gap-2.5 px-2.5 pt-1"
+        className={cn(
+          'relative flex items-center gap-2.5 px-2.5',
+          docked ? 'pl-3' : 'pt-1'
+        )}
       >
         <MediaIcon type={item.type} size="sm" />
         <div className="min-w-0 flex-1 leading-tight">
