@@ -16,6 +16,7 @@ import { askBrain } from '@/lib/rag/board/ask';
 import { WavRecorder, transcribeAudio } from '@/lib/rag/board/dictation';
 import { ChatMessage } from '@/lib/rag/types';
 import { MediaIcon } from '@/components/rag/shared';
+import { Markdown } from '@/components/rag/board/markdown';
 import { LLM_MODELS, PROVIDER_META } from '@/lib/rag/models';
 import {
   DropdownMenu,
@@ -288,13 +289,13 @@ function BrainNodeInner({ id, data, selected }: NodeProps) {
             {scope.items.length === 0 ? (
               <>
                 <Unplug className="h-5 w-5 text-muted-foreground/40" />
-                <p className="max-w-[260px] text-[11.5px] leading-relaxed text-muted-foreground/70">
+                <p className="max-w-[280px] text-[13px] leading-relaxed text-muted-foreground/70">
                   Nothing wired yet — connect a chip, a hub, or the Everything
                   hub to give this brain its knowledge basis.
                 </p>
               </>
             ) : (
-              <p className="max-w-[260px] text-[11.5px] leading-relaxed text-muted-foreground/70">
+              <p className="max-w-[280px] text-[13px] leading-relaxed text-muted-foreground/70">
                 Ask anything — answers come only from the {scope.items.length}{' '}
                 wired source{scope.items.length === 1 ? '' : 's'}, with
                 citations.
@@ -328,7 +329,7 @@ function BrainNodeInner({ id, data, selected }: NodeProps) {
                   ? 'Listening…'
                   : 'Ask your wired sources…'
             }
-            className="max-h-44 min-h-[30px] flex-1 resize-none bg-transparent py-1 text-[12.5px] outline-none placeholder:text-muted-foreground/50"
+            className="max-h-44 min-h-[30px] flex-1 resize-none bg-transparent py-1 text-[14px] outline-none placeholder:text-muted-foreground/50"
           />
           <button
             onClick={toggleMic}
@@ -444,23 +445,25 @@ function BrainMessage({
 }) {
   if (m.role === 'user') {
     return (
-      <div className="self-end rounded-[14px] rounded-br-[5px] bg-accent px-3 py-1.5 text-[12px] leading-relaxed text-white shadow-[0_2px_8px_hsl(var(--accent)/0.3)]">
+      <div className="max-w-[88%] self-end whitespace-pre-wrap rounded-[14px] rounded-br-[5px] bg-accent px-3.5 py-2 text-[14px] leading-relaxed text-white shadow-[0_2px_8px_hsl(var(--accent)/0.3)]">
         {m.content}
       </div>
     );
   }
   return (
     <div className="self-start">
-      <div className="whitespace-pre-wrap text-[12px] leading-relaxed text-foreground/90">
-        {m.content || <Loader2 className="h-3 w-3 animate-spin text-muted-foreground/50" />}
-      </div>
+      {m.content ? (
+        <Markdown>{m.content}</Markdown>
+      ) : (
+        <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground/50" />
+      )}
       {m.citations && m.citations.length > 0 && (
-        <div className="mt-1.5 flex flex-wrap gap-1">
+        <div className="mt-2 flex flex-wrap gap-1.5">
           {m.citations.map((c, i) => (
             <button
               key={i}
               onClick={() => onCitation(c)}
-              className="flex items-center gap-1 rounded-md bg-accent/[0.07] px-1.5 py-0.5 text-[10px] font-medium text-accent transition-colors hover:bg-accent/[0.13]"
+              className="flex items-center gap-1 rounded-md bg-accent/[0.07] px-2 py-1 text-[11.5px] font-medium text-accent transition-colors hover:bg-accent/[0.13]"
             >
               <MediaIcon type={c.type} size="sm" className="h-3.5 w-3.5 rounded" />
               <span className="max-w-[110px] truncate">{c.mediaName}</span>
