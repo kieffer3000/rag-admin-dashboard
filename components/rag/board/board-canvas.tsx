@@ -26,10 +26,13 @@ import { MediaType } from '@/lib/rag/types';
 import {
   BoardNode,
   hubSlot,
+  stackOf,
   CHIP_W,
   CHIP_H,
   STACK_PITCH,
-  STACK_SNAP
+  STACK_SNAP,
+  PEEL_BREAK,
+  STACK_GRAB
 } from '@/lib/rag/board/types';
 import { ChipNode } from './chip-node';
 import { HubNode } from './hub-node';
@@ -123,46 +126,155 @@ function BoardCanvasInner() {
     [board.nodes]
   );
 
-  /** Magnetic glow while dragging a chip over a compatible hub. */
+  /**
+   * Sibling-sync drag session. A welded stack moves as ONE unit; yanking a
+   * piece sideways past PEEL_BREAK pops it loose (yank-to-peel) and the
+   * column closes the gap behind it. Stacks stay emergent — this only
+   * coordinates movement, never the data model.
+   */
+  const dragSession = useRef<{
+    mode: 'undecided' | 'stack' | 'peel';
+    startX: number;
+    startY: number;
+    mates: { id: string; x: number; y: number }[];
+  } | null>(null);
+
+  const onNodeDragStart = useCallback(
+    (_: unknown, node: Node) => {
+      dragSession.current = null;
+      if (node.type !== 'chip' || node.parentId) return;
+      const self = board.nodes.find((n) => n.id === node.id);
+      if (!self) return;
+      const typeOf = (n: BoardNode) =>
+        media.find((m) => m.id === n.data.mediaId)?.type;
+      const mates = stackOf(self, board.nodes, typeOf).filter(
+        (n) => n.id !== node.id
+      );
+      if (!mates.length) return; // lone piece — plain drag
+      dragSession.current = {
+        mode: 'undecided',
+        startX: self.position.x,
+        startY: self.position.y,
+        mates: mates.map((m) => ({ id: m.id, x: m.position.x, y: m.position.y }))
+      };
+    },
+    [board.nodes, media]
+  );
+
+  /** Magnetic hub glow + stack movement, per drag tick. */
   const onNodeDrag = useCallback(
     (_: unknown, node: Node) => {
       if (node.type !== 'chip') return;
       const hub = hitHub(node);
-      setBoard((prev) => ({
-        ...prev,
-        nodes: prev.nodes.map((n) =>
+
+      const s = dragSession.current;
+      let stackPatch: ((nodes: BoardNode[]) => BoardNode[]) | null = null;
+
+      if (s) {
+        const dx = node.position.x - s.startX;
+        const dy = node.position.y - s.startY;
+
+        if (s.mode === 'undecided') {
+          if (Math.abs(dx) >= PEEL_BREAK && Math.abs(dx) > Math.abs(dy)) {
+            // POP: the piece breaks free; the column seals the gap behind it.
+            s.mode = 'peel';
+            const gapY = s.startY;
+            stackPatch = (nodes) =>
+              nodes.map((n) => {
+                if (n.id === node.id)
+                  return { ...n, data: { ...n.data, peel: true, tug: false } };
+                const mate = s.mates.find((m) => m.id === n.id);
+                if (mate && mate.y > gapY)
+                  return { ...n, position: { x: mate.x, y: mate.y - STACK_PITCH } };
+                return n;
+              });
+            s.mates = s.mates.map((m) =>
+              m.y > gapY ? { ...m, y: m.y - STACK_PITCH } : m
+            );
+          } else if (Math.abs(dy) >= STACK_GRAB && Math.abs(dy) > Math.abs(dx)) {
+            // Vertical intent grabs the whole welded block.
+            s.mode = 'stack';
+          } else {
+            // Sideways tug under the break distance: the piece resists —
+            // warm seam glow warns it's about to pop loose.
+            const tug = Math.abs(dx) > 10;
+            stackPatch = (nodes) =>
+              nodes.map((n) =>
+                n.id === node.id && !!n.data.tug !== tug
+                  ? { ...n, data: { ...n.data, tug } }
+                  : n
+              );
+          }
+        }
+
+        if (s.mode === 'stack') {
+          // Rigid translate: every mate follows the lead piece's delta.
+          stackPatch = (nodes) =>
+            nodes.map((n) => {
+              if (n.id === node.id && n.data.tug)
+                return { ...n, data: { ...n.data, tug: false } };
+              const mate = s.mates.find((m) => m.id === n.id);
+              return mate
+                ? { ...n, position: { x: mate.x + dx, y: mate.y + dy } }
+                : n;
+            });
+        }
+      }
+
+      setBoard((prev) => {
+        let nodes = prev.nodes.map((n) =>
           n.type === 'hub'
             ? n.data.glow === (n.id === hub?.id)
               ? n
               : { ...n, data: { ...n.data, glow: n.id === hub?.id } }
             : n
-        )
-      }));
+        );
+        if (stackPatch) nodes = stackPatch(nodes);
+        return { ...prev, nodes };
+      });
     },
     [hitHub, setBoard]
   );
 
-  /** Dock / undock on drop. */
+  /** Dock / undock / snap on drop — stack-aware (the unit lands together). */
   const onNodeDragStop = useCallback(
     (_: unknown, node: Node) => {
+      const s = dragSession.current;
+      dragSession.current = null;
       if (node.type !== 'chip') return;
+      // The set of pieces travelling together this gesture.
+      const unitIds =
+        s && s.mode === 'stack'
+          ? new Set([node.id, ...s.mates.map((m) => m.id)])
+          : new Set([node.id]);
       const hub = hitHub(node);
 
       setBoard((prev) => {
-        let nodes = prev.nodes.map((n) =>
-          n.type === 'hub' && n.data.glow ? { ...n, data: { ...n.data, glow: false } } : n
-        );
+        let nodes = prev.nodes.map((n) => {
+          let out = n;
+          if (n.type === 'hub' && n.data.glow)
+            out = { ...out, data: { ...out.data, glow: false } };
+          if (n.type === 'chip' && (n.data.tug || n.data.peel))
+            out = { ...out, data: { ...out.data, tug: false, peel: false } };
+          return out;
+        });
         const chip = nodes.find((n) => n.id === node.id);
         if (!chip) return { ...prev, nodes };
 
         if (hub && chip.parentId !== hub.id) {
-          // DOCK: reparent (chip must come after its parent in the array),
-          // then tile the hub's members compactly.
-          const oldHub = chip.parentId;
-          nodes = nodes.filter((n) => n.id !== chip.id);
-          nodes.push({ ...chip, parentId: hub.id, position: { x: 0, y: 0 } });
+          // DOCK: reparent the grabbed piece — and on a stack move, the whole
+          // welded unit (chips must come after their parent in the array).
+          const docking = nodes.filter(
+            (n) => unitIds.has(n.id) && n.parentId !== hub.id
+          );
+          const oldHubs = new Set(
+            docking.map((n) => n.parentId).filter(Boolean) as string[]
+          );
+          nodes = nodes.filter((n) => !unitIds.has(n.id) || n.parentId === hub.id);
+          for (const d of docking)
+            nodes.push({ ...d, parentId: hub.id, position: { x: 0, y: 0 } });
           nodes = retile(nodes, hub.id);
-          if (oldHub) nodes = retile(nodes, oldHub);
+          for (const oh of oldHubs) nodes = retile(nodes, oh);
         } else if (!hub && chip.parentId) {
           // UNDOCK: back to absolute coordinates where it was dropped.
           const parent = nodes.find((n) => n.id === chip.parentId);
@@ -181,39 +293,57 @@ function BoardCanvasInner() {
           nodes = retile(nodes, oldHub);
         }
 
-        // Puzzle docking: a free chip dropped near another free chip of the
-        // SAME type clicks into place above/below it (tab fills the notch).
+        // Puzzle docking: the dragged piece (or whole unit) dropped near a
+        // free chip of the SAME type clicks into place above/below it — the
+        // unit shifts rigidly, and only if every member's landing is clear.
         const moved = nodes.find((n) => n.id === node.id);
         if (!hub && moved && !moved.parentId) {
           const t = mediaTypeOf(node);
-          let best: { x: number; y: number; d: number } | null = null;
+          const members = nodes.filter(
+            (n) => unitIds.has(n.id) && !n.parentId
+          );
+          let best: { dx: number; dy: number; d: number } | null = null;
           for (const o of nodes) {
-            if (o.id === moved.id || o.type !== 'chip' || o.parentId) continue;
+            if (unitIds.has(o.id) || o.type !== 'chip' || o.parentId) continue;
             if (media.find((m) => m.id === o.data.mediaId)?.type !== t) continue;
             for (const slot of [
               { x: o.position.x, y: o.position.y + STACK_PITCH },
               { x: o.position.x, y: o.position.y - STACK_PITCH }
             ]) {
-              const occupied = nodes.some(
-                (n) =>
-                  n.type === 'chip' &&
-                  !n.parentId &&
-                  n.id !== moved.id &&
-                  Math.abs(n.position.x - slot.x) < 6 &&
-                  Math.abs(n.position.y - slot.y) < 6
+              const dx = slot.x - moved.position.x;
+              const dy = slot.y - moved.position.y;
+              const collides = members.some((mem) =>
+                nodes.some(
+                  (n) =>
+                    n.type === 'chip' &&
+                    !n.parentId &&
+                    !unitIds.has(n.id) &&
+                    Math.abs(n.position.x - (mem.position.x + dx)) < 6 &&
+                    Math.abs(n.position.y - (mem.position.y + dy)) < 6
+                )
               );
-              if (occupied) continue;
-              const d = Math.hypot(
-                moved.position.x - slot.x,
-                moved.position.y - slot.y
-              );
-              if (d < STACK_SNAP && (!best || d < best.d)) best = { ...slot, d };
+              if (collides) continue;
+              const d = Math.hypot(dx, dy);
+              if (d < STACK_SNAP && (!best || d < best.d)) best = { dx, dy, d };
             }
           }
-          if (best) {
-            const { x, y } = best;
+          if (best && best.d > 0.5) {
+            const { dx, dy } = best;
+            // Settle bounce: the whole unit jiggles once as one mass.
             nodes = nodes.map((n) =>
-              n.id === moved.id ? { ...n, position: { x, y } } : n
+              unitIds.has(n.id) && !n.parentId
+                ? {
+                    ...n,
+                    position: {
+                      x: n.position.x + dx,
+                      y: n.position.y + dy
+                    },
+                    data: {
+                      ...n.data,
+                      settle: ((n.data.settle as number) ?? 0) + 1
+                    }
+                  }
+                : n
             );
           }
         }
@@ -283,8 +413,33 @@ function BoardCanvasInner() {
     [board.nodes]
   );
 
+  // Cursor spotlight: a faint radial light that follows the pointer, painted
+  // BEHIND the dot grid (ReactFlow's pane is transparent). Direct style
+  // mutation — no React re-render per mousemove.
+  const spotRef = useRef<HTMLDivElement>(null);
+  const onSpotMove = useCallback((e: React.PointerEvent) => {
+    const el = spotRef.current;
+    const rect = wrapRef.current?.getBoundingClientRect();
+    if (!el || !rect) return;
+    el.style.setProperty('--spot-x', `${e.clientX - rect.left}px`);
+    el.style.setProperty('--spot-y', `${e.clientY - rect.top}px`);
+  }, []);
+
   return (
-    <div ref={wrapRef} className="relative h-full w-full">
+    <div
+      ref={wrapRef}
+      className="relative h-full w-full"
+      onPointerMove={onSpotMove}
+    >
+      <div
+        ref={spotRef}
+        aria-hidden
+        className="pointer-events-none absolute inset-0"
+        style={{
+          background:
+            'radial-gradient(560px circle at var(--spot-x, 50%) var(--spot-y, 40%), hsl(var(--accent) / 0.06), transparent 70%)'
+        }}
+      />
       <ReactFlow
         nodes={board.nodes as Node[]}
         edges={liveEdges}
@@ -294,16 +449,19 @@ function BoardCanvasInner() {
         onEdgesChange={onEdgesChange}
         onConnect={onConnect}
         isValidConnection={isValidConnection}
+        onNodeDragStart={onNodeDragStart}
         onNodeDrag={onNodeDrag}
         onNodeDragStop={onNodeDragStop}
         onNodeDoubleClick={onNodeDoubleClick}
         zoomOnDoubleClick={false}
         defaultEdgeOptions={{
           type: 'scope',
+          // Resting wires: smooth, semi-transparent curves. The dashes are
+          // reserved for the in-progress connection line; flowing light
+          // pulses appear only while a brain is thinking (scope-edge.tsx).
           style: {
-            stroke: 'hsl(var(--accent) / 0.5)',
-            strokeWidth: 1.6,
-            strokeDasharray: '6 6'
+            stroke: 'hsl(var(--accent) / 0.38)',
+            strokeWidth: 1.6
           }
         }}
         connectionLineStyle={{

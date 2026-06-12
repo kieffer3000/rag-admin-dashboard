@@ -24,7 +24,8 @@ export function ScopeEdge({
   sourcePosition,
   targetPosition,
   style,
-  markerEnd
+  markerEnd,
+  animated
 }: EdgeProps) {
   const { removeBoardEdge } = useBoard();
   const [hover, setHover] = useState(false);
@@ -40,6 +41,30 @@ export function ScopeEdge({
   return (
     <>
       <BaseEdge id={id} path={edgePath} markerEnd={markerEnd} style={style} />
+      {/* thinking: energy flows source → brain like an illuminated fiber-optic
+          cable — a soft glow under a travelling pulse of light. Renders ONLY
+          while this edge's brain has a query in flight (idle = still). */}
+      {animated && (
+        <>
+          <path
+            d={edgePath}
+            fill="none"
+            stroke="hsl(var(--accent) / 0.45)"
+            strokeWidth={4}
+            strokeLinecap="round"
+            style={{ filter: 'blur(3px)' }}
+          />
+          <path
+            d={edgePath}
+            fill="none"
+            stroke="hsl(var(--accent))"
+            strokeWidth={2.2}
+            strokeLinecap="round"
+            strokeDasharray="14 118"
+            className="edge-flow"
+          />
+        </>
+      )}
       {/* brighten the line while it's armed for disconnect */}
       {hover && (
         <path

@@ -46,6 +46,10 @@ export const CHIP_TAB = 7;
 export const STACK_PITCH = CHIP_H;
 /** Snap radius for chip-to-chip puzzle docking. */
 export const STACK_SNAP = 38;
+/** Yank-to-peel: horizontal pull past this and a piece pops out of its stack. */
+export const PEEL_BREAK = 40;
+/** Vertical movement past this "grabs" the whole stack (sibling-sync drag). */
+export const STACK_GRAB = 8;
 
 /** code.org/Scratch-style block outline: slanted notch on top, matching tab
  *  on the bottom — stacked same-type chips visually interlock. */

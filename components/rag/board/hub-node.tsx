@@ -35,15 +35,26 @@ function HubNodeInner({ id, data, selected }: NodeProps) {
     <div
       style={size}
       className={cn(
-        'relative rounded-[18px] transition-all',
+        // Glassmorphic tray: translucent, frosted, resting ON the dot grid.
+        'relative rounded-[18px] backdrop-blur-xl transition-all',
         everything
           ? 'bg-gradient-to-br from-indigo-500/[0.09] to-violet-500/[0.13] ring-1 ring-accent/25'
-          : 'bg-[hsl(240_14%_97%)]/90 shadow-[0_1px_3px_rgb(0_0_0/0.04),0_8px_28px_rgb(0_0_0/0.05)] dark:bg-white/[0.035] dark:ring-1 dark:ring-white/[0.06]',
+          : 'bg-white/55 ring-1 ring-white/40 shadow-[0_1px_3px_rgb(0_0_0/0.04),0_8px_28px_rgb(0_0_0/0.05)] dark:bg-white/[0.045] dark:ring-white/[0.08]',
         selected && 'ring-2 ring-accent/60',
         d.glow &&
           'ring-2 ring-accent shadow-[0_0_0_5px_hsl(var(--accent)/0.14),0_8px_28px_rgb(0_0_0/0.08)]'
       )}
     >
+      {/* magnetic drag-over: the tray lights up from within, in the type's hue */}
+      {!everything && (
+        <div
+          className={cn(
+            'pointer-events-none absolute inset-0 rounded-[18px] transition-opacity duration-200',
+            meta!.solid,
+            d.glow ? 'opacity-[0.10]' : 'opacity-0'
+          )}
+        />
+      )}
       {/* header */}
       <div className="flex h-[42px] items-center gap-2 px-3">
         <span

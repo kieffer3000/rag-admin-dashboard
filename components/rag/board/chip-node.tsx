@@ -64,26 +64,53 @@ function ChipNodeInner({ id, data, selected, parentId }: NodeProps) {
   const note = item.userNote;
   const inStack = above || below;
   const isTop = inStack && !above;
+  const isBottom = inStack && !below;
   const meta = MEDIA_TYPES[item.type];
+  const tug = !!d.tug;
+  const peel = !!d.peel;
+  const settle = (d.settle as number) ?? 0;
+
+  // Seamless monolith: in-stack pieces drop their individual card shadows —
+  // only the block's exposed top/bottom edges cast, so the stack reads as
+  // ONE object. Tug = warm "about to pop" seam glow; peel = floating lift.
+  const filter = selected
+    ? 'drop-shadow(0 0 0.5px hsl(var(--accent))) drop-shadow(0 2px 8px hsl(var(--accent)/0.45))'
+    : peel
+    ? 'drop-shadow(0 2px 4px rgb(0 0 0/0.10)) drop-shadow(0 16px 28px rgb(0 0 0/0.20))'
+    : tug
+    ? 'drop-shadow(0 0 7px rgb(251 146 60/0.75)) drop-shadow(0 2px 6px rgb(0 0 0/0.10))'
+    : inStack
+    ? [
+        'drop-shadow(0 0 1px rgb(0 0 0/0.05))',
+        isTop ? 'drop-shadow(0 -1px 3px rgb(0 0 0/0.04))' : '',
+        isBottom ? 'drop-shadow(0 4px 10px rgb(0 0 0/0.10))' : ''
+      ]
+        .filter(Boolean)
+        .join(' ')
+    : 'drop-shadow(0 1px 2px rgb(0 0 0/0.08)) drop-shadow(0 4px 10px rgb(0 0 0/0.07))';
 
   return (
     <div
+      key={`settle-${settle}`}
       style={{
         width: CHIP_W,
         height: CHIP_H + CHIP_TAB,
-        filter: selected
-          ? 'drop-shadow(0 0 0.5px hsl(var(--accent))) drop-shadow(0 2px 8px hsl(var(--accent)/0.45))'
-          : 'drop-shadow(0 1px 2px rgb(0 0 0/0.08)) drop-shadow(0 4px 10px rgb(0 0 0/0.07))'
+        filter
       }}
-      className="group relative transition-all"
+      className={cn(
+        'group relative transition-all',
+        settle > 0 && 'animate-stack-settle',
+        peel && 'scale-[1.03] animate-peel-pop'
+      )}
     >
       {/* puzzle-piece body (code.org/Scratch block): notch top, tab bottom */}
       <div
         style={{ width: CHIP_W, height: CHIP_H + CHIP_TAB, clipPath: CHIP_CLIP }}
         className="absolute inset-0 bg-card dark:bg-[hsl(240_8%_14%)]"
       />
-      {/* welded-stack spine: a type-colored rail running the full column —
-          interlocked pieces read as ONE block */}
+      {/* welded-stack treatment: glowing spine rail binding the layers,
+          laser-cut seams where pieces meet, faint type wash — and a hover
+          illumination on the individual piece (telegraphs separability) */}
       {inStack && (
         <div
           style={{
@@ -93,8 +120,34 @@ function ChipNodeInner({ id, data, selected, parentId }: NodeProps) {
           }}
           className="pointer-events-none absolute inset-0"
         >
-          <div className={cn('absolute bottom-0 left-0 top-0 w-[5px]', meta.solid)} />
-          <div className={cn('absolute inset-0 opacity-[0.045]', meta.solid)} />
+          {/* spine glow bleed */}
+          <div
+            className={cn(
+              'absolute bottom-0 left-0 top-0 w-[7px] opacity-50 blur-[5px]',
+              meta.solid
+            )}
+          />
+          {/* the rail itself — flashes once when a snap lands */}
+          <div
+            className={cn(
+              'absolute bottom-0 left-0 top-0 w-[5px]',
+              meta.solid,
+              settle > 0 && 'animate-spine-flash'
+            )}
+          />
+          {/* faint type wash over the whole piece */}
+          <div className={cn('absolute inset-0 opacity-[0.05]', meta.solid)} />
+          {/* laser-cut seam where this piece meets the one above */}
+          {above && (
+            <div className="absolute left-0 right-0 top-0 h-px bg-black/[0.08] dark:bg-white/[0.10]" />
+          )}
+          {/* hover: illuminate THIS piece within the welded block */}
+          <div
+            className={cn(
+              'absolute inset-0 opacity-0 transition-opacity duration-150 group-hover:opacity-[0.08]',
+              meta.solid
+            )}
+          />
         </div>
       )}
       <div
@@ -116,27 +169,32 @@ function ChipNodeInner({ id, data, selected, parentId }: NodeProps) {
             )}
           </div>
         </div>
-        {/* one-piece badge on the stack's top piece: wire THIS, get them all */}
-        {isTop && stackSize > 1 && (
-          <span
-            title={`A stack of ${stackSize} — wiring any piece wires them all`}
-            className={cn(
-              'flex shrink-0 items-center gap-0.5 rounded-full px-1.5 py-0.5 text-[9.5px] font-semibold text-white shadow-sm',
-              meta.solid
-            )}
-          >
-            <Layers className="h-2.5 w-2.5" />
-            {stackSize}
-          </span>
-        )}
       </div>
+
+      {/* one-piece badge: frosted glass, floating on the stack's top-right
+          perimeter — metadata for the whole physical object, not printed on
+          the top chip. Wire ANY piece, get them all. */}
+      {isTop && stackSize > 1 && (
+        <span
+          title={`A stack of ${stackSize} — wiring any piece wires them all`}
+          className={cn(
+            'absolute -right-2 -top-2.5 z-10 flex items-center gap-1 rounded-full border border-white/50 bg-white/70 px-1.5 py-0.5 text-[9.5px] font-bold shadow-[0_2px_8px_rgb(0_0_0/0.14)] backdrop-blur-md dark:border-white/15 dark:bg-white/10',
+            meta.text
+          )}
+        >
+          <Layers className="h-2.5 w-2.5" />
+          {stackSize}
+        </span>
+      )}
 
       {/* user note (schema v2 user_note) */}
       <Tooltip>
         <TooltipTrigger asChild>
           <button
             className={cn(
-              'nodrag absolute -right-1.5 -top-1.5 flex h-5 w-5 items-center justify-center rounded-full',
+              'nodrag absolute -top-1.5 flex h-5 w-5 items-center justify-center rounded-full',
+              // the frosted ⧉N badge owns the top-right corner on a stack top
+              isTop && stackSize > 1 ? '-left-1.5' : '-right-1.5',
               'bg-card shadow-[0_1px_4px_rgb(0_0_0/0.12)] transition-opacity',
               note
                 ? 'text-amber-500 opacity-100'
@@ -163,8 +221,10 @@ function ChipNodeInner({ id, data, selected, parentId }: NodeProps) {
         position={Position.Right}
         className={cn(
           '!h-2.5 !w-2.5 !border-2 !border-card !bg-accent/70',
-          // Lower stack members: the stack is one piece — nudge wiring to the top.
-          above && '!opacity-30'
+          // Lower stack members: the stack is one piece — nudge wiring to the
+          // top, but pulse awake when this piece is hovered (any piece works).
+          above && '!opacity-30 group-hover:!opacity-100',
+          inStack && 'group-hover:animate-pulse'
         )}
       />
     </div>
