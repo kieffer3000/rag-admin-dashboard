@@ -40,6 +40,40 @@ import type { BrainData } from '@/lib/rag/board/types';
 /** v1 generation runs on Gemini in Make — the Board defaults to it. */
 const BOARD_DEFAULT_MODEL = 'gemini-2.5-flash';
 
+/** Poppy-style quick actions — each sends a grounded prompt over the wired sources. */
+const BRAIN_ACTIONS: { label: string; prompt: string }[] = [
+  {
+    label: 'Mind map',
+    prompt:
+      'Create a hierarchical mind map of the key concepts and how they relate, using only the wired sources. Output as a markdown nested bullet list.'
+  },
+  {
+    label: 'Landing page',
+    prompt:
+      'Draft landing-page copy from the wired sources: a headline, a subheadline, 3 benefit bullets, and a call to action.'
+  },
+  {
+    label: 'Presentation',
+    prompt:
+      'Outline a slide-by-slide presentation from the wired sources — a title plus 3–5 bullets per slide.'
+  },
+  {
+    label: 'Carousel',
+    prompt:
+      'Write a 6-slide social carousel from the wired sources — one punchy line per slide.'
+  },
+  {
+    label: 'Image prompt',
+    prompt:
+      'Write a detailed image-generation prompt that visualizes the central idea from the wired sources.'
+  },
+  {
+    label: 'Deep research',
+    prompt:
+      'Do a deep, structured analysis of the wired sources: themes, contradictions, gaps, and open questions — with citations.'
+  }
+];
+
 let msgCounter = 9000;
 const nextMsgId = () => `bm${++msgCounter}`;
 
@@ -181,11 +215,16 @@ function BrainNodeInner({ id, data, selected }: NodeProps) {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight });
   }, [messages]);
 
-  async function send() {
+  function send() {
     const q = question.trim();
     if (!q || busy) return;
-    if (listening) recRef.current?.stop();
     setQuestion('');
+    runQuery(q);
+  }
+
+  async function runQuery(q: string) {
+    if (!q || busy) return;
+    if (listening) recRef.current?.stop();
     addBrainMessage(id, {
       id: nextMsgId(),
       role: 'user',
@@ -310,6 +349,21 @@ function BrainNodeInner({ id, data, selected }: NodeProps) {
 
       {/* composer */}
       <div className="shrink-0 px-3 pb-3">
+        {/* quick actions — grounded one-tap prompts */}
+        {scope.items.length > 0 && (
+          <div className="nodrag mb-2 flex gap-1.5 overflow-x-auto pb-0.5">
+            {BRAIN_ACTIONS.map((a) => (
+              <button
+                key={a.label}
+                onClick={() => runQuery(a.prompt)}
+                disabled={busy}
+                className="shrink-0 rounded-full border border-[rgb(var(--hairline)/0.16)] bg-card px-2.5 py-1 text-[11.5px] font-medium text-foreground/80 transition-colors hover:border-accent/40 hover:text-accent disabled:opacity-40"
+              >
+                {a.label}
+              </button>
+            ))}
+          </div>
+        )}
         <div className="nodrag flex items-end gap-1.5 rounded-[14px] bg-[hsl(240_14%_96.5%)] px-2.5 py-1.5 dark:bg-white/[0.05]">
           <textarea
             ref={taRef}

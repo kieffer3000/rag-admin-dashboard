@@ -34,6 +34,7 @@ import { HubNode } from './hub-node';
 import { BrainNode } from './brain-node';
 import { TextNode } from './text-node';
 import { AnnotationNode } from './annotation-node';
+import { MindmapNode } from './mindmap-node';
 import { ScopeEdge } from './scope-edge';
 import { BoardToolbar } from './toolbar';
 
@@ -42,7 +43,8 @@ const nodeTypes = {
   hub: HubNode,
   brain: BrainNode,
   textNode: TextNode,
-  annotation: AnnotationNode
+  annotation: AnnotationNode,
+  mindmap: MindmapNode
 };
 
 const edgeTypes = { scope: ScopeEdge };
@@ -350,6 +352,18 @@ function BoardCanvasInner() {
             type: 'annotation',
             position: centerPos(),
             data: { text: '' }
+          })
+        }
+        onAddMindmap={() =>
+          pushNode({
+            id: nextBoardId('mm'),
+            type: 'mindmap',
+            position: centerPos(),
+            width: 280,
+            height: 200,
+            data: {
+              tree: { id: 'root', text: 'Main Topic', children: [] }
+            }
           })
         }
         onAddHub={(name, type) =>

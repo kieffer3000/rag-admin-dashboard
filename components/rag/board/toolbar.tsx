@@ -17,6 +17,7 @@ import {
   Mic,
   Square,
   Loader2,
+  GitFork,
   PanelLeftClose,
   PanelLeftOpen
 } from 'lucide-react';
@@ -49,6 +50,7 @@ export interface BoardToolbarProps {
   onAddAnnotation: () => void;
   onAddHub: (name: string, type: MediaType) => void;
   onAddEverything: () => void;
+  onAddMindmap: () => void;
   onNewRecording: (name: string, transcript: string) => void;
   /** Media ids already placed on the canvas. */
   placedIds: Set<string>;
@@ -269,6 +271,11 @@ export function BoardToolbar(p: BoardToolbarProps) {
             onClick={p.onAddEverything}
           />
           <RailDivider />
+          <RailButton
+            label="Mind map"
+            icon={<GitFork className="h-[17px] w-[17px]" />}
+            onClick={p.onAddMindmap}
+          />
           <RailButton
             label="Context note (not indexed)"
             icon={<Type className="h-[17px] w-[17px]" />}
