@@ -6,10 +6,11 @@ import { cn } from '@/lib/utils';
 import { MEDIA_TYPES } from '@/lib/rag/media-config';
 import {
   hubSize,
+  hubSlot,
   CHIP_W,
   CHIP_H,
-  CHIP_TAB,
-  CHIP_CLIP,
+  HUB_HEADER_H,
+  HUB_COLS,
   type HubData
 } from '@/lib/rag/board/types';
 import { MediaType } from '@/lib/rag/types';
@@ -61,6 +62,17 @@ function HubNodeInner({ id, data, selected }: NodeProps) {
   const size = everything ? { width: 230, height: 86 } : hubSize(memberCount);
   const indexedAll = projectMedia.filter((m) => m.status === 'indexed').length;
 
+  // Open "parking spaces" in the grid — dashed ghost tiles that say "drop
+  // pieces here" without words. Empty tray shows a full first row; otherwise
+  // the trailing open column of the current last row.
+  const ghostSlots: number[] = everything
+    ? []
+    : memberCount === 0
+    ? Array.from({ length: HUB_COLS }, (_, i) => i)
+    : memberCount % HUB_COLS !== 0
+    ? [memberCount]
+    : [];
+
   function commitName(next: string) {
     const name = next.trim();
     if (name && name !== d.name) updateBoardNodeData(id, { name });
@@ -71,32 +83,57 @@ function HubNodeInner({ id, data, selected }: NodeProps) {
     <div
       style={size}
       className={cn(
-        // Recessed BENTO BOX: a shallow dish carved into the desk. Cooler/
-        // darker than the canvas + an INNER shadow so it reads as a hollow
-        // the pieces sit down inside, not another floating card.
+        // The tray BODY is a bezel/lip flush with the desk: frosted white,
+        // a crisp ultra-fine outer border, a gentle raise. The recess lives
+        // in the inner WELL below (separate, darker surface).
         'relative rounded-[18px] backdrop-blur-xl transition-all',
         everything
           ? 'bg-gradient-to-br from-indigo-500/[0.09] to-violet-500/[0.13] ring-1 ring-accent/25'
-          : 'bg-[hsl(225_18%_95.5%)]/80 ring-1 ring-black/[0.05] shadow-[inset_0_2px_10px_rgb(0_0_0/0.06),0_1px_0_rgb(255_255_255/0.7)] dark:bg-black/[0.18] dark:ring-white/[0.05] dark:shadow-[inset_0_2px_12px_rgb(0_0_0/0.5)]',
+          : 'bg-white/72 ring-1 ring-black/[0.07] shadow-[0_1px_2px_rgb(0_0_0/0.04),0_6px_20px_-8px_rgb(0_0_0/0.12)] dark:bg-white/[0.045] dark:ring-white/[0.08]',
         selected && 'ring-2 ring-accent/55',
-        d.glow &&
-          'ring-2 ring-accent shadow-[inset_0_2px_10px_rgb(0_0_0/0.05),0_0_0_5px_hsl(var(--accent)/0.14)]'
+        d.glow && 'ring-2 ring-accent shadow-[0_0_0_5px_hsl(var(--accent)/0.14)]'
       )}
     >
-      {/* magnetic drag-over: the tray lights up from within */}
+      {/* the recessed WELL — a distinct cool-gray surface cut into the body,
+          with the inset shadow ONLY here so the dish depth is unmistakable.
+          Docked chip tiles (RF children) render on top of it. */}
       {!everything && (
         <div
+          style={{ top: HUB_HEADER_H - 2 }}
           className={cn(
-            'pointer-events-none absolute inset-0 rounded-[18px] transition-opacity duration-200',
-            cluster ? 'bg-accent' : meta!.solid,
-            d.glow ? 'opacity-[0.10]' : 'opacity-0'
+            'pointer-events-none absolute inset-x-1.5 bottom-1.5 overflow-hidden rounded-[13px] bg-[#eef1f5] shadow-[inset_0_2px_6px_rgb(0_0_0/0.10),inset_0_0_0_1px_rgb(0_0_0/0.03)] dark:bg-black/30 dark:shadow-[inset_0_2px_8px_rgb(0_0_0/0.55)]'
           )}
-        />
+        >
+          {/* magnetic drag-over: the well floods with the accent hue */}
+          <div
+            className={cn(
+              'absolute inset-0 transition-opacity duration-200',
+              cluster ? 'bg-accent' : meta!.solid,
+              d.glow ? 'opacity-[0.12]' : 'opacity-0'
+            )}
+          />
+          {/* ghost "parking spaces" — dashed empty tiles invite a drop */}
+          {ghostSlots.map((i) => {
+            const slot = hubSlot(i);
+            return (
+              <div
+                key={i}
+                style={{
+                  left: slot.x - 6, // well is inset 6px from the body
+                  top: slot.y - (HUB_HEADER_H - 2),
+                  width: CHIP_W,
+                  height: CHIP_H
+                }}
+                className="absolute rounded-[11px] border border-dashed border-black/15 dark:border-white/15"
+              />
+            );
+          })}
+        </div>
       )}
 
-      {/* rim header — the box's grab handle; a hairline divider separates the
-          title from the recessed chip well below */}
-      <div className="relative flex h-[42px] cursor-grab items-center gap-2 border-b border-black/[0.05] px-3 active:cursor-grabbing dark:border-white/[0.06]">
+      {/* rim header — the box's grab handle / lip; a hairline divider separates
+          it from the recessed well below */}
+      <div className="relative flex h-[42px] cursor-grab items-center gap-2 border-b border-black/[0.06] px-3 active:cursor-grabbing dark:border-white/[0.06]">
         <span
           className={cn(
             'flex h-6 w-6 shrink-0 items-center justify-center rounded-lg',
@@ -158,30 +195,24 @@ function HubNodeInner({ id, data, selected }: NodeProps) {
           Wires every indexed source in this project to the brain.
         </div>
       ) : memberCount === 0 ? (
-        /* empty tray: a ghost piece shows exactly what seats here */
-        <div className="relative flex flex-col items-center justify-center pt-2.5">
-          <div
-            style={{
-              width: CHIP_W,
-              height: CHIP_H + CHIP_TAB,
-              clipPath: CHIP_CLIP
-            }}
-            className="bg-black/[0.05] dark:bg-white/[0.05]"
-          />
-          <span className="pointer-events-none absolute inset-x-0 top-[24px] text-center text-[10.5px] text-muted-foreground/55">
-            {cluster
-              ? 'drop any pieces here'
-              : `drag ${meta!.plural.toLowerCase()} here to dock`}
-          </span>
-        </div>
+        /* empty tray: a caption floats over the parking-space ghosts */
+        <span
+          style={{ top: HUB_HEADER_H + 26 }}
+          className="pointer-events-none absolute inset-x-0 text-center text-[10.5px] font-medium text-muted-foreground/60"
+        >
+          {cluster
+            ? 'drop any pieces here'
+            : `drag ${meta!.plural.toLowerCase()} here to dock`}
+        </span>
       ) : null}
 
-      {/* THE plug — a pronounced pill-shaped lug, capable of transmitting the
-          whole box's power (vs a piece's tiny dot) */}
+      {/* THE plug — a pronounced, MOLDED pill-shaped lug: a vertical gradient
+          + a top inner-highlight give it cylindrical volume, like a rubberized
+          port protruding from the tray's side (vs a piece's tiny dot) */}
       <Handle
         type="source"
         position={Position.Right}
-        className="!h-6 !w-3 !-right-1.5 !rounded-full !border-2 !border-card !bg-accent !shadow-[0_1px_4px_hsl(var(--accent)/0.5)]"
+        className="!h-6 !w-3 !-right-1.5 !rounded-full !border !border-black/10 !bg-gradient-to-b !from-indigo-400 !to-violet-600 !shadow-[inset_0_1px_0_rgb(255_255_255/0.55),0_1px_4px_hsl(var(--accent)/0.5)]"
       />
     </div>
   );

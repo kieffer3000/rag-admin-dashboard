@@ -35,7 +35,10 @@ export function ScopeEdge({
     sourcePosition,
     targetX,
     targetY,
-    targetPosition
+    targetPosition,
+    // Lower curvature → shorter control arms → a tauter, more intentional
+    // cable that doesn't dip into a loose "U".
+    curvature: 0.18
   });
 
   return (

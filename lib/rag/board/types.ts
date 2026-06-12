@@ -63,9 +63,11 @@ export const CHIP_CLIP = `path('M 12 0 L 26 0 L 30 ${CHIP_TAB} L 48 ${CHIP_TAB} 
 /** Same notch on top, but a FLAT bottom — the last piece of a welded column,
  *  so the stack's bottom edge reads clean (no dangling tab). */
 export const CHIP_CLIP_FLATBOTTOM = `path('M 12 0 L 26 0 L 30 ${CHIP_TAB} L 48 ${CHIP_TAB} L 52 0 L 160 0 Q 172 0 172 12 L 172 44 Q 172 56 160 56 L 12 56 Q 0 56 0 44 L 0 12 Q 0 0 12 0 Z')`;
-export const HUB_PAD_X = 12;
+// Inner padding/gaps: chips rest comfortably inside the recessed well, not
+// wedged against its walls.
+export const HUB_PAD_X = 16;
 export const HUB_HEADER_H = 42;
-export const HUB_GAP = 10;
+export const HUB_GAP = 12;
 export const HUB_COLS = 2;
 
 export function hubSize(memberCount: number) {
