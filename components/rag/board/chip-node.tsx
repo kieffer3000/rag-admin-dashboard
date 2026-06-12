@@ -185,7 +185,7 @@ function ChipNodeInner({ id, data, selected, parentId }: NodeProps) {
           the top chip. Wire ANY piece, get them all. */}
       {isTop && stackSize > 1 && (
         <span
-          title={`A stack of ${stackSize} — wiring any piece wires them all`}
+          title={`A stack of ${stackSize} — wiring any piece wires them all. Drag up/down to move the whole stack; yank a piece sideways to pop it out.`}
           className={cn(
             'absolute -right-2 -top-2.5 z-10 flex items-center gap-1 rounded-full border border-white/50 bg-white/70 px-1.5 py-0.5 text-[9.5px] font-bold shadow-[0_2px_8px_rgb(0_0_0/0.14)] backdrop-blur-md dark:border-white/15 dark:bg-white/10',
             meta.text
@@ -230,10 +230,13 @@ function ChipNodeInner({ id, data, selected, parentId }: NodeProps) {
         position={Position.Right}
         className={cn(
           '!h-2.5 !w-2.5 !border-2 !border-card !bg-accent/70',
+          // Docked in a box: the BOX is the plug — one wire per family, so a
+          // piece "in the box but not wired" can never exist.
+          parentId && '!pointer-events-none !opacity-0',
           // Lower stack members: the stack is one piece — nudge wiring to the
           // top, but pulse awake when this piece is hovered (any piece works).
-          above && '!opacity-30 group-hover:!opacity-100',
-          inStack && 'group-hover:animate-pulse'
+          !parentId && above && '!opacity-30 group-hover:!opacity-100',
+          !parentId && inStack && 'group-hover:animate-pulse'
         )}
       />
     </div>

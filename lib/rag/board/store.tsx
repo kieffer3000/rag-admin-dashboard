@@ -66,7 +66,7 @@ function seedBoard(media: MediaItem[]): BoardState {
       id: hubId,
       type: 'hub',
       position: { x: 80, y: 80 },
-      data: { name: 'Documents', mediaType: 'document' },
+      data: { name: 'Documents', mediaType: 'cluster' },
       ...hubSize(docs.length)
     });
     docs.forEach((m, i) => {

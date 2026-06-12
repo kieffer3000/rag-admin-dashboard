@@ -81,12 +81,16 @@ function BoardCanvasInner() {
     [media]
   );
 
-  /** The matching-type hub currently under a dragged chip, if any. */
+  /** The box currently under a dragged chip, if any. Cluster boxes accept
+   *  ANY media (they're sub-projects, not type bins); legacy typed hubs
+   *  still only take their own type. */
   const hitHub = useCallback(
     (chip: Node): Node | undefined => {
       const t = mediaTypeOf(chip);
       return getIntersectingNodes(chip).find(
-        (n) => n.type === 'hub' && n.data.mediaType === t
+        (n) =>
+          n.type === 'hub' &&
+          (n.data.mediaType === 'cluster' || n.data.mediaType === t)
       ) as Node | undefined;
     },
     [getIntersectingNodes, mediaTypeOf]
@@ -262,6 +266,7 @@ function BoardCanvasInner() {
             out = { ...out, data: { ...out.data, tug: false, peel: false } };
           return out;
         });
+        let edges = prev.edges;
         const chip = nodes.find((n) => n.id === node.id);
         if (!chip) return { ...prev, nodes };
 
@@ -279,6 +284,9 @@ function BoardCanvasInner() {
             nodes.push({ ...d, parentId: hub.id, position: { x: 0, y: 0 } });
           nodes = retile(nodes, hub.id);
           for (const oh of oldHubs) nodes = retile(nodes, oh);
+          // The BOX is now these pieces' plug — cut their old private wires
+          // so "in the box" and "wired" can never disagree.
+          edges = edges.filter((e) => !unitIds.has(e.source));
         } else if (!hub && chip.parentId) {
           // UNDOCK: back to absolute coordinates where it was dropped.
           const parent = nodes.find((n) => n.id === chip.parentId);
@@ -352,7 +360,7 @@ function BoardCanvasInner() {
             );
           }
         }
-        return { ...prev, nodes };
+        return { ...prev, nodes, edges };
       });
     },
     [hitHub, setBoard, media, mediaTypeOf]
@@ -744,12 +752,12 @@ function BoardCanvasInner() {
             }
           })
         }
-        onAddHub={(name, type) =>
+        onAddHub={(name) =>
           pushNode({
             id: nextBoardId('hub'),
             type: 'hub',
             position: centerPos(),
-            data: { name, mediaType: type }
+            data: { name, mediaType: 'cluster' }
           })
         }
         onAddEverything={() =>

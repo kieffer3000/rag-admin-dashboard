@@ -52,7 +52,8 @@ export interface BoardToolbarProps {
   onAddBrain: () => void;
   onAddText: () => void;
   onAddAnnotation: () => void;
-  onAddHub: (name: string, type: MediaType) => void;
+  /** Create a BOX — a named cluster of intelligence holding any media mix. */
+  onAddHub: (name: string) => void;
   onAddEverything: () => void;
   onAddMindmap: () => void;
   onNewRecording: (name: string, transcript: string) => void;
@@ -79,7 +80,6 @@ export function BoardToolbar(p: BoardToolbarProps) {
   const [hubOpen, setHubOpen] = useState(false);
   const [name, setName] = useState('');
   const [url, setUrl] = useState('');
-  const [hubType, setHubType] = useState<MediaType>('document');
 
   // ---- voice recording ----
   const [recOpen, setRecOpen] = useState(false);
@@ -162,7 +162,7 @@ export function BoardToolbar(p: BoardToolbarProps) {
 
   function submitHub() {
     if (!name.trim()) return;
-    p.onAddHub(name.trim(), hubType);
+    p.onAddHub(name.trim());
     setHubOpen(false);
     setName('');
   }
@@ -267,7 +267,7 @@ export function BoardToolbar(p: BoardToolbarProps) {
             </PopoverContent>
           </Popover>
           <RailButton
-            label="New typed hub"
+            label="New box — a named cluster of any media"
             icon={<FolderPlus className="h-[17px] w-[17px]" />}
             onClick={() => {
               setName('');
@@ -377,57 +377,34 @@ export function BoardToolbar(p: BoardToolbarProps) {
         </DialogContent>
       </Dialog>
 
-      {/* new-hub dialog */}
+      {/* new-box (cluster) dialog */}
       <Dialog open={hubOpen} onOpenChange={setHubOpen}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>New hub</DialogTitle>
+            <DialogTitle>New box</DialogTitle>
             <DialogDescription>
-              A hub holds ONE media type. Drag matching chips near it to dock
-              them; wire the hub to a brain to query everything inside.
+              A box is a cluster of intelligence — a sub-project, not a media
+              type. Mix documents, videos, audio, anything. Wire the box to a
+              brain and the whole family answers together; unplug it and the
+              whole family goes silent.
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-4">
-            <div className="space-y-1.5">
-              <Label>Name</Label>
-              <Input
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                placeholder="e.g. Research Videos"
-                autoFocus
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label>Accepts</Label>
-              <div className="flex flex-wrap gap-1.5">
-                {MEDIA_TYPE_ORDER.map((t) => {
-                  const meta = MEDIA_TYPES[t];
-                  const Icon = meta.icon;
-                  return (
-                    <button
-                      key={t}
-                      onClick={() => setHubType(t)}
-                      className={cn(
-                        'flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[12px] font-medium transition-all',
-                        hubType === t
-                          ? 'bg-accent text-white shadow-[0_2px_8px_hsl(var(--accent)/0.35)]'
-                          : cn(meta.tint, meta.text, 'hover:brightness-95')
-                      )}
-                    >
-                      <Icon className="h-3 w-3" />
-                      {meta.plural}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
+          <div className="space-y-1.5">
+            <Label>Name</Label>
+            <Input
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="e.g. SEO · PPC · Conference 2026"
+              autoFocus
+              onKeyDown={(e) => e.key === 'Enter' && submitHub()}
+            />
           </div>
           <div className="flex justify-end gap-2 pt-1">
             <Button variant="ghost" onClick={() => setHubOpen(false)}>
               Cancel
             </Button>
             <Button variant="accent" disabled={!name.trim()} onClick={submitHub}>
-              Create hub
+              Create box
             </Button>
           </div>
         </DialogContent>

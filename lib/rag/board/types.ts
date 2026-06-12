@@ -2,8 +2,14 @@
 import type { Node, Edge } from '@xyflow/react';
 import { MediaType } from '../types';
 
-/** Hub media type — a real type, or the implicit "everything" hub. */
-export type HubType = MediaType | 'everything';
+/**
+ * Hub flavor — 'cluster' is the primary kind: a user-named box holding ANY
+ * mix of media (a sub-project / cluster of intelligence — "SEO", "PPC",
+ * "Conference 2026"). Wire the box → the whole family is queried; unplug it
+ * → the whole family goes silent. Legacy single-type hubs still render.
+ * 'everything' is the implicit all-sources hub.
+ */
+export type HubType = MediaType | 'everything' | 'cluster';
 
 export interface ChipData extends Record<string, unknown> {
   mediaId: string;
