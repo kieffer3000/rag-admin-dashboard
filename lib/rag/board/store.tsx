@@ -17,7 +17,14 @@ import {
 } from 'react';
 import { useRag } from '../store';
 import { ChatMessage, MediaItem } from '../types';
-import { BoardNode, BoardEdge, BoardState, hubSize, hubSlot } from './types';
+import {
+  BoardNode,
+  BoardEdge,
+  BoardState,
+  hubSize,
+  hubSlot,
+  stackOf
+} from './types';
 
 let boardIdCounter = 5000;
 const nextId = (prefix: string) => `${prefix}${++boardIdCounter}`;
@@ -305,12 +312,18 @@ export function BoardProvider({ children }: { children: ReactNode }) {
       const contextTexts: string[] = [];
       let everything = false;
 
+      const typeOf = (n: BoardNode) =>
+        media.find((m) => m.id === n.data.mediaId)?.type;
+
       for (const e of edges) {
         if (e.target !== brainId) continue;
         const src = byId.get(e.source);
         if (!src) continue;
         if (src.type === 'chip') {
-          ids.push(src.data.mediaId as string);
+          // A puzzle stack is ONE piece: wiring any member wires them all.
+          for (const member of stackOf(src, nodes, typeOf)) {
+            ids.push(member.data.mediaId as string);
+          }
         } else if (src.type === 'hub') {
           if (src.data.mediaType === 'everything') {
             everything = true;

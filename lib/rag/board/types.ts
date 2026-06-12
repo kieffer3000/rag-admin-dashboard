@@ -66,6 +66,36 @@ export function hubSize(memberCount: number) {
   };
 }
 
+/**
+ * A puzzle STACK is one piece: free same-type chips interlocked at
+ * STACK_PITCH. Walk up+down from `start` and return every member (incl.
+ * start). Wiring ANY member to a brain wires the whole stack.
+ */
+export function stackOf(
+  start: BoardNode,
+  nodes: BoardNode[],
+  typeOf: (n: BoardNode) => string | undefined
+): BoardNode[] {
+  const t = typeOf(start);
+  const column = nodes.filter(
+    (n) =>
+      n.type === 'chip' &&
+      !n.parentId &&
+      typeOf(n) === t &&
+      Math.abs(n.position.x - start.position.x) < 2
+  );
+  const byY = new Map(column.map((n) => [Math.round(n.position.y), n]));
+  const out: BoardNode[] = [start];
+  for (const dir of [-1, 1]) {
+    let y = Math.round(start.position.y) + dir * STACK_PITCH;
+    while (byY.has(y)) {
+      out.push(byY.get(y)!);
+      y += dir * STACK_PITCH;
+    }
+  }
+  return out;
+}
+
 /** Grid slot for the i-th docked chip (relative to the hub). */
 export function hubSlot(i: number) {
   const col = i % HUB_COLS;

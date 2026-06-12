@@ -1,16 +1,19 @@
 'use client';
 
 import { memo } from 'react';
-import { Handle, Position, type NodeProps } from '@xyflow/react';
+import { Handle, Position, useStore, type NodeProps } from '@xyflow/react';
 import { cn } from '@/lib/utils';
 import { useRag } from '@/lib/rag/store';
 import { MediaIcon } from '@/components/rag/shared';
-import { Loader2, StickyNote } from 'lucide-react';
+import { MEDIA_TYPES } from '@/lib/rag/media-config';
+import { Loader2, StickyNote, Layers } from 'lucide-react';
 import {
   CHIP_W,
   CHIP_H,
   CHIP_TAB,
   CHIP_CLIP,
+  STACK_PITCH,
+  type BoardNode,
   type ChipData
 } from '@/lib/rag/board/types';
 import {
@@ -24,9 +27,44 @@ function ChipNodeInner({ id, data, selected, parentId }: NodeProps) {
   const d = data as ChipData;
   const { media, updateMedia } = useRag();
   const item = media.find((m) => m.id === d.mediaId);
+
+  // Stack awareness: interlocked same-type neighbors weld into ONE piece.
+  const { above, below, stackSize } = useStore((s) => {
+    const self = s.nodes.find((n) => n.id === id) as BoardNode | undefined;
+    if (!self || self.parentId || !item)
+      return { above: false, below: false, stackSize: 1 };
+    const typeOf = (n: BoardNode) =>
+      media.find((m) => m.id === n.data?.mediaId)?.type;
+    const column = (s.nodes as BoardNode[]).filter(
+      (n) =>
+        n.type === 'chip' &&
+        !n.parentId &&
+        typeOf(n) === item.type &&
+        Math.abs(n.position.x - self.position.x) < 2
+    );
+    const byY = new Map(column.map((n) => [Math.round(n.position.y), n]));
+    const y = Math.round(self.position.y);
+    let size = 1;
+    for (const dir of [-1, 1]) {
+      let yy = y + dir * STACK_PITCH;
+      while (byY.has(yy)) {
+        size++;
+        yy += dir * STACK_PITCH;
+      }
+    }
+    return {
+      above: byY.has(y - STACK_PITCH),
+      below: byY.has(y + STACK_PITCH),
+      stackSize: size
+    };
+  }, (a, b) => a.above === b.above && a.below === b.below && a.stackSize === b.stackSize);
+
   if (!item) return null;
 
   const note = item.userNote;
+  const inStack = above || below;
+  const isTop = inStack && !above;
+  const meta = MEDIA_TYPES[item.type];
 
   return (
     <div
@@ -44,6 +82,21 @@ function ChipNodeInner({ id, data, selected, parentId }: NodeProps) {
         style={{ width: CHIP_W, height: CHIP_H + CHIP_TAB, clipPath: CHIP_CLIP }}
         className="absolute inset-0 bg-card dark:bg-[hsl(240_8%_14%)]"
       />
+      {/* welded-stack spine: a type-colored rail running the full column —
+          interlocked pieces read as ONE block */}
+      {inStack && (
+        <div
+          style={{
+            clipPath: CHIP_CLIP,
+            width: CHIP_W,
+            height: CHIP_H + CHIP_TAB
+          }}
+          className="pointer-events-none absolute inset-0"
+        >
+          <div className={cn('absolute bottom-0 left-0 top-0 w-[5px]', meta.solid)} />
+          <div className={cn('absolute inset-0 opacity-[0.045]', meta.solid)} />
+        </div>
+      )}
       <div
         style={{ height: CHIP_H }}
         className="relative flex items-center gap-2.5 px-2.5 pt-1"
@@ -63,6 +116,19 @@ function ChipNodeInner({ id, data, selected, parentId }: NodeProps) {
             )}
           </div>
         </div>
+        {/* one-piece badge on the stack's top piece: wire THIS, get them all */}
+        {isTop && stackSize > 1 && (
+          <span
+            title={`A stack of ${stackSize} — wiring any piece wires them all`}
+            className={cn(
+              'flex shrink-0 items-center gap-0.5 rounded-full px-1.5 py-0.5 text-[9.5px] font-semibold text-white shadow-sm',
+              meta.solid
+            )}
+          >
+            <Layers className="h-2.5 w-2.5" />
+            {stackSize}
+          </span>
+        )}
       </div>
 
       {/* user note (schema v2 user_note) */}
@@ -95,7 +161,11 @@ function ChipNodeInner({ id, data, selected, parentId }: NodeProps) {
       <Handle
         type="source"
         position={Position.Right}
-        className="!h-2.5 !w-2.5 !border-2 !border-card !bg-accent/70"
+        className={cn(
+          '!h-2.5 !w-2.5 !border-2 !border-card !bg-accent/70',
+          // Lower stack members: the stack is one piece — nudge wiring to the top.
+          above && '!opacity-30'
+        )}
       />
     </div>
   );
