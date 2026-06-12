@@ -168,7 +168,7 @@ export function BoardProvider({ children }: { children: ReactNode }) {
             ]);
             // Scrub transient interaction flags (glow/pulse/tug/peel) that a
             // mid-gesture autosave may have frozen into the document.
-            const nodes = (data.nodes ?? []).map((n: BoardNode) =>
+            let nodes = (data.nodes ?? []).map((n: BoardNode) =>
               n.data?.glow || n.data?.pulse || n.data?.tug || n.data?.peel
                 ? {
                     ...n,
@@ -182,6 +182,19 @@ export function BoardProvider({ children }: { children: ReactNode }) {
                   }
                 : n
             );
+            // HEAL: docked pieces are never half-in/half-out of their tray —
+            // re-tile every box's members into the grid (old saves may hold
+            // arbitrary in-box offsets from before the magnet-tidy rules).
+            const slotIdx = new Map<string, number>();
+            nodes = nodes.map((n: BoardNode) => {
+              if (n.type !== 'chip' || !n.parentId) return n;
+              const i = slotIdx.get(n.parentId) ?? 0;
+              slotIdx.set(n.parentId, i + 1);
+              const slot = hubSlot(i);
+              return n.position.x === slot.x && n.position.y === slot.y
+                ? n
+                : { ...n, position: slot };
+            });
             setBoards((prev) => ({
               ...prev,
               [pid]: { nodes, edges: data.edges ?? [] }

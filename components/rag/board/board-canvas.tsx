@@ -307,6 +307,10 @@ function BoardCanvasInner() {
               : n
           );
           nodes = retile(nodes, oldHub);
+        } else if (hub) {
+          // Released INSIDE its own box: a piece is never half-in/half-out —
+          // it settles straight back into the tray's grid.
+          nodes = retile(nodes, hub.id);
         }
 
         // Puzzle docking: the dragged piece (or whole unit) dropped near a
@@ -362,6 +366,71 @@ function BoardCanvasInner() {
                   }
                 : n
             );
+          } else {
+            // MAGNET REPULSION: a free piece is either IN a box or CLEAR of
+            // every box — never touching one. If the dropped unit's rect
+            // grazes any tray (plus a halo), push it out along the axis of
+            // least penetration, like same-pole magnets.
+            const HALO = 14;
+            const trays = nodes
+              .filter((n) => n.type === 'hub')
+              .map((h) => {
+                const sz =
+                  h.data.mediaType === 'everything'
+                    ? { width: 230, height: 86 }
+                    : hubSize(
+                        nodes.filter((c) => c.parentId === h.id).length
+                      );
+                return {
+                  x: h.position.x - HALO,
+                  y: h.position.y - HALO,
+                  w: sz.width + HALO * 2,
+                  h: sz.height + HALO * 2
+                };
+              });
+            const unit = nodes.filter((n) => unitIds.has(n.id) && !n.parentId);
+            if (unit.length && trays.length) {
+              const minX = Math.min(...unit.map((m) => m.position.x));
+              const minY = Math.min(...unit.map((m) => m.position.y));
+              const maxX = Math.max(...unit.map((m) => m.position.x + CHIP_W));
+              const maxY = Math.max(
+                ...unit.map((m) => m.position.y + CHIP_H + CHIP_TAB)
+              );
+              let dx = 0;
+              let dy = 0;
+              for (let pass = 0; pass < 3; pass++) {
+                let pushed = false;
+                for (const r of trays) {
+                  const ox =
+                    Math.min(maxX + dx, r.x + r.w) - Math.max(minX + dx, r.x);
+                  const oy =
+                    Math.min(maxY + dy, r.y + r.h) - Math.max(minY + dy, r.y);
+                  if (ox <= 0 || oy <= 0) continue; // already clear
+                  if (ox < oy) {
+                    dx +=
+                      (minX + maxX) / 2 + dx < r.x + r.w / 2 ? -ox : ox;
+                  } else {
+                    dy +=
+                      (minY + maxY) / 2 + dy < r.y + r.h / 2 ? -oy : oy;
+                  }
+                  pushed = true;
+                }
+                if (!pushed) break;
+              }
+              if (dx || dy) {
+                nodes = nodes.map((n) =>
+                  unitIds.has(n.id) && !n.parentId
+                    ? {
+                        ...n,
+                        position: {
+                          x: n.position.x + dx,
+                          y: n.position.y + dy
+                        }
+                      }
+                    : n
+                );
+              }
+            }
           }
         }
         return { ...prev, nodes, edges };
