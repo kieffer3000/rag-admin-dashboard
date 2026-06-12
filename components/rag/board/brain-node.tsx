@@ -13,6 +13,7 @@ import { useBoard } from '@/lib/rag/board/store';
 import { useRag } from '@/lib/rag/store';
 import { generateMockAnswer, streamText } from '@/lib/rag/mock-answer';
 import { askBrain } from '@/lib/rag/board/ask';
+import { startHum, stopHum, playChime } from '@/lib/rag/board/sound';
 import { WavRecorder, transcribeAudio } from '@/lib/rag/board/dictation';
 import { ChatMessage } from '@/lib/rag/types';
 import { MediaIcon } from '@/components/rag/shared';
@@ -100,6 +101,7 @@ const nextMsgId = () => `bm${++msgCounter}`;
 function BrainNodeInner({ id, data, selected }: NodeProps) {
   const d = data as BrainData;
   const {
+    board,
     brainMessages,
     addBrainMessage,
     updateBrainMessage,
@@ -268,7 +270,8 @@ function BrainNodeInner({ id, data, selected }: NodeProps) {
     });
 
     setBusy(true);
-    setBrainBusy(id, true); // inbound edges march while thinking
+    setBrainBusy(id, true); // inbound edges pulse while thinking
+    startHum(); // muted processing hum (refcounted across brains)
     const asstId = nextMsgId();
     addBrainMessage(id, {
       id: asstId,
@@ -299,8 +302,22 @@ function BrainNodeInner({ id, data, selected }: NodeProps) {
         updateBrainMessage(id, asstId, { citations });
         setBusy(false);
         setBrainBusy(id, false);
+        stopHum();
+        playChime(); // the answer landed
       }
     );
+  }
+
+  /**
+   * Citation → canvas: hovering a citation chip pulses the exact source
+   * piece on the board — the text visibly points back at the physical
+   * object that proved it.
+   */
+  function pulseSource(mediaId: string, on: boolean) {
+    for (const n of board.nodes) {
+      if (n.type === 'chip' && n.data.mediaId === mediaId && !!n.data.pulse !== on)
+        updateBoardNodeData(n.id, { pulse: on });
+    }
   }
 
   return (
@@ -394,7 +411,12 @@ function BrainNodeInner({ id, data, selected }: NodeProps) {
           </div>
         )}
         {messages.map((m) => (
-          <BrainMessage key={m.id} m={m} onCitation={openViewer} />
+          <BrainMessage
+            key={m.id}
+            m={m}
+            onCitation={openViewer}
+            onCiteHover={pulseSource}
+          />
         ))}
       </div>
 
@@ -558,10 +580,12 @@ function BrainNodeInner({ id, data, selected }: NodeProps) {
 
 function BrainMessage({
   m,
-  onCitation
+  onCitation,
+  onCiteHover
 }: {
   m: ChatMessage;
   onCitation: (c: any) => void;
+  onCiteHover: (mediaId: string, on: boolean) => void;
 }) {
   if (m.role === 'user') {
     return (
@@ -583,6 +607,8 @@ function BrainMessage({
             <button
               key={i}
               onClick={() => onCitation(c)}
+              onMouseEnter={() => onCiteHover(c.mediaId, true)}
+              onMouseLeave={() => onCiteHover(c.mediaId, false)}
               className="flex items-center gap-1 rounded-md bg-accent/[0.07] px-2 py-1 text-[11.5px] font-medium text-accent transition-colors hover:bg-accent/[0.13]"
             >
               <MediaIcon type={c.type} size="sm" className="h-3.5 w-3.5 rounded" />

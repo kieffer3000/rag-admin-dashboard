@@ -7,6 +7,7 @@ import { MEDIA_TYPES, MEDIA_TYPE_ORDER } from '@/lib/rag/media-config';
 import { MediaType } from '@/lib/rag/types';
 import { MediaIcon } from '@/components/rag/shared';
 import { WavRecorder, transcribeAudio } from '@/lib/rag/board/dictation';
+import { soundEnabled, setSoundEnabled } from '@/lib/rag/board/sound';
 import {
   MessageSquarePlus,
   Type,
@@ -19,7 +20,10 @@ import {
   Loader2,
   GitFork,
   PanelLeftClose,
-  PanelLeftOpen
+  PanelLeftOpen,
+  Wand2,
+  Volume2,
+  VolumeX
 } from 'lucide-react';
 import {
   Dialog,
@@ -52,6 +56,8 @@ export interface BoardToolbarProps {
   onAddEverything: () => void;
   onAddMindmap: () => void;
   onNewRecording: (name: string, transcript: string) => void;
+  /** Auto-tidy: brief force-directed cleanup of the whole board. */
+  onCleanDesk: () => void;
   /** Media ids already placed on the canvas. */
   placedIds: Set<string>;
 }
@@ -66,6 +72,9 @@ const URL_TYPES: MediaType[] = ['youtube', 'website'];
 export function BoardToolbar(p: BoardToolbarProps) {
   const { projectMedia } = useRag();
   const [collapsed, setCollapsed] = useState(false);
+  // Sound starts unknown on the server; sync from localStorage after mount.
+  const [sound, setSound] = useState(true);
+  useEffect(() => setSound(soundEnabled()), []);
   const [sourceType, setSourceType] = useState<MediaType | null>(null);
   const [hubOpen, setHubOpen] = useState(false);
   const [name, setName] = useState('');
@@ -285,6 +294,26 @@ export function BoardToolbar(p: BoardToolbarProps) {
             label="Annotation"
             icon={<StickyNote className="h-[17px] w-[17px]" />}
             onClick={p.onAddAnnotation}
+          />
+          <RailDivider />
+          <RailButton
+            label="Clean desk — auto-tidy the board"
+            icon={<Wand2 className="h-[17px] w-[17px]" />}
+            onClick={p.onCleanDesk}
+          />
+          <RailButton
+            label={sound ? 'Sounds on — click to mute' : 'Sounds off — click to enable'}
+            icon={
+              sound ? (
+                <Volume2 className="h-[17px] w-[17px]" />
+              ) : (
+                <VolumeX className="h-[17px] w-[17px] opacity-60" />
+              )
+            }
+            onClick={() => {
+              setSoundEnabled(!sound);
+              setSound(!sound);
+            }}
           />
         </div>
       )}

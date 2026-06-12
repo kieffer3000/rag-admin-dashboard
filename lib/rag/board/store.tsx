@@ -166,9 +166,25 @@ export function BoardProvider({ children }: { children: ReactNode }) {
               ...(data.nodes ?? []).map((n: { id: string }) => n.id),
               ...(data.edges ?? []).map((e: { id: string }) => e.id)
             ]);
+            // Scrub transient interaction flags (glow/pulse/tug/peel) that a
+            // mid-gesture autosave may have frozen into the document.
+            const nodes = (data.nodes ?? []).map((n: BoardNode) =>
+              n.data?.glow || n.data?.pulse || n.data?.tug || n.data?.peel
+                ? {
+                    ...n,
+                    data: {
+                      ...n.data,
+                      glow: false,
+                      pulse: false,
+                      tug: false,
+                      peel: false
+                    }
+                  }
+                : n
+            );
             setBoards((prev) => ({
               ...prev,
-              [pid]: { nodes: data.nodes ?? [], edges: data.edges ?? [] }
+              [pid]: { nodes, edges: data.edges ?? [] }
             }));
             if (data.brainMessages)
               setBrainMessages((prev) => ({ ...prev, ...data.brainMessages }));

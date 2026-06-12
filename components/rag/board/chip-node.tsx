@@ -68,12 +68,16 @@ function ChipNodeInner({ id, data, selected, parentId }: NodeProps) {
   const meta = MEDIA_TYPES[item.type];
   const tug = !!d.tug;
   const peel = !!d.peel;
+  const pulse = !!d.pulse; // a citation in some brain is pointing at this piece
   const settle = (d.settle as number) ?? 0;
 
   // Seamless monolith: in-stack pieces drop their individual card shadows —
   // only the block's exposed top/bottom edges cast, so the stack reads as
-  // ONE object. Tug = warm "about to pop" seam glow; peel = floating lift.
-  const filter = selected
+  // ONE object. Tug = warm "about to pop" seam glow; peel = floating lift;
+  // pulse = a hovered citation proving an answer against THIS piece.
+  const filter = pulse
+    ? 'drop-shadow(0 0 10px hsl(var(--accent)/0.9)) drop-shadow(0 2px 8px hsl(var(--accent)/0.4))'
+    : selected
     ? 'drop-shadow(0 0 0.5px hsl(var(--accent))) drop-shadow(0 2px 8px hsl(var(--accent)/0.45))'
     : peel
     ? 'drop-shadow(0 2px 4px rgb(0 0 0/0.10)) drop-shadow(0 16px 28px rgb(0 0 0/0.20))'
@@ -103,6 +107,11 @@ function ChipNodeInner({ id, data, selected, parentId }: NodeProps) {
         peel && 'scale-[1.03] animate-peel-pop'
       )}
     >
+      {/* citation pulse: an expanding ripple anchors the cited text to this
+          physical piece on the board */}
+      {pulse && (
+        <span className="pointer-events-none absolute -inset-1.5 animate-cite-ripple rounded-[16px] border-2 border-accent" />
+      )}
       {/* puzzle-piece body (code.org/Scratch block): notch top, tab bottom */}
       <div
         style={{ width: CHIP_W, height: CHIP_H + CHIP_TAB, clipPath: CHIP_CLIP }}
