@@ -308,6 +308,8 @@ function BoardCanvasInner() {
             id: nextBoardId('brain'),
             type: 'brain',
             position: centerPos(),
+            width: 400,
+            height: 480,
             data: { name: 'answersDoc Brain' }
           })
         }

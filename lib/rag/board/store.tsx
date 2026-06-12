@@ -33,6 +33,8 @@ function seedBoard(media: MediaItem[]): BoardState {
       id: brainId,
       type: 'brain',
       position: { x: 640, y: 160 },
+      width: 400,
+      height: 480,
       data: { name: 'answersDoc Brain' }
     }
   ];
@@ -96,6 +98,13 @@ interface BoardCtxState {
   resolveBrainScope: (brainId: string) => BrainScope;
   /** Patch a node's data (controlled flow — must go through the provider). */
   updateBoardNodeData: (nodeId: string, patch: Record<string, unknown>) => void;
+  /** Set a node's width/height (used by the half-screen toggle). */
+  resizeBoardNode: (
+    nodeId: string,
+    width: number,
+    height: number,
+    extraData?: Record<string, unknown>
+  ) => void;
   nextBoardId: (prefix: string) => string;
 }
 
@@ -128,6 +137,30 @@ export function BoardProvider({ children }: { children: ReactNode }) {
         ...prev,
         nodes: prev.nodes.map((n) =>
           n.id === nodeId ? { ...n, data: { ...n.data, ...patch } } : n
+        )
+      }));
+    },
+    [setBoard]
+  );
+
+  const resizeBoardNode = useCallback(
+    (
+      nodeId: string,
+      width: number,
+      height: number,
+      extraData?: Record<string, unknown>
+    ) => {
+      setBoard((prev) => ({
+        ...prev,
+        nodes: prev.nodes.map((n) =>
+          n.id === nodeId
+            ? {
+                ...n,
+                width,
+                height,
+                data: extraData ? { ...n.data, ...extraData } : n.data
+              }
+            : n
         )
       }));
     },
@@ -209,6 +242,7 @@ export function BoardProvider({ children }: { children: ReactNode }) {
     updateBrainMessage,
     resolveBrainScope,
     updateBoardNodeData,
+    resizeBoardNode,
     nextBoardId: nextId
   };
 

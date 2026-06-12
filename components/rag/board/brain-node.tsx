@@ -1,7 +1,13 @@
 'use client';
 
 import { memo, useRef, useState, useEffect } from 'react';
-import { Handle, Position, type NodeProps } from '@xyflow/react';
+import {
+  Handle,
+  Position,
+  NodeResizer,
+  useReactFlow,
+  type NodeProps
+} from '@xyflow/react';
 import { cn } from '@/lib/utils';
 import { useBoard } from '@/lib/rag/board/store';
 import { useRag } from '@/lib/rag/store';
@@ -24,7 +30,9 @@ import {
   Unplug,
   Mic,
   Check,
-  ChevronDown
+  ChevronDown,
+  Maximize2,
+  Minimize2
 } from 'lucide-react';
 import type { BrainData } from '@/lib/rag/board/types';
 
@@ -46,9 +54,11 @@ function BrainNodeInner({ id, data, selected }: NodeProps) {
     addBrainMessage,
     updateBrainMessage,
     resolveBrainScope,
-    updateBoardNodeData
+    updateBoardNodeData,
+    resizeBoardNode
   } = useBoard();
   const { openViewer } = useRag();
+  const { getViewport } = useReactFlow();
   const [question, setQuestion] = useState('');
   const [busy, setBusy] = useState(false);
   const [listening, setListening] = useState(false);
@@ -56,6 +66,7 @@ function BrainNodeInner({ id, data, selected }: NodeProps) {
   /** False once we learn MAI-Transcribe isn't configured → use Web Speech. */
   const [maiMode, setMaiMode] = useState(true);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const taRef = useRef<HTMLTextAreaElement>(null);
   const recRef = useRef<any>(null);
   const wavRef = useRef<WavRecorder | null>(null);
   /** Composer text at the moment dictation started — interim results append to it. */
@@ -63,6 +74,26 @@ function BrainNodeInner({ id, data, selected }: NodeProps) {
 
   const messages = brainMessages[id] ?? [];
   const scope = resolveBrainScope(id);
+
+  // Auto-grow the composer as text fills it (capped; overflow scrolls).
+  useEffect(() => {
+    const el = taRef.current;
+    if (!el) return;
+    el.style.height = 'auto';
+    el.style.height = Math.min(el.scrollHeight, 168) + 'px';
+  }, [question]);
+
+  /** Toggle the brain between its default size and ~half the screen. */
+  function toggleHalf() {
+    if (d.expanded) {
+      resizeBoardNode(id, 400, 480, { expanded: false });
+    } else {
+      const { zoom } = getViewport();
+      const w = Math.round((window.innerWidth * 0.48) / zoom);
+      const h = Math.round((window.innerHeight * 0.82) / zoom);
+      resizeBoardNode(id, w, h, { expanded: true });
+    }
+  }
   const modelId = (d.modelId as string) ?? BOARD_DEFAULT_MODEL;
   const model = LLM_MODELS.find((m) => m.id === modelId) ?? LLM_MODELS[3];
 
@@ -196,42 +227,61 @@ function BrainNodeInner({ id, data, selected }: NodeProps) {
   }
 
   return (
-    <div
-      className={cn(
-        'flex w-[400px] flex-col overflow-hidden rounded-[20px] bg-card',
-        'shadow-[0_2px_6px_rgb(0_0_0/0.05),0_18px_50px_rgb(0_0_0/0.10)]',
-        'dark:ring-1 dark:ring-white/[0.08]',
-        selected && 'ring-2 ring-accent/60 dark:ring-accent/60'
-      )}
-    >
-      {/* header */}
-      <div className="flex items-center gap-2.5 bg-gradient-to-r from-indigo-500/[0.07] to-violet-500/[0.10] px-3.5 py-2.5">
-        <div className="flex h-7 w-7 items-center justify-center rounded-[9px] bg-gradient-to-br from-indigo-500 to-violet-600 text-white shadow-[0_2px_10px_hsl(var(--accent)/0.45)]">
-          <Boxes className="h-4 w-4" />
-        </div>
-        <div className="min-w-0 flex-1 leading-tight">
-          <div className="truncate text-[13px] font-semibold tracking-tight">
-            {d.name}
+    <div className="relative h-full w-full">
+      <NodeResizer
+        minWidth={340}
+        minHeight={300}
+        isVisible={selected}
+        lineClassName="!border-accent/40"
+        handleClassName="!h-2.5 !w-2.5 !rounded-[3px] !border-accent !bg-card"
+      />
+      <div
+        className={cn(
+          'flex h-full w-full flex-col overflow-hidden rounded-[20px] bg-card',
+          'shadow-[0_2px_6px_rgb(0_0_0/0.05),0_18px_50px_rgb(0_0_0/0.10)]',
+          'dark:ring-1 dark:ring-white/[0.08]',
+          selected && 'ring-2 ring-accent/60 dark:ring-accent/60'
+        )}
+      >
+        {/* header */}
+        <div className="flex shrink-0 items-center gap-2.5 bg-gradient-to-r from-indigo-500/[0.07] to-violet-500/[0.10] px-3.5 py-2.5">
+          <div className="flex h-7 w-7 items-center justify-center rounded-[9px] bg-gradient-to-br from-indigo-500 to-violet-600 text-white shadow-[0_2px_10px_hsl(var(--accent)/0.45)]">
+            <Boxes className="h-4 w-4" />
           </div>
-          <div className="text-[10.5px] text-muted-foreground/70">
-            {scope.everything
-              ? 'Everything in project'
-              : `${scope.items.length} source${scope.items.length === 1 ? '' : 's'} wired`}
-            {scope.contextTexts.length > 0 && ` · ${scope.contextTexts.length} note`}
+          <div className="min-w-0 flex-1 leading-tight">
+            <div className="truncate text-[13px] font-semibold tracking-tight">
+              {d.name}
+            </div>
+            <div className="text-[10.5px] text-muted-foreground/70">
+              {scope.everything
+                ? 'Everything in project'
+                : `${scope.items.length} source${scope.items.length === 1 ? '' : 's'} wired`}
+              {scope.contextTexts.length > 0 && ` · ${scope.contextTexts.length} note`}
+            </div>
           </div>
+          <button
+            onClick={toggleHalf}
+            title={d.expanded ? 'Restore size' : 'Expand to half screen'}
+            className="nodrag flex h-6 w-6 items-center justify-center rounded-[8px] text-muted-foreground/70 transition-colors hover:bg-black/[0.05] hover:text-foreground dark:hover:bg-white/[0.07]"
+          >
+            {d.expanded ? (
+              <Minimize2 className="h-3.5 w-3.5" />
+            ) : (
+              <Maximize2 className="h-3.5 w-3.5" />
+            )}
+          </button>
+          <span
+            className={cn(
+              'h-2 w-2 shrink-0 rounded-full',
+              scope.items.length > 0 ? 'bg-emerald-500' : 'bg-amber-400'
+            )}
+          />
         </div>
-        <span
-          className={cn(
-            'h-2 w-2 rounded-full',
-            scope.items.length > 0 ? 'bg-emerald-500' : 'bg-amber-400'
-          )}
-        />
-      </div>
 
       {/* messages */}
       <div
         ref={scrollRef}
-        className="nodrag nowheel flex max-h-[300px] min-h-[120px] flex-col gap-2.5 overflow-y-auto px-3.5 py-3"
+        className="nodrag nowheel flex min-h-0 flex-1 flex-col gap-2.5 overflow-y-auto px-3.5 py-3"
       >
         {messages.length === 0 && (
           <div className="flex flex-1 flex-col items-center justify-center gap-1.5 py-4 text-center">
@@ -258,9 +308,10 @@ function BrainNodeInner({ id, data, selected }: NodeProps) {
       </div>
 
       {/* composer */}
-      <div className="px-3 pb-3">
+      <div className="shrink-0 px-3 pb-3">
         <div className="nodrag flex items-end gap-1.5 rounded-[14px] bg-[hsl(240_14%_96.5%)] px-2.5 py-1.5 dark:bg-white/[0.05]">
           <textarea
+            ref={taRef}
             value={question}
             onChange={(e) => setQuestion(e.target.value)}
             onKeyDown={(e) => {
@@ -277,7 +328,7 @@ function BrainNodeInner({ id, data, selected }: NodeProps) {
                   ? 'Listening…'
                   : 'Ask your wired sources…'
             }
-            className="max-h-24 min-h-[30px] flex-1 resize-none bg-transparent py-1 text-[12.5px] outline-none placeholder:text-muted-foreground/50"
+            className="max-h-44 min-h-[30px] flex-1 resize-none bg-transparent py-1 text-[12.5px] outline-none placeholder:text-muted-foreground/50"
           />
           <button
             onClick={toggleMic}
@@ -371,6 +422,8 @@ function BrainNodeInner({ id, data, selected }: NodeProps) {
             cited answers only
           </span>
         </div>
+      </div>
+
       </div>
 
       <Handle
