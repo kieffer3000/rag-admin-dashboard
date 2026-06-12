@@ -34,6 +34,7 @@ import { HubNode } from './hub-node';
 import { BrainNode } from './brain-node';
 import { TextNode } from './text-node';
 import { AnnotationNode } from './annotation-node';
+import { ScopeEdge } from './scope-edge';
 import { BoardToolbar } from './toolbar';
 
 const nodeTypes = {
@@ -43,6 +44,8 @@ const nodeTypes = {
   textNode: TextNode,
   annotation: AnnotationNode
 };
+
+const edgeTypes = { scope: ScopeEdge };
 
 const SOURCE_TYPES = new Set(['chip', 'hub', 'textNode']);
 
@@ -233,6 +236,7 @@ function BoardCanvasInner() {
         nodes={board.nodes as Node[]}
         edges={board.edges as Edge[]}
         nodeTypes={nodeTypes}
+        edgeTypes={edgeTypes}
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
         onConnect={onConnect}
@@ -242,7 +246,7 @@ function BoardCanvasInner() {
         onNodeDoubleClick={onNodeDoubleClick}
         zoomOnDoubleClick={false}
         defaultEdgeOptions={{
-          type: 'default',
+          type: 'scope',
           style: {
             stroke: 'hsl(var(--accent) / 0.5)',
             strokeWidth: 1.6,

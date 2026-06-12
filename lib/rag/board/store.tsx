@@ -105,6 +105,8 @@ interface BoardCtxState {
     height: number,
     extraData?: Record<string, unknown>
   ) => void;
+  /** Disconnect an edge (the hover-✕ on a connection). */
+  removeBoardEdge: (edgeId: string) => void;
   nextBoardId: (prefix: string) => string;
 }
 
@@ -162,6 +164,16 @@ export function BoardProvider({ children }: { children: ReactNode }) {
               }
             : n
         )
+      }));
+    },
+    [setBoard]
+  );
+
+  const removeBoardEdge = useCallback(
+    (edgeId: string) => {
+      setBoard((prev) => ({
+        ...prev,
+        edges: prev.edges.filter((e) => e.id !== edgeId)
       }));
     },
     [setBoard]
@@ -243,6 +255,7 @@ export function BoardProvider({ children }: { children: ReactNode }) {
     resolveBrainScope,
     updateBoardNodeData,
     resizeBoardNode,
+    removeBoardEdge,
     nextBoardId: nextId
   };
 
