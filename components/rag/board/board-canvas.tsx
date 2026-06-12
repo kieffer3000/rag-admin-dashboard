@@ -368,6 +368,40 @@ function BoardCanvasInner() {
             data: { name: 'Everything', mediaType: 'everything' }
           })
         }
+        onNewRecording={(name, transcript) => {
+          // Voice memo → indexed source: transcript IS the embedded text.
+          const id = addMedia(
+            {
+              type: 'audio',
+              name,
+              description: 'Voice memo (MAI-Transcribe)',
+              date: new Date().toISOString().slice(0, 10),
+              content: transcript
+            },
+            { simulate: false }
+          );
+          pushNode({
+            id: nextBoardId('chip'),
+            type: 'chip',
+            position: centerPos(),
+            data: { mediaId: id }
+          });
+          fetch('/api/index', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              source_id: id,
+              name,
+              type: 'audio',
+              text: transcript
+            })
+          })
+            .then((r) => {
+              if (!r.ok) throw new Error();
+              updateMedia(id, { status: 'indexed' });
+            })
+            .catch(() => updateMedia(id, { status: 'failed' }));
+        }}
       />
     </div>
   );
