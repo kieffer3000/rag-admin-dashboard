@@ -6,7 +6,13 @@ import { cn } from '@/lib/utils';
 import { useRag } from '@/lib/rag/store';
 import { MediaIcon } from '@/components/rag/shared';
 import { Loader2, StickyNote } from 'lucide-react';
-import { CHIP_W, CHIP_H, type ChipData } from '@/lib/rag/board/types';
+import {
+  CHIP_W,
+  CHIP_H,
+  CHIP_TAB,
+  CHIP_CLIP,
+  type ChipData
+} from '@/lib/rag/board/types';
 import {
   Tooltip,
   TooltipContent,
@@ -24,28 +30,38 @@ function ChipNodeInner({ id, data, selected, parentId }: NodeProps) {
 
   return (
     <div
-      style={{ width: CHIP_W, height: CHIP_H }}
-      className={cn(
-        'group relative flex items-center gap-2.5 rounded-[14px] bg-card px-2.5',
-        'shadow-[0_1px_2px_rgb(0_0_0/0.05),0_4px_14px_rgb(0_0_0/0.06)] transition-all',
-        'dark:ring-1 dark:ring-white/[0.07]',
-        selected && 'ring-2 ring-accent/60 dark:ring-accent/60',
-        parentId && 'shadow-[0_1px_2px_rgb(0_0_0/0.04)]'
-      )}
+      style={{
+        width: CHIP_W,
+        height: CHIP_H + CHIP_TAB,
+        filter: selected
+          ? 'drop-shadow(0 0 0.5px hsl(var(--accent))) drop-shadow(0 2px 8px hsl(var(--accent)/0.45))'
+          : 'drop-shadow(0 1px 2px rgb(0 0 0/0.08)) drop-shadow(0 4px 10px rgb(0 0 0/0.07))'
+      }}
+      className="group relative transition-all"
     >
-      <MediaIcon type={item.type} size="sm" />
-      <div className="min-w-0 flex-1 leading-tight">
-        <div className="truncate text-[12px] font-semibold">{item.name}</div>
-        <div className="flex items-center gap-1 text-[10px] text-muted-foreground/70">
-          {item.status === 'processing' ? (
-            <>
-              <Loader2 className="h-2.5 w-2.5 animate-spin" /> Processing
-            </>
-          ) : item.status === 'failed' ? (
-            <span className="text-red-500">Failed</span>
-          ) : (
-            <>{item.chunks} chunks</>
-          )}
+      {/* puzzle-piece body (code.org/Scratch block): notch top, tab bottom */}
+      <div
+        style={{ width: CHIP_W, height: CHIP_H + CHIP_TAB, clipPath: CHIP_CLIP }}
+        className="absolute inset-0 bg-card dark:bg-[hsl(240_8%_14%)]"
+      />
+      <div
+        style={{ height: CHIP_H }}
+        className="relative flex items-center gap-2.5 px-2.5 pt-1"
+      >
+        <MediaIcon type={item.type} size="sm" />
+        <div className="min-w-0 flex-1 leading-tight">
+          <div className="truncate text-[12px] font-semibold">{item.name}</div>
+          <div className="flex items-center gap-1 text-[10px] text-muted-foreground/70">
+            {item.status === 'processing' ? (
+              <>
+                <Loader2 className="h-2.5 w-2.5 animate-spin" /> Processing
+              </>
+            ) : item.status === 'failed' ? (
+              <span className="text-red-500">Failed</span>
+            ) : (
+              <>{item.chunks} chunks</>
+            )}
+          </div>
         </div>
       </div>
 

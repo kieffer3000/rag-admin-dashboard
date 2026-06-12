@@ -40,6 +40,16 @@ export interface BoardState {
 // ---- chip / hub geometry (compact "puzzle" tiling, 2 columns) ----
 export const CHIP_W = 172;
 export const CHIP_H = 56;
+/** Depth of the Scratch-style puzzle tab below the chip body. */
+export const CHIP_TAB = 7;
+/** Vertical pitch when same-type chips click together (tab fills the notch). */
+export const STACK_PITCH = CHIP_H;
+/** Snap radius for chip-to-chip puzzle docking. */
+export const STACK_SNAP = 38;
+
+/** code.org/Scratch-style block outline: slanted notch on top, matching tab
+ *  on the bottom — stacked same-type chips visually interlock. */
+export const CHIP_CLIP = `path('M 12 0 L 26 0 L 30 ${CHIP_TAB} L 48 ${CHIP_TAB} L 52 0 L 160 0 Q 172 0 172 12 L 172 44 Q 172 56 160 56 L 52 56 L 48 ${CHIP_H + CHIP_TAB} L 30 ${CHIP_H + CHIP_TAB} L 26 56 L 12 56 Q 0 56 0 44 L 0 12 Q 0 0 12 0 Z')`;
 export const HUB_PAD_X = 12;
 export const HUB_HEADER_H = 42;
 export const HUB_GAP = 10;

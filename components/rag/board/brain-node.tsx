@@ -32,45 +32,59 @@ import {
   Mic,
   Check,
   ChevronDown,
+  ChevronUp,
   Maximize2,
-  Minimize2
+  Minimize2,
+  Globe,
+  Image as ImageIcon,
+  Share2,
+  PanelTop,
+  Presentation,
+  GalleryHorizontalEnd,
+  SlidersHorizontal
 } from 'lucide-react';
 import type { BrainData } from '@/lib/rag/board/types';
 
 /** v1 generation runs on Gemini in Make — the Board defaults to it. */
 const BOARD_DEFAULT_MODEL = 'gemini-2.5-flash';
 
-/** Poppy-style quick actions — each sends a grounded prompt over the wired sources. */
-const BRAIN_ACTIONS: { label: string; prompt: string }[] = [
+/** Poppy-style Tools menu — each sends a grounded prompt over the wired sources. */
+const BRAIN_TOOLS: { label: string; icon: any; prompt: string }[] = [
   {
-    label: 'Mind map',
+    label: 'Deep Research',
+    icon: Globe,
+    prompt:
+      'Do a deep, structured analysis of the wired sources: themes, contradictions, gaps, and open questions — with citations.'
+  },
+  {
+    label: 'Create Image',
+    icon: ImageIcon,
+    prompt:
+      'Write a detailed image-generation prompt that visualizes the central idea from the wired sources.'
+  },
+  {
+    label: 'MindMap',
+    icon: Share2,
     prompt:
       'Create a hierarchical mind map of the key concepts and how they relate, using only the wired sources. Output as a markdown nested bullet list.'
   },
   {
-    label: 'Landing page',
+    label: 'Landing Page',
+    icon: PanelTop,
     prompt:
       'Draft landing-page copy from the wired sources: a headline, a subheadline, 3 benefit bullets, and a call to action.'
   },
   {
     label: 'Presentation',
+    icon: Presentation,
     prompt:
       'Outline a slide-by-slide presentation from the wired sources — a title plus 3–5 bullets per slide.'
   },
   {
     label: 'Carousel',
+    icon: GalleryHorizontalEnd,
     prompt:
       'Write a 6-slide social carousel from the wired sources — one punchy line per slide.'
-  },
-  {
-    label: 'Image prompt',
-    prompt:
-      'Write a detailed image-generation prompt that visualizes the central idea from the wired sources.'
-  },
-  {
-    label: 'Deep research',
-    prompt:
-      'Do a deep, structured analysis of the wired sources: themes, contradictions, gaps, and open questions — with citations.'
   }
 ];
 
@@ -349,21 +363,6 @@ function BrainNodeInner({ id, data, selected }: NodeProps) {
 
       {/* composer */}
       <div className="shrink-0 px-3 pb-3">
-        {/* quick actions — grounded one-tap prompts */}
-        {scope.items.length > 0 && (
-          <div className="nodrag mb-2 flex gap-1.5 overflow-x-auto pb-0.5">
-            {BRAIN_ACTIONS.map((a) => (
-              <button
-                key={a.label}
-                onClick={() => runQuery(a.prompt)}
-                disabled={busy}
-                className="shrink-0 rounded-full border border-[rgb(var(--hairline)/0.16)] bg-card px-2.5 py-1 text-[11.5px] font-medium text-foreground/80 transition-colors hover:border-accent/40 hover:text-accent disabled:opacity-40"
-              >
-                {a.label}
-              </button>
-            ))}
-          </div>
-        )}
         <div className="nodrag flex items-end gap-1.5 rounded-[14px] bg-[hsl(240_14%_96.5%)] px-2.5 py-1.5 dark:bg-white/[0.05]">
           <textarea
             ref={taRef}
@@ -426,8 +425,38 @@ function BrainNodeInner({ id, data, selected }: NodeProps) {
           </button>
         </div>
 
-        {/* model picker */}
+        {/* tools + model picker */}
         <div className="mt-1.5 flex items-center justify-between px-1">
+          <div className="flex items-center gap-1">
+            {/* Tools dropdown — Poppy-style grounded actions */}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button
+                  disabled={busy || scope.items.length === 0}
+                  className="nodrag flex items-center gap-1.5 rounded-full bg-accent/[0.07] px-2.5 py-1 text-[11.5px] font-medium text-accent transition-colors hover:bg-accent/[0.13] disabled:opacity-40"
+                >
+                  <SlidersHorizontal className="h-3 w-3" />
+                  Tools
+                  <ChevronUp className="h-2.5 w-2.5" />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start" side="top" className="w-56">
+                {BRAIN_TOOLS.map((t) => {
+                  const TIcon = t.icon;
+                  return (
+                    <DropdownMenuItem
+                      key={t.label}
+                      onClick={() => runQuery(t.prompt)}
+                      className="gap-3 py-2.5"
+                    >
+                      <TIcon className="h-4 w-4 text-foreground/70" />
+                      <span className="text-[13.5px] font-medium">{t.label}</span>
+                    </DropdownMenuItem>
+                  );
+                })}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <button className="nodrag flex items-center gap-1.5 rounded-md px-1.5 py-0.5 text-[10.5px] font-medium text-muted-foreground/80 transition-colors hover:bg-black/[0.04] hover:text-foreground dark:hover:bg-white/[0.06]">

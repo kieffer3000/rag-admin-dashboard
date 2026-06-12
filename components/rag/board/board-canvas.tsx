@@ -27,7 +27,9 @@ import {
   BoardNode,
   hubSlot,
   CHIP_W,
-  CHIP_H
+  CHIP_H,
+  STACK_PITCH,
+  STACK_SNAP
 } from '@/lib/rag/board/types';
 import { ChipNode } from './chip-node';
 import { HubNode } from './hub-node';
@@ -178,10 +180,47 @@ function BoardCanvasInner() {
           );
           nodes = retile(nodes, oldHub);
         }
+
+        // Puzzle docking: a free chip dropped near another free chip of the
+        // SAME type clicks into place above/below it (tab fills the notch).
+        const moved = nodes.find((n) => n.id === node.id);
+        if (!hub && moved && !moved.parentId) {
+          const t = mediaTypeOf(node);
+          let best: { x: number; y: number; d: number } | null = null;
+          for (const o of nodes) {
+            if (o.id === moved.id || o.type !== 'chip' || o.parentId) continue;
+            if (media.find((m) => m.id === o.data.mediaId)?.type !== t) continue;
+            for (const slot of [
+              { x: o.position.x, y: o.position.y + STACK_PITCH },
+              { x: o.position.x, y: o.position.y - STACK_PITCH }
+            ]) {
+              const occupied = nodes.some(
+                (n) =>
+                  n.type === 'chip' &&
+                  !n.parentId &&
+                  n.id !== moved.id &&
+                  Math.abs(n.position.x - slot.x) < 6 &&
+                  Math.abs(n.position.y - slot.y) < 6
+              );
+              if (occupied) continue;
+              const d = Math.hypot(
+                moved.position.x - slot.x,
+                moved.position.y - slot.y
+              );
+              if (d < STACK_SNAP && (!best || d < best.d)) best = { ...slot, d };
+            }
+          }
+          if (best) {
+            const { x, y } = best;
+            nodes = nodes.map((n) =>
+              n.id === moved.id ? { ...n, position: { x, y } } : n
+            );
+          }
+        }
         return { ...prev, nodes };
       });
     },
-    [hitHub, setBoard]
+    [hitHub, setBoard, media, mediaTypeOf]
   );
 
   /** Double-click a module to zoom the viewport straight to it. Ignores
@@ -249,6 +288,7 @@ function BoardCanvasInner() {
         zoomOnDoubleClick={false}
         defaultEdgeOptions={{
           type: 'scope',
+          animated: true, // marching-ants flow along every connection
           style: {
             stroke: 'hsl(var(--accent) / 0.5)',
             strokeWidth: 1.6,

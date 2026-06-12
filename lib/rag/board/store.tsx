@@ -75,7 +75,8 @@ function seedBoard(media: MediaItem[]): BoardState {
       id: nextId('e'),
       source: hubId,
       target: brainId,
-      type: 'scope'
+      type: 'scope',
+      animated: true
     });
   }
 
