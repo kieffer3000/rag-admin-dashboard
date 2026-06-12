@@ -124,7 +124,13 @@ function HubNodeInner({ id, data, selected }: NodeProps) {
                   width: CHIP_W,
                   height: CHIP_H
                 }}
-                className="absolute rounded-[11px] border border-dashed border-black/15 dark:border-white/15"
+                className={cn(
+                  'absolute rounded-[11px] border border-dashed transition-colors duration-200',
+                  // whisper at rest; brighten to the accent as a chip nears
+                  d.glow
+                    ? 'border-accent/50'
+                    : 'border-black/[0.07] dark:border-white/[0.07]'
+                )}
               />
             );
           })}

@@ -11,15 +11,19 @@ import { cn } from '@/lib/utils';
  */
 export function Markdown({
   children,
-  className
+  className,
+  large = false
 }: {
   children: string;
   className?: string;
+  /** Reading mode: scale the body up + relax the leading for long answers. */
+  large?: boolean;
 }) {
   return (
     <div
       className={cn(
-        'text-[15px] leading-[1.6] text-foreground/90 [&>*:first-child]:mt-0 [&>*:last-child]:mb-0',
+        'text-foreground/90 [&>*:first-child]:mt-0 [&>*:last-child]:mb-0',
+        large ? 'text-[16.5px] leading-[1.72]' : 'text-[15px] leading-[1.6]',
         className
       )}
     >

@@ -127,6 +127,8 @@ function BrainNodeInner({ id, data, selected }: NodeProps) {
 
   const messages = brainMessages[id] ?? [];
   const scope = resolveBrainScope(id);
+  /** Any cable plugged into this brain's receptacle? */
+  const wired = board.edges.some((e) => e.target === id);
 
   // Auto-grow the composer as text fills it (capped; overflow scrolls).
   useEffect(() => {
@@ -388,9 +390,10 @@ function BrainNodeInner({ id, data, selected }: NodeProps) {
         ref={scrollRef}
         className={cn(
           'nodrag nowheel select-text flex min-h-0 flex-1 flex-col gap-2.5 overflow-y-auto py-3',
-          // Reading mode: doc-like centered measure instead of full-bleed lines.
+          // Reading mode: a comfortable ~70ch centered measure (not full-bleed)
+          // plus larger type — a premium reading column, not a stretched page.
           sizeMode === 'full'
-            ? 'px-[max(1.5rem,calc((100%-760px)/2))]'
+            ? 'px-[max(1.5rem,calc((100%-620px)/2))] py-5'
             : 'px-3.5'
         )}
       >
@@ -417,6 +420,7 @@ function BrainNodeInner({ id, data, selected }: NodeProps) {
           <BrainMessage
             key={m.id}
             m={m}
+            large={sizeMode === 'full'}
             onCitation={openViewer}
             onCiteHover={pulseSource}
           />
@@ -425,7 +429,8 @@ function BrainNodeInner({ id, data, selected }: NodeProps) {
 
       {/* composer */}
       <div className="shrink-0 px-3 pb-3">
-        <div className="nodrag flex items-end gap-1.5 rounded-[14px] bg-[hsl(240_14%_96.5%)] px-2.5 py-1.5 dark:bg-white/[0.05]">
+        {/* a physical indentation that lights up when you click into it */}
+        <div className="nodrag flex items-end gap-1.5 rounded-[14px] bg-[hsl(240_14%_96.5%)] px-2.5 py-1.5 shadow-[inset_0_1px_3px_rgb(0_0_0/0.07)] ring-1 ring-black/[0.04] transition-shadow focus-within:ring-2 focus-within:ring-accent/45 dark:bg-white/[0.05] dark:shadow-[inset_0_1px_3px_rgb(0_0_0/0.3)] dark:ring-white/[0.05]">
           <textarea
             ref={taRef}
             value={question}
@@ -572,12 +577,19 @@ function BrainNodeInner({ id, data, selected }: NodeProps) {
 
       </div>
 
-      {/* input RECEPTACLE — a visible port waiting to receive wires, set into
-          the brain's left edge rather than a bare dot on the border */}
+      {/* input RECEPTACLE — a visible port set into the brain's left edge. It
+          comes alive when cables are plugged in (soft inner glow) and pulses
+          in time with the wires while the brain is thinking. */}
       <Handle
         type="target"
         position={Position.Left}
-        className="!h-7 !w-3.5 !-left-1 !rounded-full !border-2 !border-card !bg-gradient-to-b !from-accent !to-violet-600 !shadow-[inset_0_1px_2px_rgb(0_0_0/0.3),0_1px_4px_hsl(var(--accent)/0.5)]"
+        className={cn(
+          '!h-7 !w-3.5 !-left-1 !rounded-full !border-2 !border-card !bg-gradient-to-b !from-accent !to-violet-600',
+          wired
+            ? '!shadow-[inset_0_1px_2px_rgb(0_0_0/0.3),0_0_10px_2px_hsl(var(--accent)/0.5)]'
+            : '!shadow-[inset_0_1px_2px_rgb(0_0_0/0.3),0_1px_4px_hsl(var(--accent)/0.45)]',
+          busy && 'animate-pulse'
+        )}
       />
     </div>
   );
@@ -585,16 +597,25 @@ function BrainNodeInner({ id, data, selected }: NodeProps) {
 
 function BrainMessage({
   m,
+  large = false,
   onCitation,
   onCiteHover
 }: {
   m: ChatMessage;
+  large?: boolean;
   onCitation: (c: any) => void;
   onCiteHover: (mediaId: string, on: boolean) => void;
 }) {
   if (m.role === 'user') {
     return (
-      <div className="max-w-[88%] self-end whitespace-pre-wrap rounded-[14px] rounded-br-[5px] bg-accent px-3.5 py-2 text-[14px] leading-relaxed text-white shadow-[0_2px_8px_hsl(var(--accent)/0.3)]">
+      // "Gel" bubble: a bright vertical gradient + a translucent white top
+      // inner-edge make it pop off the canvas like a premium iMessage bubble.
+      <div
+        className={cn(
+          'max-w-[88%] self-end whitespace-pre-wrap rounded-[14px] rounded-br-[5px] bg-gradient-to-b from-indigo-500 to-indigo-600 px-3.5 py-2 leading-relaxed text-white shadow-[inset_0_1px_0_rgb(255_255_255/0.25),0_2px_8px_hsl(var(--accent)/0.32)]',
+          large ? 'text-[15px]' : 'text-[14px]'
+        )}
+      >
         {m.content}
       </div>
     );
@@ -602,7 +623,7 @@ function BrainMessage({
   return (
     <div className="self-start">
       {m.content ? (
-        <Markdown>{m.content}</Markdown>
+        <Markdown large={large}>{m.content}</Markdown>
       ) : (
         <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground/50" />
       )}
