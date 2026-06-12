@@ -59,7 +59,7 @@ function retile(nodes: BoardNode[], hubId: string): BoardNode[] {
 function BoardCanvasInner() {
   const { board, setBoard, nextBoardId } = useBoard();
   const { media, addMedia, updateMedia } = useRag();
-  const { getIntersectingNodes, screenToFlowPosition } = useReactFlow();
+  const { getIntersectingNodes, screenToFlowPosition, fitView } = useReactFlow();
   const wrapRef = useRef<HTMLDivElement>(null);
 
   const mediaTypeOf = useCallback(
@@ -179,6 +179,23 @@ function BoardCanvasInner() {
     [hitHub, setBoard]
   );
 
+  /** Double-click a module to zoom the viewport straight to it. Ignores
+   *  double-clicks on interactive bits (composer, buttons) so text-select
+   *  and typing still work. */
+  const onNodeDoubleClick = useCallback(
+    (e: React.MouseEvent, node: Node) => {
+      const t = e.target as HTMLElement;
+      if (t.closest('textarea, input, button, a, [role="checkbox"]')) return;
+      fitView({
+        nodes: [{ id: node.id }],
+        duration: 450,
+        padding: 0.22,
+        maxZoom: 1.4
+      });
+    },
+    [fitView]
+  );
+
   // ---- toolbar actions ----
   const centerPos = useCallback(() => {
     const el = wrapRef.current;
@@ -222,6 +239,8 @@ function BoardCanvasInner() {
         isValidConnection={isValidConnection}
         onNodeDrag={onNodeDrag}
         onNodeDragStop={onNodeDragStop}
+        onNodeDoubleClick={onNodeDoubleClick}
+        zoomOnDoubleClick={false}
         defaultEdgeOptions={{
           type: 'default',
           style: {
