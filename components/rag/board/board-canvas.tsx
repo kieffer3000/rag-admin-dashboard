@@ -64,7 +64,7 @@ function retile(nodes: BoardNode[], hubId: string): BoardNode[] {
 }
 
 function BoardCanvasInner() {
-  const { board, setBoard, nextBoardId } = useBoard();
+  const { board, setBoard, nextBoardId, busyBrains } = useBoard();
   const { media, addMedia, updateMedia } = useRag();
   const { getIntersectingNodes, screenToFlowPosition, fitView } = useReactFlow();
   const wrapRef = useRef<HTMLDivElement>(null);
@@ -261,6 +261,18 @@ function BoardCanvasInner() {
     [setBoard]
   );
 
+  // Ants march ONLY while a brain is thinking — and only on ITS edges.
+  // Idle canvas = zero animation work (battery + visual calm).
+  const liveEdges = useMemo(
+    () =>
+      (board.edges as Edge[]).map((e) =>
+        busyBrains.has(e.target) === !!e.animated
+          ? e
+          : { ...e, animated: busyBrains.has(e.target) }
+      ),
+    [board.edges, busyBrains]
+  );
+
   const placedIds = useMemo(
     () =>
       new Set(
@@ -275,7 +287,7 @@ function BoardCanvasInner() {
     <div ref={wrapRef} className="relative h-full w-full">
       <ReactFlow
         nodes={board.nodes as Node[]}
-        edges={board.edges as Edge[]}
+        edges={liveEdges}
         nodeTypes={nodeTypes}
         edgeTypes={edgeTypes}
         onNodesChange={onNodesChange}
@@ -288,7 +300,6 @@ function BoardCanvasInner() {
         zoomOnDoubleClick={false}
         defaultEdgeOptions={{
           type: 'scope',
-          animated: true, // marching-ants flow along every connection
           style: {
             stroke: 'hsl(var(--accent) / 0.5)',
             strokeWidth: 1.6,

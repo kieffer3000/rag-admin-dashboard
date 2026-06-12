@@ -104,7 +104,8 @@ function BrainNodeInner({ id, data, selected }: NodeProps) {
     updateBrainMessage,
     resolveBrainScope,
     updateBoardNodeData,
-    resizeBoardNode
+    resizeBoardNode,
+    setBrainBusy
   } = useBoard();
   const { openViewer } = useRag();
   const { getViewport } = useReactFlow();
@@ -247,6 +248,7 @@ function BrainNodeInner({ id, data, selected }: NodeProps) {
     });
 
     setBusy(true);
+    setBrainBusy(id, true); // inbound edges march while thinking
     const asstId = nextMsgId();
     addBrainMessage(id, {
       id: asstId,
@@ -276,6 +278,7 @@ function BrainNodeInner({ id, data, selected }: NodeProps) {
       () => {
         updateBrainMessage(id, asstId, { citations });
         setBusy(false);
+        setBrainBusy(id, false);
       }
     );
   }

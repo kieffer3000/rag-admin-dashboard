@@ -75,8 +75,7 @@ function seedBoard(media: MediaItem[]): BoardState {
       id: nextId('e'),
       source: hubId,
       target: brainId,
-      type: 'scope',
-      animated: true
+      type: 'scope'
     });
   }
 
@@ -122,6 +121,9 @@ interface BoardCtxState {
   ) => void;
   /** Disconnect an edge (the hover-✕ on a connection). */
   removeBoardEdge: (edgeId: string) => void;
+  /** Brains with a query in flight — their inbound edges march. */
+  busyBrains: Set<string>;
+  setBrainBusy: (brainId: string, busy: boolean) => void;
   nextBoardId: (prefix: string) => string;
 }
 
@@ -251,6 +253,15 @@ export function BoardProvider({ children }: { children: ReactNode }) {
     [setBoard]
   );
 
+  const [busyBrains, setBusyBrains] = useState<Set<string>>(new Set());
+  const setBrainBusy = useCallback((brainId: string, busy: boolean) => {
+    setBusyBrains((prev) => {
+      const next = new Set(prev);
+      busy ? next.add(brainId) : next.delete(brainId);
+      return next;
+    });
+  }, []);
+
   const removeBoardEdge = useCallback(
     (edgeId: string) => {
       setBoard((prev) => ({
@@ -338,6 +349,8 @@ export function BoardProvider({ children }: { children: ReactNode }) {
     updateBoardNodeData,
     resizeBoardNode,
     removeBoardEdge,
+    busyBrains,
+    setBrainBusy,
     nextBoardId: nextId
   };
 
