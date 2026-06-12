@@ -300,3 +300,18 @@ input[type='search']::-webkit-search-cancel-button {
 .animate-cite-ripple {
   animation: cite-ripple 1s ease-out infinite;
 }
+
+/* Board nodes are PHYSICAL OBJECTS: grabbing one must always drag it, never
+   start a browser text-selection sweep. Brain chat opts back in (answers
+   must stay copyable). */
+.react-flow__node {
+  user-select: none;
+  -webkit-user-select: none;
+}
+.react-flow__node .select-text,
+.react-flow__node .select-text *,
+.react-flow__node input,
+.react-flow__node textarea {
+  user-select: text;
+  -webkit-user-select: text;
+}

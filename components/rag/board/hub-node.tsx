@@ -96,8 +96,8 @@ function HubNodeInner({ id, data, selected }: NodeProps) {
         <div className="pointer-events-none absolute inset-x-2 bottom-2 top-[40px] rounded-[13px] bg-black/[0.035] shadow-[inset_0_2px_5px_rgb(0_0_0/0.07),inset_0_0_0_1px_rgb(0_0_0/0.025)] dark:bg-black/[0.22] dark:shadow-[inset_0_2px_6px_rgb(0_0_0/0.45),inset_0_0_0_1px_rgb(255_255_255/0.03)]" />
       )}
 
-      {/* rim header */}
-      <div className="relative flex h-[42px] items-center gap-2 px-3">
+      {/* rim header — the box's grab handle */}
+      <div className="relative flex h-[42px] cursor-grab items-center gap-2 px-3 active:cursor-grabbing">
         <span
           className={cn(
             'flex h-6 w-6 shrink-0 items-center justify-center rounded-lg',
@@ -126,7 +126,7 @@ function HubNodeInner({ id, data, selected }: NodeProps) {
               e.stopPropagation();
               setEditing(true);
             }}
-            className="min-w-0 flex-1 cursor-text truncate text-[12px] font-semibold tracking-tight"
+            className="min-w-0 flex-1 select-none truncate text-[12px] font-semibold tracking-tight"
           >
             {d.name}
           </span>

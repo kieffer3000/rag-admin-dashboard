@@ -384,7 +384,7 @@ function BrainNodeInner({ id, data, selected }: NodeProps) {
       <div
         ref={scrollRef}
         className={cn(
-          'nodrag nowheel flex min-h-0 flex-1 flex-col gap-2.5 overflow-y-auto py-3',
+          'nodrag nowheel select-text flex min-h-0 flex-1 flex-col gap-2.5 overflow-y-auto py-3',
           // Reading mode: doc-like centered measure instead of full-bleed lines.
           sizeMode === 'full'
             ? 'px-[max(1.5rem,calc((100%-760px)/2))]'

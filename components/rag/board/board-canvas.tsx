@@ -257,7 +257,11 @@ function BoardCanvasInner() {
           : new Set([node.id]);
       const hub = hitHub(node);
 
-      setBoard((prev) => {
+      // Defer one tick: React Flow flushes its final drag position AFTER this
+      // callback — by applying the dock on the next tick we are the LAST
+      // writer, so a dropped piece always seats INTO the glowing box instead
+      // of being snapped back to wherever it was released.
+      setTimeout(() => setBoard((prev) => {
         let nodes = prev.nodes.map((n) => {
           let out = n;
           if (n.type === 'hub' && n.data.glow)
@@ -361,7 +365,7 @@ function BoardCanvasInner() {
           }
         }
         return { ...prev, nodes, edges };
-      });
+      }), 0);
     },
     [hitHub, setBoard, media, mediaTypeOf]
   );
@@ -630,6 +634,14 @@ function BoardCanvasInner() {
         onNodeDragStop={onNodeDragStop}
         onNodeDoubleClick={onNodeDoubleClick}
         zoomOnDoubleClick={false}
+        // Gesture contract: plain drag on a node MOVES it; plain drag on the
+        // canvas PANS; the rubber-band multi-select box appears ONLY while
+        // holding Shift. Dragging never auto-selects (no surprise group box).
+        panOnDrag
+        selectionOnDrag={false}
+        selectionKeyCode="Shift"
+        multiSelectionKeyCode="Shift"
+        selectNodesOnDrag={false}
         defaultEdgeOptions={{
           type: 'scope',
           // Resting wires: smooth, semi-transparent curves. The dashes are
