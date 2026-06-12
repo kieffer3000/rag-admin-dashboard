@@ -49,6 +49,8 @@ interface RagState {
     item: Omit<MediaItem, 'id' | 'status' | 'chunks'>,
     opts?: { simulate?: boolean }
   ) => string;
+  /** Merge persisted media back in on load (board persistence). */
+  hydrateMedia: (items: MediaItem[], projectId: string) => void;
   updateMedia: (id: string, patch: Partial<MediaItem>) => void;
   deleteMedia: (id: string) => void;
   reindexMedia: (id: string) => void;
@@ -174,6 +176,22 @@ export function RagProvider({ children }: { children: ReactNode }) {
 
   const updateMedia = useCallback((id: string, patch: Partial<MediaItem>) => {
     setMedia((prev) => prev.map((m) => (m.id === id ? { ...m, ...patch } : m)));
+  }, []);
+
+  const hydrateMedia = useCallback((items: MediaItem[], projectId: string) => {
+    if (!items?.length) return;
+    setMedia((prev) => {
+      const have = new Set(prev.map((m) => m.id));
+      const add = items.filter((i) => !have.has(i.id));
+      return add.length ? [...add, ...prev] : prev;
+    });
+    setProjects((prev) =>
+      prev.map((p) =>
+        p.id === projectId
+          ? { ...p, sourceIds: Array.from(new Set([...p.sourceIds, ...items.map((i) => i.id)])) }
+          : p
+      )
+    );
   }, []);
 
   const deleteMedia = useCallback((id: string) => {
@@ -439,6 +457,7 @@ export function RagProvider({ children }: { children: ReactNode }) {
     setScope,
     setModel: setModelId,
     addMedia,
+    hydrateMedia,
     updateMedia,
     deleteMedia,
     reindexMedia,

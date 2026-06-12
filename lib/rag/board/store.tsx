@@ -11,6 +11,8 @@ import {
   useState,
   useCallback,
   useMemo,
+  useEffect,
+  useRef,
   ReactNode
 } from 'react';
 import { useRag } from '../store';
@@ -19,6 +21,18 @@ import { BoardNode, BoardEdge, BoardState, hubSize, hubSlot } from './types';
 
 let boardIdCounter = 5000;
 const nextId = (prefix: string) => `${prefix}${++boardIdCounter}`;
+
+/** After loading a saved board, advance the counter past existing numeric ids
+ *  so freshly-created nodes/edges never collide with persisted ones. */
+function bumpCounterFrom(ids: string[]) {
+  for (const id of ids) {
+    const m = /(\d+)$/.exec(id);
+    if (m) {
+      const n = parseInt(m[1], 10);
+      if (n > boardIdCounter) boardIdCounter = n;
+    }
+  }
+}
 
 /** Seed a friendly starter layout from the project's existing sources. */
 function seedBoard(media: MediaItem[]): BoardState {
@@ -113,15 +127,82 @@ interface BoardCtxState {
 const Ctx = createContext<BoardCtxState | null>(null);
 
 export function BoardProvider({ children }: { children: ReactNode }) {
-  const { activeProjectId, projectMedia, media } = useRag();
+  const { activeProjectId, projectMedia, media, hydrateMedia } = useRag();
   const [boards, setBoards] = useState<Record<string, BoardState>>({});
   const [brainMessages, setBrainMessages] = useState<Record<string, ChatMessage[]>>({});
+  /** Projects whose saved state we've already loaded (don't reload/overwrite). */
+  const hydrated = useRef<Set<string>>(new Set());
+  const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const board = useMemo<BoardState>(() => {
     return boards[activeProjectId] ?? seedBoard(projectMedia);
     // projectMedia only matters for the first seed of a project's board.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [boards, activeProjectId]);
+
+  // ---- LOAD persisted board on project mount/switch (Neon via /api/board) ----
+  useEffect(() => {
+    const pid = activeProjectId;
+    if (hydrated.current.has(pid)) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch(`/api/board?projectId=${encodeURIComponent(pid)}`);
+        if (res.ok) {
+          const { data } = await res.json();
+          if (!cancelled && data) {
+            if (Array.isArray(data.media)) hydrateMedia(data.media, pid);
+            bumpCounterFrom([
+              ...(data.nodes ?? []).map((n: { id: string }) => n.id),
+              ...(data.edges ?? []).map((e: { id: string }) => e.id)
+            ]);
+            setBoards((prev) => ({
+              ...prev,
+              [pid]: { nodes: data.nodes ?? [], edges: data.edges ?? [] }
+            }));
+            if (data.brainMessages)
+              setBrainMessages((prev) => ({ ...prev, ...data.brainMessages }));
+          }
+        }
+      } catch {
+        /* offline / no DB → keep the seed */
+      } finally {
+        if (!cancelled) hydrated.current.add(pid);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [activeProjectId, hydrateMedia]);
+
+  // ---- AUTOSAVE (debounced) once the project is hydrated ----
+  useEffect(() => {
+    const pid = activeProjectId;
+    if (!hydrated.current.has(pid)) return;
+    if (saveTimer.current) clearTimeout(saveTimer.current);
+    saveTimer.current = setTimeout(() => {
+      const brainIds = new Set(
+        board.nodes.filter((n) => n.type === 'brain').map((n) => n.id)
+      );
+      const msgs = Object.fromEntries(
+        Object.entries(brainMessages).filter(([k]) => brainIds.has(k))
+      );
+      const doc = {
+        nodes: board.nodes,
+        edges: board.edges,
+        brainMessages: msgs,
+        media: projectMedia
+      };
+      fetch('/api/board', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ projectId: pid, data: doc })
+      }).catch(() => {});
+    }, 1000);
+    return () => {
+      if (saveTimer.current) clearTimeout(saveTimer.current);
+    };
+  }, [board, brainMessages, projectMedia, activeProjectId]);
 
   const setBoard = useCallback(
     (updater: (prev: BoardState) => BoardState) => {
