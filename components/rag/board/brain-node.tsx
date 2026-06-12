@@ -35,6 +35,7 @@ import {
   ChevronUp,
   Maximize2,
   Minimize2,
+  BookOpen,
   Globe,
   Image as ImageIcon,
   Share2,
@@ -108,7 +109,7 @@ function BrainNodeInner({ id, data, selected }: NodeProps) {
     setBrainBusy
   } = useBoard();
   const { openViewer } = useRag();
-  const { getViewport } = useReactFlow();
+  const { getViewport, fitView } = useReactFlow();
   const [question, setQuestion] = useState('');
   const [busy, setBusy] = useState(false);
   const [listening, setListening] = useState(false);
@@ -133,16 +134,35 @@ function BrainNodeInner({ id, data, selected }: NodeProps) {
     el.style.height = Math.min(el.scrollHeight, 168) + 'px';
   }, [question]);
 
-  /** Toggle the brain between its default size and ~half the screen. */
-  function toggleHalf() {
-    if (d.expanded) {
-      resizeBoardNode(id, 400, 480, { expanded: false });
+  /**
+   * Cycle the brain through three sizes:
+   * default (400×480) → half-screen → READING MODE (near-fullscreen, for
+   * reading long answers/charts like a doc) → back to default.
+   * Each step re-frames the viewport onto the brain so it fills the screen.
+   */
+  const sizeMode: 'default' | 'half' | 'full' =
+    (d.sizeMode as any) ?? (d.expanded ? 'half' : 'default');
+
+  function cycleSize() {
+    const { zoom } = getViewport();
+    const px = (fw: number, fh: number) => ({
+      w: Math.round((window.innerWidth * fw) / zoom),
+      h: Math.round((window.innerHeight * fh) / zoom)
+    });
+    if (sizeMode === 'default') {
+      const { w, h } = px(0.48, 0.82);
+      resizeBoardNode(id, w, h, { sizeMode: 'half', expanded: true });
+    } else if (sizeMode === 'half') {
+      const { w, h } = px(0.92, 0.9);
+      resizeBoardNode(id, w, h, { sizeMode: 'full', expanded: true });
     } else {
-      const { zoom } = getViewport();
-      const w = Math.round((window.innerWidth * 0.48) / zoom);
-      const h = Math.round((window.innerHeight * 0.82) / zoom);
-      resizeBoardNode(id, w, h, { expanded: true });
+      resizeBoardNode(id, 400, 480, { sizeMode: 'default', expanded: false });
     }
+    // Re-frame after the node re-renders at its new dimensions.
+    setTimeout(
+      () => fitView({ nodes: [{ id }], duration: 420, padding: 0.04, maxZoom: 1.2 }),
+      30
+    );
   }
   const modelId = (d.modelId as string) ?? BOARD_DEFAULT_MODEL;
   const model = LLM_MODELS.find((m) => m.id === modelId) ?? LLM_MODELS[3];
@@ -317,14 +337,22 @@ function BrainNodeInner({ id, data, selected }: NodeProps) {
             </div>
           </div>
           <button
-            onClick={toggleHalf}
-            title={d.expanded ? 'Restore size' : 'Expand to half screen'}
+            onClick={cycleSize}
+            title={
+              sizeMode === 'default'
+                ? 'Expand to half screen'
+                : sizeMode === 'half'
+                  ? 'Reading mode (full screen)'
+                  : 'Restore size'
+            }
             className="nodrag flex h-6 w-6 items-center justify-center rounded-[8px] text-muted-foreground/70 transition-colors hover:bg-black/[0.05] hover:text-foreground dark:hover:bg-white/[0.07]"
           >
-            {d.expanded ? (
-              <Minimize2 className="h-3.5 w-3.5" />
-            ) : (
+            {sizeMode === 'default' ? (
               <Maximize2 className="h-3.5 w-3.5" />
+            ) : sizeMode === 'half' ? (
+              <BookOpen className="h-3.5 w-3.5" />
+            ) : (
+              <Minimize2 className="h-3.5 w-3.5" />
             )}
           </button>
           <span
@@ -338,7 +366,13 @@ function BrainNodeInner({ id, data, selected }: NodeProps) {
       {/* messages */}
       <div
         ref={scrollRef}
-        className="nodrag nowheel flex min-h-0 flex-1 flex-col gap-2.5 overflow-y-auto px-3.5 py-3"
+        className={cn(
+          'nodrag nowheel flex min-h-0 flex-1 flex-col gap-2.5 overflow-y-auto py-3',
+          // Reading mode: doc-like centered measure instead of full-bleed lines.
+          sizeMode === 'full'
+            ? 'px-[max(1.5rem,calc((100%-760px)/2))]'
+            : 'px-3.5'
+        )}
       >
         {messages.length === 0 && (
           <div className="flex flex-1 flex-col items-center justify-center gap-1.5 py-4 text-center">
