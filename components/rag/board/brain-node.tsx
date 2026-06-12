@@ -17,6 +17,7 @@ import { startHum, stopHum, playChime } from '@/lib/rag/board/sound';
 import { WavRecorder, transcribeAudio } from '@/lib/rag/board/dictation';
 import { ChatMessage } from '@/lib/rag/types';
 import { MediaIcon } from '@/components/rag/shared';
+import { MEDIA_TYPES } from '@/lib/rag/media-config';
 import { Markdown } from '@/components/rag/board/markdown';
 import { LLM_MODELS, PROVIDER_META } from '@/lib/rag/models';
 import {
@@ -90,6 +91,14 @@ const BRAIN_TOOLS: { label: string; icon: any; prompt: string }[] = [
   }
 ];
 
+/** Zero-state starter prompts — clicking one populates the composer (it does
+ *  not auto-send), so the user can tweak before asking. */
+const SUGGESTED_PROMPTS = [
+  'Summarize the key points',
+  'What are the main contradictions?',
+  'Give me 3 actionable takeaways'
+];
+
 let msgCounter = 9000;
 const nextMsgId = () => `bm${++msgCounter}`;
 
@@ -129,6 +138,12 @@ function BrainNodeInner({ id, data, selected }: NodeProps) {
   const scope = resolveBrainScope(id);
   /** Any cable plugged into this brain's receptacle? */
   const wired = board.edges.some((e) => e.target === id);
+  const scopeLabel = scope.everything
+    ? 'Everything in project'
+    : `${scope.items.length} source${scope.items.length === 1 ? '' : 's'} wired` +
+      (scope.contextTexts.length > 0
+        ? ` · ${scope.contextTexts.length} note${scope.contextTexts.length === 1 ? '' : 's'}`
+        : '');
 
   // Auto-grow the composer as text fills it (capped; overflow scrolls).
   useEffect(() => {
@@ -351,12 +366,22 @@ function BrainNodeInner({ id, data, selected }: NodeProps) {
             <div className="truncate text-[13px] font-semibold tracking-tight">
               {d.name}
             </div>
-            <div className="text-[10.5px] text-muted-foreground/70">
-              {scope.everything
-                ? 'Everything in project'
-                : `${scope.items.length} source${scope.items.length === 1 ? '' : 's'} wired`}
-              {scope.contextTexts.length > 0 && ` · ${scope.contextTexts.length} note`}
-            </div>
+            {/* Live scope readout — a hardware-style pill that POPS whenever the
+                wired-source count changes (key remounts → re-runs the pop). */}
+            <span
+              key={scopeLabel}
+              className="mt-0.5 inline-flex animate-count-pop items-center gap-1 rounded-full bg-accent/[0.08] py-0.5 pl-1 pr-1.5 text-[10px] font-medium text-accent/90"
+            >
+              <span
+                className={cn(
+                  'h-1.5 w-1.5 rounded-full',
+                  scope.items.length > 0 || scope.everything
+                    ? 'bg-emerald-500'
+                    : 'bg-amber-400'
+                )}
+              />
+              {scopeLabel}
+            </span>
           </div>
           <button
             onClick={cycleSize}
@@ -377,19 +402,13 @@ function BrainNodeInner({ id, data, selected }: NodeProps) {
               <Minimize2 className="h-3.5 w-3.5" />
             )}
           </button>
-          <span
-            className={cn(
-              'h-2 w-2 shrink-0 rounded-full',
-              scope.items.length > 0 ? 'bg-emerald-500' : 'bg-amber-400'
-            )}
-          />
         </div>
 
       {/* messages */}
       <div
         ref={scrollRef}
         className={cn(
-          'nodrag nowheel select-text flex min-h-0 flex-1 flex-col gap-2.5 overflow-y-auto py-3',
+          'nodrag nowheel select-text scroll-brain flex min-h-0 flex-1 flex-col gap-2.5 overflow-y-auto py-3',
           // Reading mode: a comfortable ~70ch centered measure (not full-bleed)
           // plus larger type — a premium reading column, not a stretched page.
           sizeMode === 'full'
@@ -398,22 +417,42 @@ function BrainNodeInner({ id, data, selected }: NodeProps) {
         )}
       >
         {messages.length === 0 && (
-          <div className="flex flex-1 flex-col items-center justify-center gap-1.5 py-4 text-center">
-            {scope.items.length === 0 ? (
-              <>
-                <Unplug className="h-5 w-5 text-muted-foreground/40" />
-                <p className="max-w-[280px] text-[13px] leading-relaxed text-muted-foreground/70">
-                  Nothing wired yet — connect a chip, a hub, or the Everything
-                  hub to give this brain its knowledge basis.
-                </p>
-              </>
-            ) : (
-              <p className="max-w-[280px] text-[13px] leading-relaxed text-muted-foreground/70">
-                Ask anything — answers come only from the {scope.items.length}{' '}
-                wired source{scope.items.length === 1 ? '' : 's'}, with
-                citations.
+          <div className="flex flex-1 flex-col items-center justify-center gap-3 py-4 text-center">
+            <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-accent/[0.07] text-accent/70">
+              {wired ? (
+                <Boxes className="h-5 w-5" />
+              ) : (
+                <Unplug className="h-5 w-5" />
+              )}
+            </div>
+            <p className="max-w-[280px] text-[13.5px] font-medium leading-relaxed text-muted-foreground/80">
+              {wired
+                ? `Ask your ${scope.items.length || ''} wired source${
+                    scope.items.length === 1 ? '' : 's'
+                  } anything — every answer is cited.`.replace('  ', ' ')
+                : 'Wire sources to begin.'}
+            </p>
+            {!wired && (
+              <p className="-mt-1.5 max-w-[260px] text-[11.5px] leading-relaxed text-muted-foreground/55">
+                Drag a wire from a chip, a box, or the Everything hub into this
+                brain. You can still draft a question below.
               </p>
             )}
+            {/* suggested starter prompts — fill the composer (don't auto-send) */}
+            <div className="mt-1 flex flex-wrap justify-center gap-1.5">
+              {SUGGESTED_PROMPTS.map((p) => (
+                <button
+                  key={p}
+                  onClick={() => {
+                    setQuestion(p);
+                    taRef.current?.focus();
+                  }}
+                  className="nodrag rounded-full border border-[rgb(var(--hairline)/0.18)] bg-card px-3 py-1 text-[11.5px] font-medium text-muted-foreground/80 transition-all hover:-translate-y-px hover:border-accent/40 hover:text-accent hover:shadow-sm"
+                >
+                  {p}
+                </button>
+              ))}
+            </div>
           </div>
         )}
         {messages.map((m) => (
@@ -500,14 +539,18 @@ function BrainNodeInner({ id, data, selected }: NodeProps) {
               <DropdownMenuTrigger asChild>
                 <button
                   disabled={busy || scope.items.length === 0}
-                  className="nodrag flex items-center gap-1.5 rounded-full bg-accent/[0.07] px-2.5 py-1 text-[11.5px] font-medium text-accent transition-colors hover:bg-accent/[0.13] disabled:opacity-40"
+                  className="nodrag flex items-center gap-1.5 rounded-full bg-accent/[0.10] px-2.5 py-1 text-[11.5px] font-medium text-accent shadow-[0_1px_2px_rgb(0_0_0/0.06)] ring-1 ring-accent/15 transition-all hover:bg-accent/[0.16] hover:shadow-sm disabled:opacity-40"
                 >
                   <SlidersHorizontal className="h-3 w-3" />
                   Tools
                   <ChevronUp className="h-2.5 w-2.5" />
                 </button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="start" side="top" className="w-56">
+              <DropdownMenuContent
+                align="start"
+                side="top"
+                className="w-56 border-black/10 bg-popover/90 shadow-[0_10px_34px_-6px_rgb(0_0_0/0.28)] backdrop-blur-xl dark:border-white/10"
+              >
                 {BRAIN_TOOLS.map((t) => {
                   const TIcon = t.icon;
                   return (
@@ -630,16 +673,26 @@ function BrainMessage({
       {m.citations && m.citations.length > 0 && (
         <div className="mt-2 flex flex-wrap gap-1.5">
           {m.citations.map((c, i) => (
+            // a physical "data tag": a media-colored left edge ties it back to
+            // the exact source chip on the board; lifts on hover.
             <button
               key={i}
               onClick={() => onCitation(c)}
               onMouseEnter={() => onCiteHover(c.mediaId, true)}
               onMouseLeave={() => onCiteHover(c.mediaId, false)}
-              className="flex items-center gap-1 rounded-md bg-accent/[0.07] px-2 py-1 text-[11.5px] font-medium text-accent transition-colors hover:bg-accent/[0.13]"
+              className="relative flex items-center gap-1.5 overflow-hidden rounded-md bg-black/[0.03] py-1 pl-2.5 pr-2 text-[11.5px] font-medium transition-all hover:-translate-y-px hover:bg-black/[0.06] hover:shadow-sm dark:bg-white/[0.05] dark:hover:bg-white/[0.08]"
             >
+              <span
+                className={cn(
+                  'absolute inset-y-0 left-0 w-[2.5px]',
+                  MEDIA_TYPES[c.type].solid
+                )}
+              />
               <MediaIcon type={c.type} size="sm" className="h-3.5 w-3.5 rounded" />
-              <span className="max-w-[110px] truncate">{c.mediaName}</span>
-              <span className="text-accent/60">{c.locator}</span>
+              <span className="max-w-[110px] truncate text-foreground/80">
+                {c.mediaName}
+              </span>
+              <span className="text-muted-foreground/55">{c.locator}</span>
             </button>
           ))}
         </div>

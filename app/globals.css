@@ -301,6 +301,52 @@ input[type='search']::-webkit-search-cancel-button {
   animation: cite-ripple 1s ease-out infinite;
 }
 
+/* Live scope readout: the count badge pops when a wire connects/disconnects. */
+@keyframes count-pop {
+  0% { transform: scale(1); }
+  40% { transform: scale(1.18); }
+  100% { transform: scale(1); }
+}
+.animate-count-pop {
+  animation: count-pop 180ms ease-out;
+}
+
+/* Premium brain scrollbar: slim, rounded, transparent track; the thumb stays
+   invisible until you hover the chat area — keeps the glass illusion intact. */
+.scroll-brain {
+  scrollbar-width: thin;
+  scrollbar-color: transparent transparent;
+}
+.scroll-brain:hover {
+  scrollbar-color: rgba(0, 0, 0, 0.16) transparent;
+}
+.dark .scroll-brain:hover {
+  scrollbar-color: rgba(255, 255, 255, 0.16) transparent;
+}
+.scroll-brain::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+.scroll-brain::-webkit-scrollbar-track {
+  background: transparent;
+}
+.scroll-brain::-webkit-scrollbar-thumb {
+  background: transparent;
+  border-radius: 999px;
+}
+.scroll-brain:hover::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.14);
+}
+.scroll-brain::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 0, 0, 0.26);
+}
+.dark .scroll-brain:hover::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.14);
+}
+.dark .scroll-brain::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.26);
+}
+
 /* Board nodes are PHYSICAL OBJECTS: grabbing one must always drag it, never
    start a browser text-selection sweep. Brain chat opts back in (answers
    must stay copyable). */
