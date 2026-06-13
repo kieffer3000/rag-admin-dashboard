@@ -1,7 +1,7 @@
 'use client';
 
-import { memo, useEffect, useRef, useState } from 'react';
-import { type NodeProps } from '@xyflow/react';
+import { memo, useState } from 'react';
+import { NodeResizer, type NodeProps } from '@xyflow/react';
 import { cn } from '@/lib/utils';
 import { GripHorizontal, Check } from 'lucide-react';
 import { useBoard } from '@/lib/rag/board/store';
@@ -57,37 +57,35 @@ const NOTE_COLORS: Record<
   }
 };
 
-const MAX_NOTE_LINES = 9;
-
-/** Sticky note — purely visual, never wired, never queried. Drag by the grip
- *  bar; the body auto-grows up to 9 lines then scrolls. Color persists. */
+/** Sticky note — purely visual, never wired, never queried. Drag by the
+ *  header bar; drag the corners (when selected) to resize; colour persists. */
 function AnnotationNodeInner({ id, data, selected }: NodeProps) {
   const d = data as AnnotationData & { color?: string };
   const { updateBoardNodeData } = useBoard();
   const [palette, setPalette] = useState(false);
-  const taRef = useRef<HTMLTextAreaElement>(null);
   const c = NOTE_COLORS[d.color ?? 'amber'] ?? NOTE_COLORS.amber;
-
-  // Auto-grow to fit content, capped at MAX_NOTE_LINES then scroll.
-  useEffect(() => {
-    const el = taRef.current;
-    if (!el) return;
-    el.style.height = 'auto';
-    const line = parseFloat(getComputedStyle(el).lineHeight) || 18;
-    el.style.height = Math.min(el.scrollHeight, line * MAX_NOTE_LINES) + 'px';
-  }, [d.text]);
 
   return (
     <div
       className={cn(
-        'w-[236px] overflow-hidden rounded-[14px] shadow-[0_2px_12px_rgb(0_0_0/0.10)]',
+        'flex h-full min-h-[110px] w-full min-w-[180px] flex-col overflow-hidden rounded-[14px] shadow-[0_2px_12px_rgb(0_0_0/0.10)]',
         c.body,
         selected && cn('ring-2', c.ring)
       )}
     >
-      {/* grip bar — grab here to MOVE the note (no nodrag) */}
-      <div className={cn('relative flex h-6 items-center px-1.5', c.grip)}>
+      <NodeResizer
+        minWidth={170}
+        minHeight={90}
+        isVisible={selected}
+        lineClassName="!border-transparent"
+        handleClassName="!h-2.5 !w-2.5 !rounded-full !border !border-white/70 !bg-black/30"
+      />
+      {/* header bar — grab here to MOVE the note (this is the drag handle) */}
+      <div className={cn('relative flex h-6 shrink-0 items-center px-1.5', c.grip)}>
         <GripHorizontal className="h-3.5 w-3.5 text-black/30 dark:text-white/40" />
+        <span className="ml-1 select-none text-[9px] font-semibold uppercase tracking-wide text-black/35 dark:text-white/40">
+          note
+        </span>
         <button
           onClick={(e) => {
             e.stopPropagation();
@@ -123,13 +121,11 @@ function AnnotationNodeInner({ id, data, selected }: NodeProps) {
         )}
       </div>
       <textarea
-        ref={taRef}
         value={d.text}
         onChange={(e) => updateBoardNodeData(id, { text: e.target.value })}
         placeholder="Note to self…"
-        rows={3}
         className={cn(
-          'nodrag block w-full resize-none bg-transparent px-2.5 py-2 text-[12.5px] leading-[1.55] outline-none',
+          'nodrag block min-h-0 w-full flex-1 resize-none bg-transparent px-2.5 py-2 text-[12.5px] leading-[1.55] outline-none',
           c.text
         )}
       />

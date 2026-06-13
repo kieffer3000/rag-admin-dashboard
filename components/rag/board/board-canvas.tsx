@@ -71,7 +71,7 @@ function retile(nodes: BoardNode[], hubId: string): BoardNode[] {
 
 function BoardCanvasInner() {
   const { board, setBoard, nextBoardId, busyBrains } = useBoard();
-  const { media, addMedia, updateMedia } = useRag();
+  const { media, projectMedia, addMedia, updateMedia } = useRag();
   const { getIntersectingNodes, screenToFlowPosition, fitView } = useReactFlow();
   const wrapRef = useRef<HTMLDivElement>(null);
 
@@ -499,13 +499,43 @@ function BoardCanvasInner() {
     [board.nodes]
   );
 
+  /** Gather every not-yet-placed source into ONE new cluster box so the user
+   *  can see all their resources and pick what to wire. */
+  const placeAllInBox = useCallback(() => {
+    const unplaced = projectMedia.filter((m) => !placedIds.has(m.id));
+    if (unplaced.length === 0) return;
+    const hubId = nextBoardId('hub');
+    const newNodes: BoardNode[] = [
+      {
+        id: hubId,
+        type: 'hub',
+        position: centerPos(),
+        data: { name: 'All sources', mediaType: 'cluster' },
+        ...hubSize(unplaced.length)
+      }
+    ];
+    unplaced.forEach((m, i) =>
+      newNodes.push({
+        id: nextBoardId('chip'),
+        type: 'chip',
+        parentId: hubId,
+        position: hubSlot(i),
+        data: { mediaId: m.id }
+      })
+    );
+    setBoard((prev) => ({ ...prev, nodes: [...prev.nodes, ...newNodes] }));
+    setTimeout(
+      () => fitView({ nodes: [{ id: hubId }], duration: 450, padding: 0.3 }),
+      60
+    );
+  }, [projectMedia, placedIds, nextBoardId, centerPos, setBoard, fitView]);
+
   /**
-   * Clean Desk: a brief force-directed relaxation that untangles the board —
-   * bodies repel where they crowd, wires pull toward a comfortable length,
-   * and everything drifts back toward the original centroid. RIGID BODIES:
-   * a puzzle stack moves as one mass (members keep exact pitch, welds never
-   * break) and hubs carry their docked chips for free (parent coords).
-   * Runs live over ~70 rAF frames so it reads as physics, then re-frames.
+   * Clean Desk: arrange everything into tidy TYPE ZONES — left→right columns
+   * that follow the flow of work: Boxes → loose Pieces → Notes → Brains. Each
+   * column stacks its blocks vertically, top-aligned, evenly gapped. Welded
+   * stacks move as one rigid block; hubs carry their docked chips for free.
+   * Animated with a short ease so it reads as "everything snaps into place".
    */
   const tidying = useRef(false);
   const cleanDesk = useCallback(() => {
@@ -513,153 +543,117 @@ function BoardCanvasInner() {
     const nodes = board.nodes;
     const typeOf = (n: BoardNode) =>
       media.find((m) => m.id === n.data.mediaId)?.type;
-    const FALLBACK: Record<string, [number, number]> = {
-      brain: [400, 480],
-      textNode: [240, 140],
-      annotation: [220, 60],
-      mindmap: [280, 200]
-    };
 
-    interface Body {
+    interface Block {
       ids: string[];
-      x: number;
-      y: number;
       w: number;
       h: number;
-      vx: number;
-      vy: number;
-      offs: { id: string; dx: number; dy: number }[];
+      col: number; // which zone
+      offs: { id: string; dx: number; dy: number }[]; // member offset from block origin
     }
+    const ZONE = { hub: 0, chip: 1, note: 2, brain: 3 } as const;
     const used = new Set<string>();
-    const bodies: Body[] = [];
+    const blocks: Block[] = [];
+
     for (const n of nodes) {
       if (n.parentId || used.has(n.id)) continue;
       if (n.type === 'chip') {
         const members = stackOf(n, nodes, typeOf);
         members.forEach((m) => used.add(m.id));
+        const minX = Math.min(...members.map((m) => m.position.x));
         const minY = Math.min(...members.map((m) => m.position.y));
-        bodies.push({
+        blocks.push({
           ids: members.map((m) => m.id),
-          x: n.position.x,
-          y: minY,
           w: CHIP_W,
           h: members.length * STACK_PITCH + CHIP_TAB,
-          vx: 0,
-          vy: 0,
+          col: ZONE.chip,
           offs: members.map((m) => ({
             id: m.id,
-            dx: m.position.x - n.position.x,
+            dx: m.position.x - minX,
             dy: m.position.y - minY
           }))
         });
       } else {
         used.add(n.id);
-        let w = (n.width as number) ?? FALLBACK[n.type!]?.[0] ?? 240;
-        let h = (n.height as number) ?? FALLBACK[n.type!]?.[1] ?? 140;
+        const col =
+          n.type === 'hub'
+            ? ZONE.hub
+            : n.type === 'brain'
+            ? ZONE.brain
+            : ZONE.note; // textNode, annotation, mindmap
+        let w = (n.width as number) ?? 240;
+        let h = (n.height as number) ?? 150;
         if (n.type === 'hub') {
           const sz = hubSize(nodes.filter((c) => c.parentId === n.id).length);
           w = sz.width;
           h = sz.height;
         }
-        bodies.push({
-          ids: [n.id],
-          x: n.position.x,
-          y: n.position.y,
-          w,
-          h,
-          vx: 0,
-          vy: 0,
-          offs: [{ id: n.id, dx: 0, dy: 0 }]
-        });
+        blocks.push({ ids: [n.id], w, h, col, offs: [{ id: n.id, dx: 0, dy: 0 }] });
       }
     }
-    if (bodies.length < 2) return;
+    if (blocks.length < 2) return;
+
+    // Column geometry: each zone's x is the running sum of prior zones' widest
+    // block + a gap. Within a zone, blocks stack top-down with a row gap.
+    const COL_GAP = 90;
+    const ROW_GAP = 34;
+    const TOP = 80;
+    const byCol = [0, 1, 2, 3].map((c) => blocks.filter((b) => b.col === c));
+    const colWidth = byCol.map((bs) =>
+      bs.length ? Math.max(...bs.map((b) => b.w)) : 0
+    );
+    const colX: number[] = [];
+    let runX = 80;
+    for (let c = 0; c < 4; c++) {
+      colX[c] = runX;
+      if (colWidth[c] > 0) runX += colWidth[c] + COL_GAP;
+    }
+
+    // Target origin (top-left) per block, centered within its column.
+    const target = new Map<string, { x: number; y: number }>();
+    for (let c = 0; c < 4; c++) {
+      let y = TOP;
+      for (const b of byCol[c]) {
+        const x = colX[c] + (colWidth[c] - b.w) / 2;
+        for (const o of b.offs) target.set(o.id, { x: x + o.dx, y: y + o.dy });
+        y += b.h + ROW_GAP;
+      }
+    }
+
+    // Animate from current → target with an ease, then re-frame.
     tidying.current = true;
-
-    const bodyOf = new Map<string, Body>();
-    bodies.forEach((b) => b.ids.forEach((id) => bodyOf.set(id, b)));
-    const springs: [Body, Body][] = [];
-    for (const e of board.edges) {
-      const a = bodyOf.get(e.source);
-      const b = bodyOf.get(e.target);
-      if (a && b && a !== b) springs.push([a, b]);
-    }
-    const cx0 =
-      bodies.reduce((s, b) => s + b.x + b.w / 2, 0) / bodies.length;
-    const cy0 =
-      bodies.reduce((s, b) => s + b.y + b.h / 2, 0) / bodies.length;
-
-    const TOTAL = 70;
-    const MARGIN = 48;
-    const REST = 340;
+    const start = new Map<string, { x: number; y: number }>();
+    for (const n of nodes)
+      if (target.has(n.id)) start.set(n.id, { ...n.position });
+    const TOTAL = 26;
     let frame = 0;
-    const step = () => {
-      const temp = 1 - frame / TOTAL; // cooling schedule
-      for (const b of bodies) {
-        b.vx = 0;
-        b.vy = 0;
-      }
-      // Repulsion: crowded bodies (AABB + margin) push apart.
-      for (let i = 0; i < bodies.length; i++) {
-        for (let j = i + 1; j < bodies.length; j++) {
-          const a = bodies[i];
-          const b = bodies[j];
-          let dx = a.x + a.w / 2 - (b.x + b.w / 2);
-          let dy = a.y + a.h / 2 - (b.y + b.h / 2);
-          const ox = (a.w + b.w) / 2 + MARGIN - Math.abs(dx);
-          const oy = (a.h + b.h) / 2 + MARGIN - Math.abs(dy);
-          if (ox <= 0 || oy <= 0) continue;
-          let len = Math.hypot(dx, dy);
-          if (len < 1) {
-            // dead-center overlap: split deterministically
-            dx = i % 2 ? 1 : -1;
-            dy = j % 2 ? 1 : -1;
-            len = Math.hypot(dx, dy);
-          }
-          const push = (Math.min(ox, oy) * 0.5 * temp) / len;
-          a.vx += dx * push;
-          a.vy += dy * push;
-          b.vx -= dx * push;
-          b.vy -= dy * push;
-        }
-      }
-      // Springs: each wire pulls its endpoints toward a comfortable length.
-      for (const [a, b] of springs) {
-        const dx = b.x + b.w / 2 - (a.x + a.w / 2);
-        const dy = b.y + b.h / 2 - (a.y + a.h / 2);
-        const dist = Math.hypot(dx, dy) || 1;
-        const f = ((dist - REST) * 0.04 * temp) / dist;
-        a.vx += dx * f;
-        a.vy += dy * f;
-        b.vx -= dx * f;
-        b.vy -= dy * f;
-      }
-      // Gentle gravity toward the original centroid; clamp step size.
-      for (const b of bodies) {
-        b.vx += (cx0 - (b.x + b.w / 2)) * 0.004 * temp;
-        b.vy += (cy0 - (b.y + b.h / 2)) * 0.004 * temp;
-        const vmax = 26 * temp + 2;
-        b.x += Math.max(-vmax, Math.min(vmax, b.vx));
-        b.y += Math.max(-vmax, Math.min(vmax, b.vy));
-      }
-      const pos = new Map<string, { x: number; y: number }>();
-      for (const b of bodies)
-        for (const o of b.offs) pos.set(o.id, { x: b.x + o.dx, y: b.y + o.dy });
+    const tick = () => {
+      frame++;
+      const t = frame / TOTAL;
+      const e = 1 - Math.pow(1 - t, 3); // easeOutCubic
       setBoard((prev) => ({
         ...prev,
-        nodes: prev.nodes.map((n) =>
-          pos.has(n.id) ? { ...n, position: pos.get(n.id)! } : n
-        )
+        nodes: prev.nodes.map((n) => {
+          const s = start.get(n.id);
+          const tg = target.get(n.id);
+          if (!s || !tg) return n;
+          return {
+            ...n,
+            position: {
+              x: s.x + (tg.x - s.x) * e,
+              y: s.y + (tg.y - s.y) * e
+            }
+          };
+        })
       }));
-      frame++;
-      if (frame <= TOTAL) requestAnimationFrame(step);
+      if (frame < TOTAL) requestAnimationFrame(tick);
       else {
         tidying.current = false;
-        playSnap(); // everything settles into place
-        fitView({ duration: 500, padding: 0.22 });
+        playSnap();
+        fitView({ duration: 500, padding: 0.18 });
       }
     };
-    requestAnimationFrame(step);
+    requestAnimationFrame(tick);
   }, [board, media, setBoard, fitView]);
 
   // Cursor spotlight: a faint radial light that follows the pointer, painted
@@ -751,6 +745,7 @@ function BoardCanvasInner() {
       <BoardToolbar
         placedIds={placedIds}
         onCleanDesk={cleanDesk}
+        onPlaceAllInBox={placeAllInBox}
         onPlaceMedia={(mediaId) =>
           pushNode({
             id: nextBoardId('chip'),
@@ -817,6 +812,8 @@ function BoardCanvasInner() {
             id: nextBoardId('text'),
             type: 'textNode',
             position: centerPos(),
+            width: 234,
+            height: 132,
             data: { text: '' }
           })
         }
@@ -825,7 +822,9 @@ function BoardCanvasInner() {
             id: nextBoardId('ann'),
             type: 'annotation',
             position: centerPos(),
-            data: { text: '' }
+            width: 240,
+            height: 150,
+            data: { text: '', color: 'amber' }
           })
         }
         onAddMindmap={() =>

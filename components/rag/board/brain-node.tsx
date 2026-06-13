@@ -52,7 +52,8 @@ import {
   Printer,
   Pencil,
   Quote,
-  Sparkles
+  Sparkles,
+  Lightbulb
 } from 'lucide-react';
 import type { BrainData } from '@/lib/rag/board/types';
 
@@ -114,6 +115,18 @@ const SUGGESTED_PROMPTS = [
   'Summarize the key points',
   'What are the main contradictions?',
   'Give me 3 actionable takeaways'
+];
+
+/** Insertable prompt templates (the composer "Prompts" dropdown). */
+const INSERT_PROMPTS = [
+  'Summarize the key points',
+  'What are the main contradictions across the sources?',
+  'Give me 3 actionable takeaways',
+  'Draft an executive summary',
+  'Explain this simply, as if to a beginner',
+  'List open questions the sources do not answer',
+  'Compare and contrast the main viewpoints',
+  'Write an outline I can present from'
 ];
 
 function escapeHtml(s: string): string {
@@ -809,6 +822,39 @@ function BrainNodeInner({ id, data, selected }: NodeProps) {
                     </DropdownMenuItem>
                   );
                 })}
+              </DropdownMenuContent>
+            </DropdownMenu>
+
+            {/* Prompts — insert a template into the composer (edit, then send) */}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button
+                  title="Insert a prompt into the composer"
+                  className="nodrag flex items-center gap-1.5 rounded-full bg-black/[0.04] px-2.5 py-1 text-[11.5px] font-medium text-muted-foreground/80 ring-1 ring-black/[0.05] transition-all hover:bg-black/[0.07] hover:text-foreground dark:bg-white/[0.05] dark:ring-white/[0.06]"
+                >
+                  <Lightbulb className="h-3 w-3" />
+                  Prompts
+                  <ChevronUp className="h-2.5 w-2.5" />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent
+                align="start"
+                side="top"
+                className="w-64 border-black/10 bg-popover/90 shadow-[0_10px_34px_-6px_rgb(0_0_0/0.28)] backdrop-blur-xl dark:border-white/10"
+              >
+                {INSERT_PROMPTS.map((p) => (
+                  <DropdownMenuItem
+                    key={p}
+                    onClick={() => {
+                      setQuestion(p);
+                      taRef.current?.focus();
+                    }}
+                    className="gap-2.5 py-2 text-[13px]"
+                  >
+                    <Lightbulb className="h-3.5 w-3.5 shrink-0 text-amber-500" />
+                    <span className="truncate">{p}</span>
+                  </DropdownMenuItem>
+                ))}
               </DropdownMenuContent>
             </DropdownMenu>
           </div>

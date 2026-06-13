@@ -57,8 +57,10 @@ export interface BoardToolbarProps {
   onAddEverything: () => void;
   onAddMindmap: () => void;
   onNewRecording: (name: string, transcript: string) => void;
-  /** Auto-tidy: brief force-directed cleanup of the whole board. */
+  /** Auto-tidy: arrange the board into tidy type zones. */
   onCleanDesk: () => void;
+  /** Drop every not-yet-placed source into one new cluster box. */
+  onPlaceAllInBox: () => void;
   /** Media ids already placed on the canvas. */
   placedIds: Set<string>;
 }
@@ -240,9 +242,19 @@ export function BoardToolbar(p: BoardToolbarProps) {
               </span>
             </PopoverTrigger>
             <PopoverContent side="right" align="center" className="w-72 p-2">
-              <p className="px-2 pb-1.5 pt-1 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-                Library — not on board
-              </p>
+              <div className="flex items-center justify-between gap-2 px-2 pb-1.5 pt-1">
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                  Library — not on board
+                </p>
+                {unplaced.length > 1 && (
+                  <button
+                    onClick={p.onPlaceAllInBox}
+                    className="shrink-0 rounded-full bg-accent/10 px-2 py-0.5 text-[10.5px] font-semibold text-accent transition-colors hover:bg-accent/20"
+                  >
+                    Place all in a box
+                  </button>
+                )}
+              </div>
               {unplaced.length === 0 ? (
                 <p className="px-2 pb-2 text-[12px] text-muted-foreground/70">
                   Every source in this project is already placed.
