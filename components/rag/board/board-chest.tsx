@@ -6,7 +6,7 @@ import { useRag } from '@/lib/rag/store';
 import { MEDIA_TYPES, MEDIA_TYPE_ORDER } from '@/lib/rag/media-config';
 import { MediaIcon } from '@/components/rag/shared';
 import { MediaType } from '@/lib/rag/types';
-import { Search, Sparkles, Lightbulb, RotateCcw, X } from 'lucide-react';
+import { Search, MessageSquareQuote, Lightbulb, RotateCcw, X } from 'lucide-react';
 
 /** Drag payload the canvas reads in its onDrop handler. */
 export const CHEST_MIME = 'application/answersdoc-chest';
@@ -241,7 +241,7 @@ export function BoardChest({
             open === 'prompt' ? 'ring-2 ring-accent' : 'hover:brightness-95'
           )}
         >
-          <Sparkles className="h-[18px] w-[18px] text-indigo-500" strokeWidth={2.25} />
+          <MessageSquareQuote className="h-[18px] w-[18px] text-indigo-500" strokeWidth={2.25} />
         </button>
       </div>
     </div>
