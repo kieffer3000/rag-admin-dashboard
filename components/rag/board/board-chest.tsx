@@ -6,7 +6,7 @@ import { useRag } from '@/lib/rag/store';
 import { MEDIA_TYPES, MEDIA_TYPE_ORDER } from '@/lib/rag/media-config';
 import { MediaIcon } from '@/components/rag/shared';
 import { MediaType } from '@/lib/rag/types';
-import { Search, Sparkles, Lightbulb, RotateCcw } from 'lucide-react';
+import { Search, Sparkles, Lightbulb, RotateCcw, X } from 'lucide-react';
 
 /** Drag payload the canvas reads in its onDrop handler. */
 export const CHEST_MIME = 'application/answersdoc-chest';
@@ -104,6 +104,13 @@ export function BoardChest({
                 ? 'drag a guide onto the board'
                 : `${byType.get(open as MediaType)?.length ?? 0} produced · drag onto board`}
             </span>
+            <button
+              onClick={() => setOpen(null)}
+              title="Close"
+              className="ml-auto flex h-6 w-6 items-center justify-center rounded-full text-muted-foreground/60 transition-colors hover:bg-[rgb(var(--hairline)/0.08)] hover:text-foreground"
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
           </div>
           <div className="px-3 pb-2 pt-1.5">
             <div className="flex items-center gap-1.5 rounded-[10px] bg-[hsl(240_14%_96.5%)] px-2 py-1 dark:bg-white/[0.05]">
