@@ -134,8 +134,9 @@ function ChipNodeInner({ id, data, selected, parentId }: NodeProps) {
       )}
     >
       {/* un-snap (✂) — sits in the seam between this piece and the one above;
-          click to split the stack here (this piece + below detach). Pieces
-          stay welded otherwise, so dragging never accidentally disconnects. */}
+          click to split the stack here (this piece + below detach). Always
+          faintly visible so it's discoverable, solid on hover. Pieces stay
+          welded otherwise, so dragging never accidentally disconnects. */}
       {above && (
         <button
           title="Un-snap here"
@@ -143,7 +144,7 @@ function ChipNodeInner({ id, data, selected, parentId }: NodeProps) {
             e.stopPropagation();
             unsnapPiece(id);
           }}
-          className="nodrag absolute -top-2.5 left-1/2 z-20 flex h-5 w-5 -translate-x-1/2 items-center justify-center rounded-full border border-card bg-card text-muted-foreground/70 opacity-0 shadow-[0_1px_5px_rgb(0_0_0/0.18)] transition-opacity hover:text-foreground group-hover:opacity-100"
+          className="nodrag absolute -top-2.5 left-1/2 z-20 flex h-5 w-5 -translate-x-1/2 items-center justify-center rounded-full border border-card bg-card text-muted-foreground/70 opacity-55 shadow-[0_1px_5px_rgb(0_0_0/0.18)] transition-all hover:scale-110 hover:text-accent hover:opacity-100 group-hover:opacity-100"
         >
           <Scissors className="h-2.5 w-2.5" />
         </button>
