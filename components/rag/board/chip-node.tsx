@@ -84,6 +84,7 @@ function ChipNodeInner({ id, data, selected, parentId }: NodeProps) {
   const tug = !!d.tug;
   const peel = !!d.peel;
   const pulse = !!d.pulse; // a citation in some brain is pointing at this piece
+  const snapTarget = !!d.snapTarget; // a dragged piece is about to click onto this
   const settle = (d.settle as number) ?? 0;
 
   // Free chip = full puzzle shape; bottom of a welded column = flat bottom
@@ -99,7 +100,9 @@ function ChipNodeInner({ id, data, selected, parentId }: NodeProps) {
   // only the block's exposed top/bottom edges cast, so the stack reads as
   // ONE object. Tug = warm "about to pop" seam glow; peel = floating lift;
   // pulse = a hovered citation proving an answer against THIS piece.
-  const filter = pulse
+  const filter = snapTarget
+    ? 'drop-shadow(0 0 0.5px hsl(var(--accent))) drop-shadow(0 0 12px hsl(var(--accent)/0.85))'
+    : pulse
     ? 'drop-shadow(0 0 10px hsl(var(--accent)/0.9)) drop-shadow(0 2px 8px hsl(var(--accent)/0.4))'
     : selected
     ? 'drop-shadow(0 0 0.5px hsl(var(--accent))) drop-shadow(0 2px 8px hsl(var(--accent)/0.45))'
@@ -131,8 +134,9 @@ function ChipNodeInner({ id, data, selected, parentId }: NodeProps) {
         'group relative transition-all',
         settle > 0 && 'animate-stack-settle',
         peel && 'scale-[1.03] animate-peel-pop',
+        snapTarget && 'animate-pulse',
         // a duplicate copy reads as redundant — desaturated + faded
-        duplicate && 'opacity-55 grayscale'
+        duplicate && !snapTarget && 'opacity-55 grayscale'
       )}
     >
       {duplicate && (

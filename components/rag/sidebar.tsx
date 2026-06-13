@@ -11,6 +11,7 @@ import {
   StickyNote,
   Activity,
   Users,
+  KeyRound,
   ChevronsUpDown,
   Plus,
   Check,
@@ -53,7 +54,8 @@ export const NAV = [
   { href: '/prompts', label: 'Prompts', icon: Sparkles },
   { href: '/notes', label: 'Notes', icon: StickyNote },
   { href: '/health', label: 'Health', icon: Activity, adminOnly: true },
-  { href: '/members', label: 'Team', icon: Users }
+  { href: '/members', label: 'Team', icon: Users },
+  { href: '/api-keys', label: 'API Keys', icon: KeyRound }
 ] as { href: string; label: string; icon: any; adminOnly?: boolean }[];
 
 const PROJECT_EMOJIS = ['🧠', '🚀', '📚', '⚖️', '🔬', '💼', '🎓', '🏥', '🎨', '🏗️'];

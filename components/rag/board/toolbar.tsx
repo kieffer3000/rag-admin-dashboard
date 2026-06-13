@@ -9,7 +9,7 @@ import { MediaIcon } from '@/components/rag/shared';
 import { WavRecorder, transcribeAudio } from '@/lib/rag/board/dictation';
 import { soundEnabled, setSoundEnabled } from '@/lib/rag/board/sound';
 import {
-  MessageSquarePlus,
+  Brain,
   Type,
   StickyNote,
   FolderPlus,
@@ -211,9 +211,9 @@ export function BoardToolbar(p: BoardToolbarProps) {
           <RailDivider />
           <RailButton
             label="New brain"
-            desc="Add a chat node. Wire sources or boxes into it and ask — it answers only from what's connected, with citations."
+            desc="Add a brain (chat) node. Wire sources or boxes into it and ask — it answers only from what's connected, with citations."
             accent
-            icon={<MessageSquarePlus className="h-[17px] w-[17px]" />}
+            icon={<Brain className="h-[17px] w-[17px]" />}
             onClick={p.onAddBrain}
           />
           <RailButton

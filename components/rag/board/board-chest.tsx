@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { cn } from '@/lib/utils';
 import { useRag } from '@/lib/rag/store';
 import { MEDIA_TYPES, MEDIA_TYPE_ORDER } from '@/lib/rag/media-config';
@@ -42,6 +42,18 @@ export function BoardChest({
   const { projectMedia } = useRag();
   const [open, setOpen] = useState<string | null>(null);
   const [q, setQ] = useState('');
+  const rootRef = useRef<HTMLDivElement>(null);
+
+  // Click anywhere outside the chest → close the open panel.
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (e: MouseEvent) => {
+      if (rootRef.current && !rootRef.current.contains(e.target as Node))
+        setOpen(null);
+    };
+    document.addEventListener('mousedown', onDown);
+    return () => document.removeEventListener('mousedown', onDown);
+  }, [open]);
 
   // Group sources by type; only show a bubble for types that have items.
   const byType = useMemo(() => {
@@ -72,7 +84,10 @@ export function BoardChest({
       : [];
 
   return (
-    <div className="absolute bottom-4 left-1/2 z-20 flex -translate-x-1/2 flex-col items-center">
+    <div
+      ref={rootRef}
+      className="absolute bottom-4 left-1/2 z-20 flex -translate-x-1/2 flex-col items-center"
+    >
       {/* flyout panel */}
       {open && (
         <div className="mb-2 w-[320px] overflow-hidden rounded-[18px] bg-card shadow-[0_8px_40px_rgb(0_0_0/0.16)] ring-1 ring-black/[0.06] dark:ring-white/[0.08]">

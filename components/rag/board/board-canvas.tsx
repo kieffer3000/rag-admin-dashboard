@@ -280,19 +280,55 @@ function BoardCanvasInner() {
         }
       }
 
+      // Snap preview: when NOT heading into a hub, find the free same-type
+      // piece whose slot the dragged piece is closest to — it highlights to
+      // promise "drop here and we'll click together" (like the box glow).
+      let snapTargetId: string | null = null;
+      if (node.type === 'chip' && !hub) {
+        const t = mediaTypeOf(node);
+        const mateIds = new Set(s?.mates.map((m) => m.id) ?? []);
+        let bestD = STACK_SNAP;
+        for (const o of board.nodes) {
+          if (
+            o.id === node.id ||
+            o.type !== 'chip' ||
+            o.parentId ||
+            mateIds.has(o.id)
+          )
+            continue;
+          if (mediaTypeOf(o as Node) !== t) continue;
+          for (const sy of [STACK_PITCH, -STACK_PITCH]) {
+            const d = Math.hypot(
+              node.position.x - o.position.x,
+              node.position.y - (o.position.y + sy)
+            );
+            if (d < bestD) {
+              bestD = d;
+              snapTargetId = o.id;
+            }
+          }
+        }
+      }
+
       setBoard((prev) => {
-        let nodes = prev.nodes.map((n) =>
-          n.type === 'hub'
-            ? n.data.glow === (n.id === hub?.id)
+        let nodes = prev.nodes.map((n) => {
+          if (n.type === 'hub') {
+            const want = n.id === hub?.id;
+            return n.data.glow === want ? n : { ...n, data: { ...n.data, glow: want } };
+          }
+          if (n.type === 'chip') {
+            const want = n.id === snapTargetId;
+            return !!n.data.snapTarget === want
               ? n
-              : { ...n, data: { ...n.data, glow: n.id === hub?.id } }
-            : n
-        );
+              : { ...n, data: { ...n.data, snapTarget: want } };
+          }
+          return n;
+        });
         if (stackPatch) nodes = stackPatch(nodes);
         return { ...prev, nodes };
       });
     },
-    [hitHub, hitCluster, setBoard]
+    [hitHub, hitCluster, setBoard, board.nodes, mediaTypeOf]
   );
 
   /** Dock / undock / snap on drop — stack-aware (the unit lands together). */
@@ -372,8 +408,11 @@ function BoardCanvasInner() {
           let out = n;
           if (n.type === 'hub' && n.data.glow)
             out = { ...out, data: { ...out.data, glow: false } };
-          if (n.type === 'chip' && (n.data.tug || n.data.peel))
-            out = { ...out, data: { ...out.data, tug: false, peel: false } };
+          if (n.type === 'chip' && (n.data.tug || n.data.peel || n.data.snapTarget))
+            out = {
+              ...out,
+              data: { ...out.data, tug: false, peel: false, snapTarget: false }
+            };
           return out;
         });
         let edges = prev.edges;
