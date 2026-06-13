@@ -24,7 +24,7 @@ import {
   Wand2,
   Volume2,
   VolumeX,
-  Lightbulb
+  MessageSquareQuote
 } from 'lucide-react';
 import {
   Dialog,
@@ -332,7 +332,7 @@ export function BoardToolbar(p: BoardToolbarProps) {
                 <RailButton
                   label="Prompt piece"
                   desc="A reusable instruction that guides HOW a brain answers (tone, format, stance). Wire several into a brain — or box them — and they all apply."
-                  icon={<Lightbulb className="h-[17px] w-[17px] text-indigo-500" />}
+                  icon={<MessageSquareQuote className="h-[17px] w-[17px] text-indigo-500" />}
                 />
               </span>
             </PopoverTrigger>
@@ -346,7 +346,7 @@ export function BoardToolbar(p: BoardToolbarProps) {
                   onClick={() => p.onAddPrompt(preset)}
                   className="flex w-full items-center gap-2 rounded-[10px] px-2 py-1.5 text-left text-[12.5px] transition-colors hover:bg-[rgb(var(--hairline)/0.05)]"
                 >
-                  <Lightbulb className="h-3.5 w-3.5 shrink-0 text-indigo-500" />
+                  <MessageSquareQuote className="h-3.5 w-3.5 shrink-0 text-indigo-500" />
                   <span className="min-w-0 flex-1">{preset}</span>
                 </button>
               ))}

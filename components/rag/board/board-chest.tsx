@@ -6,7 +6,7 @@ import { useRag } from '@/lib/rag/store';
 import { MEDIA_TYPES, MEDIA_TYPE_ORDER } from '@/lib/rag/media-config';
 import { MediaIcon } from '@/components/rag/shared';
 import { MediaType } from '@/lib/rag/types';
-import { Search, MessageSquareQuote, Lightbulb, RotateCcw, X } from 'lucide-react';
+import { Search, MessageSquareQuote, RotateCcw, X } from 'lucide-react';
 
 /** Drag payload the canvas reads in its onDrop handler. */
 export const CHEST_MIME = 'application/answersdoc-chest';
@@ -144,7 +144,7 @@ export function BoardChest({
                   onClick={() => onPlacePrompt(preset)}
                   className="flex cursor-grab items-center gap-2.5 rounded-[10px] px-2 py-1.5 transition-colors hover:bg-[rgb(var(--hairline)/0.05)] active:cursor-grabbing"
                 >
-                  <Lightbulb className="h-4 w-4 shrink-0 text-indigo-500" />
+                  <MessageSquareQuote className="h-4 w-4 shrink-0 text-indigo-500" />
                   <span className="min-w-0 flex-1 truncate text-[12.5px]">{preset}</span>
                 </div>
               ))

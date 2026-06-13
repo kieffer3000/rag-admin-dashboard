@@ -3,7 +3,7 @@
 import { memo } from 'react';
 import { Handle, Position, useStore, type NodeProps } from '@xyflow/react';
 import { cn } from '@/lib/utils';
-import { Sparkles, Pencil, RotateCcw } from 'lucide-react';
+import { MessageSquareQuote, Pencil, RotateCcw } from 'lucide-react';
 import { useBoard } from '@/lib/rag/board/store';
 import {
   CHIP_W,
@@ -55,7 +55,7 @@ function PromptNodeInner({ id, data, selected, parentId }: NodeProps) {
         )}
       >
         <span className="pointer-events-none absolute bottom-0 left-0 top-0 w-[3px] rounded-l-[11px] bg-indigo-500" />
-        <Sparkles className="h-3.5 w-3.5 shrink-0 text-indigo-500" />
+        <MessageSquareQuote className="h-3.5 w-3.5 shrink-0 text-indigo-500" />
         <span className="min-w-0 flex-1 leading-tight">
           <span className="block text-[10px] font-bold uppercase tracking-wide text-indigo-500/80">
             Prompt
@@ -103,7 +103,7 @@ function PromptNodeInner({ id, data, selected, parentId }: NodeProps) {
         style={{ height: CHIP_H }}
         className="relative flex items-center gap-2 px-2.5 pt-1"
       >
-        <Sparkles className="h-4 w-4 shrink-0 text-indigo-500" />
+        <MessageSquareQuote className="h-4 w-4 shrink-0 text-indigo-500" />
         <div className="min-w-0 flex-1 leading-tight">
           <div className="text-[9px] font-bold uppercase tracking-wide text-indigo-500/80">
             Prompt
