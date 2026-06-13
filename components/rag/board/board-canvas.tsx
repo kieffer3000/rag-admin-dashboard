@@ -796,16 +796,22 @@ function BoardCanvasInner() {
             })
             .catch(() => updateMedia(id, { status: 'failed' }));
         }}
-        onAddBrain={() =>
+        onAddBrain={() => {
+          // Up to 5 brains per board — one per subject/angle in a project.
+          const brainCount = board.nodes.filter((n) => n.type === 'brain').length;
+          if (brainCount >= 5) {
+            window.alert('You can have up to 5 brains on a board.');
+            return;
+          }
           pushNode({
             id: nextBoardId('brain'),
             type: 'brain',
             position: centerPos(),
             width: 400,
             height: 480,
-            data: { name: 'answersDoc Brain' }
-          })
-        }
+            data: { name: `Brain ${brainCount + 1}` }
+          });
+        }}
         onAddText={() =>
           pushNode({
             id: nextBoardId('text'),

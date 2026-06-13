@@ -18,12 +18,13 @@ import { WavRecorder, transcribeAudio } from '@/lib/rag/board/dictation';
 import { ChatMessage } from '@/lib/rag/types';
 import { MediaIcon } from '@/components/rag/shared';
 import { MEDIA_TYPES } from '@/lib/rag/media-config';
-import { Markdown } from '@/components/rag/board/markdown';
+import { AnswerBody } from '@/components/rag/board/markdown';
 import { LLM_MODELS, PROVIDER_META } from '@/lib/rag/models';
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu';
 import {
@@ -44,9 +45,25 @@ import {
   PanelTop,
   Presentation,
   GalleryHorizontalEnd,
-  SlidersHorizontal
+  SlidersHorizontal,
+  MoreVertical,
+  Trash2,
+  Download,
+  Printer,
+  Pencil,
+  Quote,
+  Sparkles
 } from 'lucide-react';
 import type { BrainData } from '@/lib/rag/board/types';
+
+/** Header accent presets so several brains in one project read as distinct. */
+const BRAIN_COLORS: Record<string, { from: string; to: string; chip: string }> = {
+  indigo: { from: 'from-indigo-500/[0.07]', to: 'to-violet-500/[0.10]', chip: 'from-indigo-500 to-violet-600' },
+  emerald: { from: 'from-emerald-500/[0.08]', to: 'to-teal-500/[0.10]', chip: 'from-emerald-500 to-teal-600' },
+  rose: { from: 'from-rose-500/[0.08]', to: 'to-pink-500/[0.10]', chip: 'from-rose-500 to-pink-600' },
+  amber: { from: 'from-amber-500/[0.09]', to: 'to-orange-500/[0.11]', chip: 'from-amber-500 to-orange-600' },
+  sky: { from: 'from-sky-500/[0.08]', to: 'to-cyan-500/[0.10]', chip: 'from-sky-500 to-cyan-600' }
+};
 
 /** v1 generation runs on Gemini in Make — the Board defaults to it. */
 const BOARD_DEFAULT_MODEL = 'gemini-2.5-flash';
@@ -99,6 +116,13 @@ const SUGGESTED_PROMPTS = [
   'Give me 3 actionable takeaways'
 ];
 
+function escapeHtml(s: string): string {
+  return s
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+}
+
 let msgCounter = 9000;
 const nextMsgId = () => `bm${++msgCounter}`;
 
@@ -108,12 +132,13 @@ const nextMsgId = () => `bm${++msgCounter}`;
  * ephemeral prompt context. This is the visual face of the Query webhook.
  */
 function BrainNodeInner({ id, data, selected }: NodeProps) {
-  const d = data as BrainData;
+  const d = data as BrainData & { color?: string; answerMode?: 'cited' | 'hybrid' };
   const {
     board,
     brainMessages,
     addBrainMessage,
     updateBrainMessage,
+    clearBrainMessages,
     resolveBrainScope,
     updateBoardNodeData,
     resizeBoardNode,
@@ -123,6 +148,9 @@ function BrainNodeInner({ id, data, selected }: NodeProps) {
   const { getViewport, fitView } = useReactFlow();
   const [question, setQuestion] = useState('');
   const [busy, setBusy] = useState(false);
+  const [renaming, setRenaming] = useState(false);
+  const answerMode: 'cited' | 'hybrid' = d.answerMode ?? 'cited';
+  const headerColor = BRAIN_COLORS[d.color ?? 'indigo'] ?? BRAIN_COLORS.indigo;
   const [listening, setListening] = useState(false);
   const [transcribing, setTranscribing] = useState(false);
   /** False once we learn MAI-Transcribe isn't configured → use Web Speech. */
@@ -303,7 +331,13 @@ function BrainNodeInner({ id, data, selected }: NodeProps) {
     let content: string;
     let citations;
     try {
-      const r = await askBrain(q, scope.items, scope.contextTexts, modelId);
+      const r = await askBrain(
+        q,
+        scope.items,
+        scope.contextTexts,
+        modelId,
+        answerMode
+      );
       content = r.answer;
       citations = r.citations;
     } catch {
@@ -337,6 +371,95 @@ function BrainNodeInner({ id, data, selected }: NodeProps) {
     }
   }
 
+  function clearConversation() {
+    if (messages.length === 0) return;
+    if (window.confirm('Clear this entire conversation? This cannot be undone.'))
+      clearBrainMessages(id);
+  }
+
+  /** Export the transcript. Markdown (.md), plain text (.txt), Word (.doc via
+   *  an HTML blob), or Print → the browser's Save-as-PDF. */
+  function exportConversation(format: 'md' | 'txt' | 'doc' | 'pdf') {
+    const title = d.name || 'answersDoc Brain';
+    const lines = messages
+      .filter((m) => m.content)
+      .map((m) => {
+        if (m.role === 'user') return `**You:** ${m.content}`;
+        const cites = m.citations?.length
+          ? '\n\n_Sources: ' +
+            m.citations.map((c) => `${c.mediaName} (${c.locator})`).join(', ') +
+            '_'
+          : '';
+        return `**${title}:** ${m.content}${cites}`;
+      });
+
+    if (format === 'pdf') {
+      const w = window.open('', '_blank');
+      if (!w) return;
+      w.document.write(
+        `<html><head><title>${title}</title><meta charset="utf-8">` +
+          `<style>body{font:15px/1.6 -apple-system,Segoe UI,Roboto,sans-serif;max-width:680px;margin:40px auto;padding:0 24px;color:#1a1a2e}h1{font-size:20px}.u{font-weight:600;color:#4f46e5;margin-top:18px}.a{margin:6px 0 4px}.s{color:#666;font-size:12px}</style></head><body>` +
+          `<h1>${escapeHtml(title)}</h1>` +
+          messages
+            .filter((m) => m.content)
+            .map((m) =>
+              m.role === 'user'
+                ? `<p class="u">You: ${escapeHtml(m.content)}</p>`
+                : `<p class="a">${escapeHtml(m.content).replace(/\n/g, '<br>')}</p>` +
+                  (m.citations?.length
+                    ? `<p class="s">Sources: ${m.citations
+                        .map((c) => escapeHtml(`${c.mediaName} (${c.locator})`))
+                        .join(', ')}</p>`
+                    : '')
+            )
+            .join('') +
+          `</body></html>`
+      );
+      w.document.close();
+      setTimeout(() => w.print(), 300);
+      return;
+    }
+
+    let blob: Blob;
+    let ext = format;
+    if (format === 'doc') {
+      const html =
+        `<html><head><meta charset="utf-8"></head><body><h2>${escapeHtml(
+          title
+        )}</h2>` +
+        messages
+          .filter((m) => m.content)
+          .map(
+            (m) =>
+              `<p><b>${m.role === 'user' ? 'You' : escapeHtml(title)}:</b> ${escapeHtml(
+                m.content
+              ).replace(/\n/g, '<br>')}</p>`
+          )
+          .join('') +
+        `</body></html>`;
+      blob = new Blob([html], { type: 'application/msword' });
+    } else {
+      const text =
+        format === 'md'
+          ? `# ${title}\n\n${lines.join('\n\n')}`
+          : `${title}\n\n` +
+            messages
+              .filter((m) => m.content)
+              .map(
+                (m) => `${m.role === 'user' ? 'You' : title}: ${m.content}`
+              )
+              .join('\n\n');
+      blob = new Blob([text], {
+        type: format === 'md' ? 'text/markdown' : 'text/plain'
+      });
+    }
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `${title.replace(/[^\w-]+/g, '_')}.${ext}`;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+  }
+
   return (
     <div className="relative h-full w-full">
       <NodeResizer
@@ -358,14 +481,46 @@ function BrainNodeInner({ id, data, selected }: NodeProps) {
         )}
       >
         {/* header */}
-        <div className="flex shrink-0 items-center gap-2.5 bg-gradient-to-r from-indigo-500/[0.07] to-violet-500/[0.10] px-3.5 py-2.5">
-          <div className="flex h-7 w-7 items-center justify-center rounded-[9px] bg-gradient-to-br from-indigo-500 to-violet-600 text-white shadow-[0_2px_10px_hsl(var(--accent)/0.45)]">
+        <div
+          className={cn(
+            'flex shrink-0 items-center gap-2.5 bg-gradient-to-r px-3.5 py-2.5',
+            headerColor.from,
+            headerColor.to
+          )}
+        >
+          <div
+            className={cn(
+              'flex h-7 w-7 items-center justify-center rounded-[9px] bg-gradient-to-br text-white shadow-[0_2px_10px_hsl(var(--accent)/0.45)]',
+              headerColor.chip
+            )}
+          >
             <Boxes className="h-4 w-4" />
           </div>
           <div className="min-w-0 flex-1 leading-tight">
-            <div className="truncate text-[13px] font-semibold tracking-tight">
-              {d.name}
-            </div>
+            {renaming ? (
+              <input
+                autoFocus
+                defaultValue={d.name}
+                onBlur={(e) => {
+                  const v = e.target.value.trim();
+                  if (v) updateBoardNodeData(id, { name: v });
+                  setRenaming(false);
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
+                  if (e.key === 'Escape') setRenaming(false);
+                }}
+                className="nodrag w-full rounded-md bg-white/70 px-1.5 py-0.5 text-[13px] font-semibold tracking-tight outline-none ring-1 ring-accent/40 dark:bg-white/10"
+              />
+            ) : (
+              <div
+                title="Double-click to rename"
+                onDoubleClick={() => setRenaming(true)}
+                className="cursor-text truncate text-[13px] font-semibold tracking-tight"
+              >
+                {d.name}
+              </div>
+            )}
             {/* Live scope readout — a hardware-style pill that POPS whenever the
                 wired-source count changes (key remounts → re-runs the pop). */}
             <span
@@ -383,6 +538,39 @@ function BrainNodeInner({ id, data, selected }: NodeProps) {
               {scopeLabel}
             </span>
           </div>
+          {/* recolor — distinguish several brains in one project */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button
+                title="Header colour"
+                className="nodrag flex h-6 w-6 items-center justify-center rounded-[8px] text-muted-foreground/70 transition-colors hover:bg-black/[0.05] hover:text-foreground dark:hover:bg-white/[0.07]"
+              >
+                <span
+                  className={cn(
+                    'h-3 w-3 rounded-full bg-gradient-to-br',
+                    headerColor.chip
+                  )}
+                />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="flex gap-1 p-1.5">
+              {Object.entries(BRAIN_COLORS).map(([key, v]) => (
+                <button
+                  key={key}
+                  onClick={() => updateBoardNodeData(id, { color: key })}
+                  className={cn(
+                    'flex h-5 w-5 items-center justify-center rounded-full bg-gradient-to-br ring-1 ring-black/10',
+                    v.chip
+                  )}
+                >
+                  {(d.color ?? 'indigo') === key && (
+                    <Check className="h-3 w-3 text-white" />
+                  )}
+                </button>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
+
           <button
             onClick={cycleSize}
             title={
@@ -402,6 +590,63 @@ function BrainNodeInner({ id, data, selected }: NodeProps) {
               <Minimize2 className="h-3.5 w-3.5" />
             )}
           </button>
+
+          {/* actions: rename / clear / export */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button
+                title="More"
+                className="nodrag flex h-6 w-6 items-center justify-center rounded-[8px] text-muted-foreground/70 transition-colors hover:bg-black/[0.05] hover:text-foreground dark:hover:bg-white/[0.07]"
+              >
+                <MoreVertical className="h-3.5 w-3.5" />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent
+              align="end"
+              className="w-52 border-black/10 bg-popover/90 shadow-[0_10px_34px_-6px_rgb(0_0_0/0.28)] backdrop-blur-xl dark:border-white/10"
+            >
+              <DropdownMenuItem onClick={() => setRenaming(true)} className="gap-2.5">
+                <Pencil className="h-4 w-4 text-foreground/70" /> Rename brain
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                onClick={() => exportConversation('pdf')}
+                disabled={messages.length === 0}
+                className="gap-2.5"
+              >
+                <Printer className="h-4 w-4 text-foreground/70" /> Print / Save PDF
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onClick={() => exportConversation('doc')}
+                disabled={messages.length === 0}
+                className="gap-2.5"
+              >
+                <Download className="h-4 w-4 text-foreground/70" /> Export Word (.doc)
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onClick={() => exportConversation('md')}
+                disabled={messages.length === 0}
+                className="gap-2.5"
+              >
+                <Download className="h-4 w-4 text-foreground/70" /> Export Markdown
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onClick={() => exportConversation('txt')}
+                disabled={messages.length === 0}
+                className="gap-2.5"
+              >
+                <Download className="h-4 w-4 text-foreground/70" /> Export Text
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                onClick={clearConversation}
+                disabled={messages.length === 0}
+                className="gap-2.5 text-red-600 focus:text-red-600"
+              >
+                <Trash2 className="h-4 w-4" /> Clear conversation
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
 
       {/* messages */}
@@ -612,9 +857,35 @@ function BrainNodeInner({ id, data, selected }: NodeProps) {
               ))}
             </DropdownMenuContent>
           </DropdownMenu>
-          <span className="text-[9.5px] uppercase tracking-wide text-muted-foreground/40">
-            cited answers only
-          </span>
+          {/* answer mode: cited-only vs cited + the model's own knowledge */}
+          <button
+            onClick={() =>
+              updateBoardNodeData(id, {
+                answerMode: answerMode === 'cited' ? 'hybrid' : 'cited'
+              })
+            }
+            title={
+              answerMode === 'cited'
+                ? 'Cited only — answers strictly from wired sources. Click to let the model add its own knowledge for gaps.'
+                : 'Cited + AI — sources first, then the model fills gaps (marked “Beyond your sources”). Click for cited-only.'
+            }
+            className={cn(
+              'nodrag flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide transition-colors',
+              answerMode === 'cited'
+                ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
+                : 'bg-accent/12 text-accent'
+            )}
+          >
+            {answerMode === 'cited' ? (
+              <>
+                <Quote className="h-2.5 w-2.5" /> Cited only
+              </>
+            ) : (
+              <>
+                <Sparkles className="h-2.5 w-2.5" /> Cited + AI
+              </>
+            )}
+          </button>
         </div>
       </div>
 
@@ -666,7 +937,7 @@ function BrainMessage({
   return (
     <div className="self-start">
       {m.content ? (
-        <Markdown large={large}>{m.content}</Markdown>
+        <AnswerBody content={m.content} large={large} />
       ) : (
         <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground/50" />
       )}

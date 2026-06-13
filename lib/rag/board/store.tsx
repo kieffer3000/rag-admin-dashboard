@@ -115,6 +115,8 @@ interface BoardCtxState {
   brainMessages: Record<string, ChatMessage[]>;
   addBrainMessage: (brainId: string, m: ChatMessage) => void;
   updateBrainMessage: (brainId: string, msgId: string, patch: Partial<ChatMessage>) => void;
+  /** Wipe a brain's whole conversation. */
+  clearBrainMessages: (brainId: string) => void;
   /** Resolve a brain's knowledge basis from graph connectivity. */
   resolveBrainScope: (brainId: string) => BrainScope;
   /** Patch a node's data (controlled flow — must go through the provider). */
@@ -327,6 +329,10 @@ export function BoardProvider({ children }: { children: ReactNode }) {
     []
   );
 
+  const clearBrainMessages = useCallback((brainId: string) => {
+    setBrainMessages((prev) => ({ ...prev, [brainId]: [] }));
+  }, []);
+
   /**
    * THE assembler: connectivity → source_ids.
    * chip→brain = that source; hub→brain = all docked chips;
@@ -387,6 +393,7 @@ export function BoardProvider({ children }: { children: ReactNode }) {
     brainMessages,
     addBrainMessage,
     updateBrainMessage,
+    clearBrainMessages,
     resolveBrainScope,
     updateBoardNodeData,
     resizeBoardNode,

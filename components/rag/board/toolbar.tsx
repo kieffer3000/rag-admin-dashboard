@@ -535,6 +535,9 @@ function RailButton({
       <TooltipTrigger asChild>
         <button
           onClick={onClick}
+          // Native title is a guaranteed fallback if the rich tooltip is ever
+          // occluded by the canvas — hover always reveals what a tool does.
+          title={desc ? `${label} — ${desc}` : label}
           className={cn(
             'flex h-9 w-9 items-center justify-center rounded-[12px] transition-all',
             accent

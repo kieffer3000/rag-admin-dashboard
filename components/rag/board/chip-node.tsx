@@ -197,18 +197,31 @@ function ChipNodeInner({ id, data, selected, parentId }: NodeProps) {
       >
         <MediaIcon type={item.type} size="sm" />
         <div className="min-w-0 flex-1 leading-tight">
-          <div className="truncate text-[12px] font-semibold">{item.name}</div>
-          <div className="flex items-center gap-1 text-[10px] text-muted-foreground/70">
-            {item.status === 'processing' ? (
-              <>
+          {item.status === 'processing' ? (
+            <>
+              <div className="line-clamp-1 text-[12px] font-semibold leading-[1.15]">
+                {item.name}
+              </div>
+              <div className="mt-0.5 flex items-center gap-1 text-[10px] text-muted-foreground/70">
                 <Loader2 className="h-2.5 w-2.5 animate-spin" /> Processing
-              </>
-            ) : item.status === 'failed' ? (
-              <span className="text-red-500">Failed</span>
-            ) : (
-              <>{item.chunks} chunks</>
-            )}
-          </div>
+              </div>
+            </>
+          ) : item.status === 'failed' ? (
+            <>
+              <div className="line-clamp-1 text-[12px] font-semibold leading-[1.15]">
+                {item.name}
+              </div>
+              <div className="mt-0.5 text-[10px] text-red-500">Failed</div>
+            </>
+          ) : (
+            // Indexed: give the title BOTH lines (chunk count moves to tooltip).
+            <div
+              title={`${item.chunks} chunks`}
+              className="line-clamp-2 text-[12px] font-semibold leading-[1.16]"
+            >
+              {item.name}
+            </div>
+          )}
         </div>
       </div>
 

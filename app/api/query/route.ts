@@ -31,12 +31,24 @@ export async function POST(req: Request) {
     );
   }
 
+  // Answer mode: 'cited' (sources only) vs 'hybrid' (sources first, then the
+  // model may add its own knowledge for gaps, clearly marked). The Make
+  // scenario can read answer_mode; we also nudge it in-prompt so it works even
+  // before the scenario is updated.
+  const mode = body.answer_mode === 'hybrid' ? 'hybrid' : 'cited';
+  const modeDirective =
+    mode === 'hybrid'
+      ? 'Answer primarily from the provided sources and cite them. If the sources do not fully cover the question, you MAY add helpful general knowledge — clearly prefix any such part with "Beyond your sources:".'
+      : 'Answer ONLY from the provided sources and cite them. If the sources do not contain the answer, say so plainly rather than guessing.';
+
   // Ephemeral text-node context rides in the prompt — never indexed.
-  const question = contextTexts.length
-    ? `Context from the user (not a source, do not cite): ${contextTexts.join(
-        ' | '
-      )}\n\nQuestion: ${body.question}`
-    : body.question;
+  const parts = [`Instruction: ${modeDirective}`];
+  if (contextTexts.length)
+    parts.push(
+      `Context from the user (not a source, do not cite): ${contextTexts.join(' | ')}`
+    );
+  parts.push(`Question: ${body.question}`);
+  const question = parts.join('\n\n');
 
   const res = await fetch(url, {
     method: 'POST',
@@ -49,6 +61,7 @@ export async function POST(req: Request) {
       // matches), so the scenario maps this verbatim instead.
       filter_json: JSON.stringify({ source_id: { $in: sourceIds } }),
       scope: 'selected',
+      answer_mode: mode,
       namespace: process.env.PINECONE_NAMESPACE ?? 'user_kieffer',
       model: body.model ?? 'gemini-2.5-flash'
     })
