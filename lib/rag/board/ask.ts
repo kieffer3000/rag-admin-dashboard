@@ -28,7 +28,9 @@ export async function askBrain(
   modelId?: string,
   /** 'cited' = answer ONLY from sources; 'hybrid' = sources first, then let
    *  the model fill gaps from its own knowledge (clearly marked). */
-  mode: 'cited' | 'hybrid' = 'cited'
+  mode: 'cited' | 'hybrid' = 'cited',
+  /** Instruction guides from wired prompt pieces (how to answer). */
+  guides: string[] = []
 ): Promise<AskResult> {
   const res = await fetch('/api/query', {
     method: 'POST',
@@ -37,6 +39,7 @@ export async function askBrain(
       question,
       source_ids: items.map((m) => m.id),
       context_texts: contextTexts,
+      guides,
       model: modelId,
       answer_mode: mode
     })

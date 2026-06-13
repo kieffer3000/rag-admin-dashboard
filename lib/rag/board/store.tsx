@@ -103,6 +103,8 @@ export interface BrainScope {
   items: MediaItem[];
   /** Ephemeral context texts from wired text nodes. */
   contextTexts: string[];
+  /** Instruction guides from wired prompt pieces (how to answer). */
+  guides: string[];
   /** True if an Everything hub is wired in. */
   everything: boolean;
 }
@@ -351,6 +353,7 @@ export function BoardProvider({ children }: { children: ReactNode }) {
       const byId = new Map(nodes.map((n) => [n.id, n]));
       const ids: string[] = [];
       const contextTexts: string[] = [];
+      const guides: string[] = [];
       let everything = false;
 
       const typeOf = (n: BoardNode) =>
@@ -380,10 +383,20 @@ export function BoardProvider({ children }: { children: ReactNode }) {
                 const t = (n.data.text as string)?.trim();
                 if (t) contextTexts.push(t);
               });
+            // Prompt pieces docked in the box guide HOW it answers.
+            nodes
+              .filter((n) => n.type === 'prompt' && n.parentId === src.id)
+              .forEach((n) => {
+                const t = (n.data.text as string)?.trim();
+                if (t) guides.push(t);
+              });
           }
         } else if (src.type === 'textNode') {
           const t = (src.data.text as string)?.trim();
           if (t) contextTexts.push(t);
+        } else if (src.type === 'prompt') {
+          const t = (src.data.text as string)?.trim();
+          if (t) guides.push(t);
         }
       }
 
@@ -395,7 +408,7 @@ export function BoardProvider({ children }: { children: ReactNode }) {
         const m = media.find((x) => x.id === id);
         if (m && m.status === 'indexed') items.push(m);
       }
-      return { items, contextTexts, everything };
+      return { items, contextTexts, guides, everything };
     },
     [board, media, projectMedia]
   );

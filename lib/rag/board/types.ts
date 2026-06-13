@@ -31,6 +31,13 @@ export interface TextNodeData extends Record<string, unknown> {
   text: string;
 }
 
+/** A reusable INSTRUCTION piece — guides HOW a brain answers (tone, format,
+ *  stance). Wired/boxed into a brain it rides into the prompt as guidance;
+ *  it is never a source and never indexed. */
+export interface PromptData extends Record<string, unknown> {
+  text: string;
+}
+
 export interface AnnotationData extends Record<string, unknown> {
   text: string;
 }

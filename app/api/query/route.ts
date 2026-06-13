@@ -23,6 +23,9 @@ export async function POST(req: Request) {
   const body = await req.json();
   const sourceIds: string[] = body.source_ids ?? [];
   const contextTexts: string[] = body.context_texts ?? [];
+  const guides: string[] = (body.guides ?? []).filter(
+    (g: unknown) => typeof g === 'string' && g.trim()
+  );
 
   if (!body.question || sourceIds.length === 0) {
     return Response.json(
@@ -43,6 +46,12 @@ export async function POST(req: Request) {
 
   // Ephemeral text-node context rides in the prompt — never indexed.
   const parts = [`Instruction: ${modeDirective}`];
+  // Prompt-piece guides steer HOW the answer is written (tone/format/stance).
+  if (guides.length)
+    parts.push(
+      'Additional instructions (follow all of these):\n' +
+        guides.map((g) => `- ${g}`).join('\n')
+    );
   if (contextTexts.length)
     parts.push(
       `Context from the user (not a source, do not cite): ${contextTexts.join(' | ')}`
@@ -62,6 +71,7 @@ export async function POST(req: Request) {
       filter_json: JSON.stringify({ source_id: { $in: sourceIds } }),
       scope: 'selected',
       answer_mode: mode,
+      guides,
       namespace: process.env.PINECONE_NAMESPACE ?? 'user_kieffer',
       model: body.model ?? 'gemini-2.5-flash'
     })

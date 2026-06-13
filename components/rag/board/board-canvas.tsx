@@ -41,6 +41,7 @@ import { ChipNode } from './chip-node';
 import { HubNode } from './hub-node';
 import { BrainNode } from './brain-node';
 import { TextNode } from './text-node';
+import { PromptNode } from './prompt-node';
 import { AnnotationNode } from './annotation-node';
 import { MindmapNode } from './mindmap-node';
 import { ScopeEdge } from './scope-edge';
@@ -51,19 +52,25 @@ const nodeTypes = {
   hub: HubNode,
   brain: BrainNode,
   textNode: TextNode,
+  prompt: PromptNode,
   annotation: AnnotationNode,
   mindmap: MindmapNode
 };
 
 const edgeTypes = { scope: ScopeEdge };
 
-const SOURCE_TYPES = new Set(['chip', 'hub', 'textNode']);
+const SOURCE_TYPES = new Set(['chip', 'hub', 'textNode', 'prompt']);
+/** Node types that dock into cluster boxes as compact tiles (non-source
+ *  context: notes + prompt guides). */
+const DOCKABLE_CONTEXT = new Set(['textNode', 'prompt']);
 
-/** Re-tile a hub's docked tiles (chips + context notes) into the 2-col grid. */
+/** Re-tile a hub's docked tiles (chips + context notes + prompts) into the
+ *  2-col grid. */
 function retile(nodes: BoardNode[], hubId: string): BoardNode[] {
   let i = 0;
   return nodes.map((n) =>
-    (n.type === 'chip' || n.type === 'textNode') && n.parentId === hubId
+    (n.type === 'chip' || n.type === 'textNode' || n.type === 'prompt') &&
+    n.parentId === hubId
       ? { ...n, position: hubSlot(i++) }
       : n
   );
@@ -181,8 +188,8 @@ function BoardCanvasInner() {
   /** Magnetic hub glow + stack movement, per drag tick. */
   const onNodeDrag = useCallback(
     (_: unknown, node: Node) => {
-      // Context notes glow a cluster box they're dragged over (dock target).
-      if (node.type === 'textNode') {
+      // Context notes / prompt pieces glow a cluster box they're over.
+      if (DOCKABLE_CONTEXT.has(node.type!)) {
         const cl = hitCluster(node);
         setBoard((prev) => ({
           ...prev,
@@ -275,9 +282,9 @@ function BoardCanvasInner() {
       const s = dragSession.current;
       dragSession.current = null;
 
-      // Context note dropped on a cluster box → dock it (it joins the family
-      // as prompt context); dropped outside → undock to the canvas.
-      if (node.type === 'textNode') {
+      // Context note / prompt piece dropped on a cluster box → dock it (joins
+      // the family as context/guidance); dropped outside → undock.
+      if (DOCKABLE_CONTEXT.has(node.type!)) {
         const cl = hitCluster(node);
         setTimeout(() => setBoard((prev) => {
           let nodes = prev.nodes.map((n) =>
@@ -310,9 +317,13 @@ function BoardCanvasInner() {
                 }
               : node.position;
             const oldHub = tn.parentId;
+            const restore =
+              tn.type === 'prompt'
+                ? { width: CHIP_W, height: CHIP_H + CHIP_TAB }
+                : { width: 234, height: 132 };
             nodes = nodes.map((n) =>
               n.id === tn.id
-                ? { ...n, parentId: undefined, position: abs, width: 234, height: 132 }
+                ? { ...n, parentId: undefined, position: abs, ...restore }
                 : n
             );
             nodes = retile(nodes, oldHub);
@@ -891,6 +902,16 @@ function BoardCanvasInner() {
             width: 234,
             height: 132,
             data: { text: '' }
+          })
+        }
+        onAddPrompt={(text) =>
+          pushNode({
+            id: nextBoardId('prompt'),
+            type: 'prompt',
+            position: centerPos(),
+            width: CHIP_W,
+            height: CHIP_H + CHIP_TAB,
+            data: { text }
           })
         }
         onAddAnnotation={() =>
