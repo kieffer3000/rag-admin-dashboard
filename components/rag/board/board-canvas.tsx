@@ -48,6 +48,7 @@ import { AnnotationNode } from './annotation-node';
 import { MindmapNode } from './mindmap-node';
 import { ScopeEdge } from './scope-edge';
 import { BoardToolbar } from './toolbar';
+import { BoardChest, CHEST_MIME } from './board-chest';
 
 const nodeTypes = {
   chip: ChipNode,
@@ -567,6 +568,50 @@ function BoardCanvasInner() {
     [setBoard]
   );
 
+  // Drag a chest item onto the canvas → drop it as a piece at the cursor.
+  const onCanvasDragOver = useCallback((e: React.DragEvent) => {
+    if (e.dataTransfer.types.includes(CHEST_MIME)) {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'copy';
+    }
+  }, []);
+
+  const onCanvasDrop = useCallback(
+    (e: React.DragEvent) => {
+      const raw = e.dataTransfer.getData(CHEST_MIME);
+      if (!raw) return;
+      e.preventDefault();
+      let payload: { kind: string; id?: string; text?: string };
+      try {
+        payload = JSON.parse(raw);
+      } catch {
+        return;
+      }
+      const pos = screenToFlowPosition({ x: e.clientX, y: e.clientY });
+      if (payload.kind === 'media' && payload.id) {
+        pushNode({
+          id: nextBoardId('chip'),
+          type: 'chip',
+          position: { x: pos.x - CHIP_W / 2, y: pos.y - CHIP_H / 2 },
+          data: { mediaId: payload.id }
+        });
+      } else if (payload.kind === 'prompt') {
+        pushNode({
+          id: nextBoardId('prompt'),
+          type: 'prompt',
+          position: {
+            x: pos.x - CHIP_W / 2,
+            y: pos.y - (CHIP_H + CHIP_TAB) / 2
+          },
+          width: CHIP_W,
+          height: CHIP_H + CHIP_TAB,
+          data: { text: payload.text ?? '' }
+        });
+      }
+    },
+    [screenToFlowPosition, pushNode, nextBoardId]
+  );
+
   // Ants march ONLY while a brain is thinking — and only on ITS edges.
   // Idle canvas = zero animation work (battery + visual calm).
   const liveEdges = useMemo(
@@ -763,6 +808,8 @@ function BoardCanvasInner() {
       ref={wrapRef}
       className="relative h-full w-full"
       onPointerMove={onSpotMove}
+      onDragOver={onCanvasDragOver}
+      onDrop={onCanvasDrop}
     >
       <div
         ref={spotRef}
@@ -1014,6 +1061,30 @@ function BoardCanvasInner() {
             })
             .catch(() => updateMedia(id, { status: 'failed' }));
         }}
+      />
+
+      {/* the CHEST — bottom dock of all produced media + prompts, drag onto
+          the canvas as puzzle pieces */}
+      <BoardChest
+        placedIds={placedIds}
+        onPlaceMedia={(mediaId) =>
+          pushNode({
+            id: nextBoardId('chip'),
+            type: 'chip',
+            position: centerPos(),
+            data: { mediaId }
+          })
+        }
+        onPlacePrompt={(text) =>
+          pushNode({
+            id: nextBoardId('prompt'),
+            type: 'prompt',
+            position: centerPos(),
+            width: CHIP_W,
+            height: CHIP_H + CHIP_TAB,
+            data: { text }
+          })
+        }
       />
     </div>
   );
