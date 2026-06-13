@@ -1,6 +1,6 @@
 'use client';
 
-import { memo, useRef, useState, useEffect } from 'react';
+import { memo, useRef, useState, useEffect, useCallback } from 'react';
 import {
   Handle,
   Position,
@@ -52,7 +52,8 @@ import {
   Printer,
   Pencil,
   Quote,
-  Sparkles
+  Sparkles,
+  Volume2
 } from 'lucide-react';
 import type { BrainData } from '@/lib/rag/board/types';
 
@@ -135,6 +136,7 @@ function BrainNodeInner({ id, data, selected }: NodeProps) {
   const d = data as BrainData & { color?: string; answerMode?: 'cited' | 'hybrid' };
   const {
     board,
+    setBoard,
     brainMessages,
     addBrainMessage,
     updateBrainMessage,
@@ -142,9 +144,10 @@ function BrainNodeInner({ id, data, selected }: NodeProps) {
     resolveBrainScope,
     updateBoardNodeData,
     resizeBoardNode,
-    setBrainBusy
+    setBrainBusy,
+    nextBoardId
   } = useBoard();
-  const { openViewer } = useRag();
+  const { openViewer, addMedia, updateMedia } = useRag();
   const { getViewport, fitView } = useReactFlow();
   const [question, setQuestion] = useState('');
   const [busy, setBusy] = useState(false);
@@ -159,6 +162,12 @@ function BrainNodeInner({ id, data, selected }: NodeProps) {
   const taRef = useRef<HTMLTextAreaElement>(null);
   const recRef = useRef<any>(null);
   const wavRef = useRef<WavRecorder | null>(null);
+  /** Message id currently being voiced (spinner on its 🔈 button). */
+  const [voicingId, setVoicingId] = useState<string | null>(null);
+  /** Session-only audio URLs keyed by the produced audio media id. Never
+   *  persisted — WAV bytes would blow the localStorage quota; the artifact's
+   *  text is re-indexable so audio is always regenerable on demand. */
+  const audioCache = useRef<Map<string, string>>(new Map());
   /** Composer text at the moment dictation started — interim results append to it. */
   const dictBaseRef = useRef('');
 
@@ -217,6 +226,100 @@ function BrainNodeInner({ id, data, selected }: NodeProps) {
   }
   const modelId = (d.modelId as string) ?? BOARD_DEFAULT_MODEL;
   const model = LLM_MODELS.find((m) => m.id === modelId) ?? LLM_MODELS[3];
+
+  /**
+   * Create Voiceover: synthesize the answer via Gemini native TTS (→ /api/voiceover),
+   * then drop the result onto the canvas as a re-indexable AUDIO chip — the answer
+   * text is the embedded content, the audio is the playable artifact. Mirrors the
+   * voice-memo flow (addMedia → chip → /api/index). Audio plays immediately and is
+   * cached for the session.
+   */
+  const handleVoiceover = useCallback(
+    async (msg: ChatMessage) => {
+      if (!msg.content || voicingId) return;
+      setVoicingId(msg.id);
+      try {
+        const res = await fetch('/api/voiceover', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ text: msg.content })
+        });
+        const j = await res.json();
+        if (!res.ok) throw new Error(j?.error ?? 'voiceover failed');
+        const playUrl: string = j.url ?? j.dataUrl;
+        if (!playUrl) throw new Error('no audio returned');
+
+        const brainName = (d.name as string) || 'Brain';
+        const preview = msg.content.replace(/\s+/g, ' ').trim().slice(0, 40);
+        const name = `Voiceover — ${brainName} · ${preview}…`;
+        const durationLabel = j.seconds
+          ? `${Math.floor(j.seconds / 60)}:${String(j.seconds % 60).padStart(2, '0')}`
+          : undefined;
+
+        // re-indexable audio artifact: content = the answer text
+        const mediaId = addMedia(
+          {
+            type: 'audio',
+            name,
+            description: `Voiceover (Gemini TTS · ${j.voice ?? 'Leda'})`,
+            date: new Date().toISOString().slice(0, 10),
+            content: msg.content,
+            source: j.durable ? j.url : undefined,
+            durationLabel
+          },
+          { simulate: false }
+        );
+        audioCache.current.set(mediaId, playUrl);
+
+        // spawn a chip just to the right of this brain
+        const self = board.nodes.find((n) => n.id === id);
+        const pos = self
+          ? { x: self.position.x + (self.width ?? 380) + 40, y: self.position.y }
+          : { x: 0, y: 0 };
+        setBoard((prev) => ({
+          ...prev,
+          nodes: [
+            ...prev.nodes,
+            {
+              id: nextBoardId('chip'),
+              type: 'chip',
+              position: pos,
+              data: { mediaId }
+            }
+          ]
+        }));
+
+        // embed the answer text so the audio piece is retrievable
+        fetch('/api/index', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            source_id: mediaId,
+            name,
+            type: 'audio',
+            text: msg.content
+          })
+        })
+          .then((r) => {
+            if (!r.ok) throw new Error();
+            updateMedia(mediaId, { status: 'indexed' });
+          })
+          .catch(() => updateMedia(mediaId, { status: 'failed' }));
+
+        // play it now
+        try {
+          await new Audio(playUrl).play();
+        } catch {
+          /* autoplay may be blocked; the chip can still play it */
+        }
+      } catch {
+        /* surfaced via the button returning to idle; artifact text is regenerable */
+      } finally {
+        setVoicingId(null);
+      }
+    },
+    [voicingId, d.name, board, id, addMedia, updateMedia, setBoard, nextBoardId]
+  );
 
   function appendToComposer(text: string) {
     if (!text) return;
@@ -712,6 +815,9 @@ function BrainNodeInner({ id, data, selected }: NodeProps) {
             large={sizeMode === 'full'}
             onCitation={openViewer}
             onCiteHover={pulseSource}
+            modelLabel={model.label}
+            onVoiceover={handleVoiceover}
+            voicing={voicingId === m.id}
           />
         ))}
       </div>
@@ -919,12 +1025,18 @@ function BrainMessage({
   m,
   large = false,
   onCitation,
-  onCiteHover
+  onCiteHover,
+  modelLabel,
+  onVoiceover,
+  voicing = false
 }: {
   m: ChatMessage;
   large?: boolean;
   onCitation: (c: any) => void;
   onCiteHover: (mediaId: string, on: boolean) => void;
+  modelLabel?: string;
+  onVoiceover?: (m: ChatMessage) => void;
+  voicing?: boolean;
 }) {
   if (m.role === 'user') {
     return (
@@ -941,11 +1053,35 @@ function BrainMessage({
     );
   }
   return (
-    <div className="self-start">
+    <div className="group self-start">
       {m.content ? (
         <AnswerBody content={m.content} large={large} />
       ) : (
         <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground/50" />
+      )}
+      {m.content && (
+        // footer: model attribution + per-message actions (revealed on hover)
+        <div className="mt-1.5 flex items-center gap-2">
+          {modelLabel && (
+            <span className="text-[11px] text-muted-foreground/55">{modelLabel}</span>
+          )}
+          <div className="ml-auto flex items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100">
+            {onVoiceover && (
+              <button
+                onClick={() => !voicing && onVoiceover(m)}
+                disabled={voicing}
+                title="Create voiceover"
+                className="nodrag flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground/70 transition-colors hover:bg-accent/10 hover:text-accent disabled:opacity-60"
+              >
+                {voicing ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Volume2 className="h-4 w-4" />
+                )}
+              </button>
+            )}
+          </div>
+        </div>
       )}
       {m.citations && m.citations.length > 0 && (
         <div className="mt-2 flex flex-wrap gap-1.5">
