@@ -51,8 +51,10 @@ export function BoardChest({
       if (rootRef.current && !rootRef.current.contains(e.target as Node))
         setOpen(null);
     };
-    document.addEventListener('mousedown', onDown);
-    return () => document.removeEventListener('mousedown', onDown);
+    // Capture phase: fires even on the React Flow pane (it stops bubbling),
+    // so clicking empty canvas closes the chest too.
+    document.addEventListener('mousedown', onDown, true);
+    return () => document.removeEventListener('mousedown', onDown, true);
   }, [open]);
 
   // Group sources by type; only show a bubble for types that have items.

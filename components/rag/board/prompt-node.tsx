@@ -3,7 +3,7 @@
 import { memo } from 'react';
 import { Handle, Position, useStore, type NodeProps } from '@xyflow/react';
 import { cn } from '@/lib/utils';
-import { Sparkles, Pencil } from 'lucide-react';
+import { Sparkles, Pencil, RotateCcw } from 'lucide-react';
 import { useBoard } from '@/lib/rag/board/store';
 import {
   CHIP_W,
@@ -22,7 +22,7 @@ import {
  */
 function PromptNodeInner({ id, data, selected, parentId }: NodeProps) {
   const d = data as PromptData;
-  const { updateBoardNodeData } = useBoard();
+  const { updateBoardNodeData, removeBoardNode } = useBoard();
   const text = (d.text as string) || '';
 
   // Duplicate = the same instruction text already exists on an earlier prompt
@@ -120,6 +120,17 @@ function PromptNodeInner({ id, data, selected, parentId }: NodeProps) {
           <Pencil className="h-3 w-3" />
         </button>
       </div>
+
+      <button
+        title="Remove from board"
+        onClick={(e) => {
+          e.stopPropagation();
+          removeBoardNode(id);
+        }}
+        className="nodrag absolute -bottom-1.5 -left-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-card text-muted-foreground/60 opacity-0 shadow-[0_1px_4px_rgb(0_0_0/0.12)] transition-opacity hover:text-foreground group-hover:opacity-100"
+      >
+        <RotateCcw className="h-2.5 w-2.5" />
+      </button>
 
       <Handle
         type="source"

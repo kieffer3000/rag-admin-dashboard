@@ -28,7 +28,7 @@ import {
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu';
 import {
-  Boxes,
+  Brain,
   ArrowUp,
   Loader2,
   Unplug,
@@ -159,6 +159,7 @@ function BrainNodeInner({ id, data, selected }: NodeProps) {
   const taRef = useRef<HTMLTextAreaElement>(null);
   const recRef = useRef<any>(null);
   const wavRef = useRef<WavRecorder | null>(null);
+  const nodeRef = useRef<HTMLDivElement>(null);
   /** Composer text at the moment dictation started — interim results append to it. */
   const dictBaseRef = useRef('');
 
@@ -215,6 +216,33 @@ function BrainNodeInner({ id, data, selected }: NodeProps) {
       30
     );
   }
+  /** Collapse straight back to the default size (the minimize button + the
+   *  click-away behaviour both use this). */
+  function restoreSize() {
+    resizeBoardNode(id, 400, 480, { sizeMode: 'default', expanded: false });
+    setTimeout(
+      () => fitView({ nodes: [{ id }], duration: 420, padding: 0.2, maxZoom: 1.2 }),
+      30
+    );
+  }
+
+  // When expanded, clicking ANYWHERE outside the brain minimizes it. Capture
+  // phase so it fires even on the React Flow pane (which stops bubbling).
+  useEffect(() => {
+    if (sizeMode === 'default') return;
+    const onDown = (e: MouseEvent) => {
+      const t = e.target as HTMLElement;
+      // Dropdowns/popovers (Tools, model, actions) portal OUTSIDE the node —
+      // a click in one isn't "away", so don't minimize.
+      if (t.closest('[role="menu"],[role="listbox"],[data-radix-popper-content-wrapper]'))
+        return;
+      if (nodeRef.current && !nodeRef.current.contains(t)) restoreSize();
+    };
+    document.addEventListener('mousedown', onDown, true);
+    return () => document.removeEventListener('mousedown', onDown, true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sizeMode]);
+
   const modelId = (d.modelId as string) ?? BOARD_DEFAULT_MODEL;
   const model = LLM_MODELS.find((m) => m.id === modelId) ?? LLM_MODELS[3];
 
@@ -466,7 +494,7 @@ function BrainNodeInner({ id, data, selected }: NodeProps) {
   }
 
   return (
-    <div className="relative h-full w-full">
+    <div ref={nodeRef} className="relative h-full w-full">
       <NodeResizer
         minWidth={340}
         minHeight={300}
@@ -499,7 +527,7 @@ function BrainNodeInner({ id, data, selected }: NodeProps) {
               headerColor.chip
             )}
           >
-            <Boxes className="h-4 w-4" />
+            <Brain className="h-4 w-4" />
           </div>
           <div className="min-w-0 flex-1 leading-tight">
             {renaming ? (
@@ -576,6 +604,17 @@ function BrainNodeInner({ id, data, selected }: NodeProps) {
             </DropdownMenuContent>
           </DropdownMenu>
 
+          {/* dedicated minimize — only while expanded; also closes on any
+              click outside the brain (see restoreSize effect) */}
+          {sizeMode !== 'default' && (
+            <button
+              onClick={restoreSize}
+              title="Minimize"
+              className="nodrag flex h-6 w-6 items-center justify-center rounded-[8px] text-muted-foreground/70 transition-colors hover:bg-black/[0.05] hover:text-foreground dark:hover:bg-white/[0.07]"
+            >
+              <Minimize2 className="h-3.5 w-3.5" />
+            </button>
+          )}
           <button
             onClick={cycleSize}
             title={
@@ -670,7 +709,7 @@ function BrainNodeInner({ id, data, selected }: NodeProps) {
           <div className="flex flex-1 flex-col items-center justify-center gap-3 py-4 text-center">
             <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-accent/[0.07] text-accent/70">
               {wired ? (
-                <Boxes className="h-5 w-5" />
+                <Brain className="h-5 w-5" />
               ) : (
                 <Unplug className="h-5 w-5" />
               )}

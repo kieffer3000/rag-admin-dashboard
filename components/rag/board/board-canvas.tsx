@@ -951,6 +951,9 @@ function BoardCanvasInner() {
         selectionKeyCode="Shift"
         multiSelectionKeyCode="Shift"
         selectNodesOnDrag={false}
+        // Don't pan the canvas when a node is dragged to the edge — it makes
+        // the other (wired) pieces appear to scroll away.
+        autoPanOnNodeDrag={false}
         defaultEdgeOptions={{
           type: 'scope',
           // Resting wires: substantial, semi-transparent curves that read as

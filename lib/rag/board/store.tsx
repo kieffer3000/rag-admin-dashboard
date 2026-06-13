@@ -157,6 +157,8 @@ interface BoardCtxState {
   ) => void;
   /** Disconnect an edge (the hover-✕ on a connection). */
   removeBoardEdge: (edgeId: string) => void;
+  /** Remove a node from the board (+ its edges); re-tiles its box if docked. */
+  removeBoardNode: (nodeId: string) => void;
   /** Brains with a query in flight — their inbound edges march. */
   busyBrains: Set<string>;
   setBrainBusy: (brainId: string, busy: boolean) => void;
@@ -434,6 +436,31 @@ export function BoardProvider({ children }: { children: ReactNode }) {
     [setBoard]
   );
 
+  const removeBoardNode = useCallback(
+    (nodeId: string) => {
+      setBoard((prev) => {
+        const node = prev.nodes.find((n) => n.id === nodeId);
+        if (!node) return prev;
+        const parentId = node.parentId;
+        let nodes = prev.nodes.filter((n) => n.id !== nodeId);
+        if (parentId) {
+          let i = 0;
+          nodes = nodes.map((n) =>
+            (n.type === 'chip' || n.type === 'textNode' || n.type === 'prompt') &&
+            n.parentId === parentId
+              ? { ...n, position: hubSlot(i++) }
+              : n
+          );
+        }
+        const edges = prev.edges.filter(
+          (e) => e.source !== nodeId && e.target !== nodeId
+        );
+        return { ...prev, nodes, edges };
+      });
+    },
+    [setBoard]
+  );
+
   const addBrainMessage = useCallback((brainId: string, m: ChatMessage) => {
     setBrainMessages((prev) => ({
       ...prev,
@@ -548,6 +575,7 @@ export function BoardProvider({ children }: { children: ReactNode }) {
     updateBoardNodeData,
     resizeBoardNode,
     removeBoardEdge,
+    removeBoardNode,
     busyBrains,
     setBrainBusy,
     nextBoardId: nextId,
