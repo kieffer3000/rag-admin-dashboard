@@ -30,10 +30,19 @@ function ChipNodeInner({ id, data, selected, parentId }: NodeProps) {
   const item = media.find((m) => m.id === d.mediaId);
 
   // Stack awareness: interlocked same-type neighbors weld into ONE piece.
-  const { above, below, stackSize } = useStore((s) => {
+  // Also detect DUPLICATES — the same source placed more than once. The first
+  // one is canonical; later copies are dimmed (they're redundant — a brain
+  // dedupes them, so they never double-ping the vector store).
+  const { above, below, stackSize, duplicate } = useStore((s) => {
     const self = s.nodes.find((n) => n.id === id) as BoardNode | undefined;
-    if (!self || self.parentId || !item)
-      return { above: false, below: false, stackSize: 1 };
+    if (!self || !item)
+      return { above: false, below: false, stackSize: 1, duplicate: false };
+    const sameSource = (s.nodes as BoardNode[]).filter(
+      (n) => n.type === 'chip' && n.data?.mediaId === item.id
+    );
+    const duplicate = sameSource.length > 1 && sameSource[0].id !== id;
+    if (self.parentId)
+      return { above: false, below: false, stackSize: 1, duplicate };
     const typeOf = (n: BoardNode) =>
       media.find((m) => m.id === n.data?.mediaId)?.type;
     const column = (s.nodes as BoardNode[]).filter(
@@ -56,9 +65,10 @@ function ChipNodeInner({ id, data, selected, parentId }: NodeProps) {
     return {
       above: byY.has(y - STACK_PITCH),
       below: byY.has(y + STACK_PITCH),
-      stackSize: size
+      stackSize: size,
+      duplicate
     };
-  }, (a, b) => a.above === b.above && a.below === b.below && a.stackSize === b.stackSize);
+  }, (a, b) => a.above === b.above && a.below === b.below && a.stackSize === b.stackSize && a.duplicate === b.duplicate);
 
   if (!item) return null;
 
@@ -120,9 +130,19 @@ function ChipNodeInner({ id, data, selected, parentId }: NodeProps) {
       className={cn(
         'group relative transition-all',
         settle > 0 && 'animate-stack-settle',
-        peel && 'scale-[1.03] animate-peel-pop'
+        peel && 'scale-[1.03] animate-peel-pop',
+        // a duplicate copy reads as redundant — desaturated + faded
+        duplicate && 'opacity-55 grayscale'
       )}
     >
+      {duplicate && (
+        <span
+          title="Duplicate — this source is already on the board. A brain only counts it once."
+          className="absolute -right-1.5 -top-1.5 z-10 rounded-full bg-foreground/70 px-1.5 py-0.5 text-[8.5px] font-bold uppercase tracking-wide text-background"
+        >
+          dup
+        </span>
+      )}
       {/* citation pulse: an expanding ripple anchors the cited text to this
           physical piece on the board */}
       {pulse && (

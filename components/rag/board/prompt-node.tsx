@@ -1,7 +1,7 @@
 'use client';
 
 import { memo } from 'react';
-import { Handle, Position, type NodeProps } from '@xyflow/react';
+import { Handle, Position, useStore, type NodeProps } from '@xyflow/react';
 import { cn } from '@/lib/utils';
 import { Sparkles, Pencil } from 'lucide-react';
 import { useBoard } from '@/lib/rag/board/store';
@@ -24,6 +24,17 @@ function PromptNodeInner({ id, data, selected, parentId }: NodeProps) {
   const d = data as PromptData;
   const { updateBoardNodeData } = useBoard();
   const text = (d.text as string) || '';
+
+  // Duplicate = the same instruction text already exists on an earlier prompt
+  // piece (a brain dedupes guides, so copies are redundant) → dimmed.
+  const duplicate = useStore((s) => {
+    const t = text.trim();
+    if (!t) return false;
+    const same = s.nodes.filter(
+      (n) => n.type === 'prompt' && ((n.data as any).text || '').trim() === t
+    );
+    return same.length > 1 && same[0].id !== id;
+  });
 
   function edit(e: React.MouseEvent) {
     e.stopPropagation();
@@ -66,8 +77,16 @@ function PromptNodeInner({ id, data, selected, parentId }: NodeProps) {
           ? 'drop-shadow(0 0 0.5px hsl(var(--accent))) drop-shadow(0 2px 8px hsl(var(--accent)/0.45))'
           : 'drop-shadow(0 1px 2px rgb(0 0 0/0.08)) drop-shadow(0 4px 10px rgb(0 0 0/0.07))'
       }}
-      className="group relative"
+      className={cn('group relative', duplicate && 'opacity-55 grayscale')}
     >
+      {duplicate && (
+        <span
+          title="Duplicate instruction — already on the board. A brain applies it once."
+          className="absolute -right-1.5 -top-1.5 z-10 rounded-full bg-foreground/70 px-1.5 py-0.5 text-[8.5px] font-bold uppercase tracking-wide text-background"
+        >
+          dup
+        </span>
+      )}
       {/* puzzle body — indigo so it reads as an instruction, not a source */}
       <div
         style={{ width: CHIP_W, height: CHIP_H + CHIP_TAB, clipPath: CHIP_CLIP }}

@@ -278,7 +278,11 @@ export function BoardProvider({ children }: { children: ReactNode }) {
       nodes: board.nodes,
       edges: board.edges,
       brainMessages: msgs,
-      media: projectMedia,
+      // Persist source METADATA only — never the full text (a book can be
+      // megabytes; it would blow the ~5MB localStorage quota and silently
+      // drop the save, losing positions/snaps). The text already lives in
+      // Pinecone; the board only needs id/name/type/status to render chips.
+      media: projectMedia.map((m) => ({ ...m, content: '' })),
       savedAt: Date.now()
     };
   }, [board, brainMessages, projectMedia]);
@@ -509,7 +513,14 @@ export function BoardProvider({ children }: { children: ReactNode }) {
         const m = media.find((x) => x.id === id);
         if (m && m.status === 'indexed') items.push(m);
       }
-      return { items, contextTexts, guides, everything };
+      // Dedupe so the SAME source/note/guide placed twice never doubles up
+      // (sources are already deduped above by id → no double vector ping).
+      return {
+        items,
+        contextTexts: [...new Set(contextTexts)],
+        guides: [...new Set(guides)],
+        everything
+      };
     },
     [board, media, projectMedia]
   );
