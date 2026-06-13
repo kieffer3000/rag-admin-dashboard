@@ -159,6 +159,9 @@ interface BoardCtxState {
   removeBoardEdge: (edgeId: string) => void;
   /** Remove a node from the board (+ its edges); re-tiles its box if docked. */
   removeBoardNode: (nodeId: string) => void;
+  /** Un-snap a welded stack at the seam ABOVE this piece — this piece and
+   *  everything below it detach into their own stack. */
+  unsnapPiece: (nodeId: string) => void;
   /** Brains with a query in flight — their inbound edges march. */
   busyBrains: Set<string>;
   setBrainBusy: (brainId: string, busy: boolean) => void;
@@ -478,6 +481,33 @@ export function BoardProvider({ children }: { children: ReactNode }) {
     [setBoard]
   );
 
+  const unsnapPiece = useCallback(
+    (nodeId: string) => {
+      setBoard((prev) => {
+        const self = prev.nodes.find((n) => n.id === nodeId);
+        if (!self || self.parentId) return prev;
+        const typeOf = (n: BoardNode) =>
+          media.find((m) => m.id === n.data.mediaId)?.type;
+        const stack = stackOf(self, prev.nodes, typeOf);
+        if (stack.length < 2) return prev;
+        // Detach THIS piece + everything below it: shift them down so the
+        // seam above no longer sits at STACK_PITCH (they become their own
+        // stack; the pieces above stay put).
+        const GAP = 38;
+        const moveIds = new Set(
+          stack.filter((n) => n.position.y >= self.position.y - 0.5).map((n) => n.id)
+        );
+        const nodes = prev.nodes.map((n) =>
+          moveIds.has(n.id)
+            ? { ...n, position: { x: n.position.x, y: n.position.y + GAP } }
+            : n
+        );
+        return { ...prev, nodes };
+      });
+    },
+    [setBoard, media]
+  );
+
   const addBrainMessage = useCallback((brainId: string, m: ChatMessage) => {
     setBrainMessages((prev) => ({
       ...prev,
@@ -593,6 +623,7 @@ export function BoardProvider({ children }: { children: ReactNode }) {
     resizeBoardNode,
     removeBoardEdge,
     removeBoardNode,
+    unsnapPiece,
     busyBrains,
     setBrainBusy,
     nextBoardId: nextId,

@@ -32,11 +32,9 @@ import {
   CHIP_H,
   CHIP_TAB,
   STACK_PITCH,
-  STACK_SNAP,
-  PEEL_BREAK,
-  STACK_GRAB
+  STACK_SNAP
 } from '@/lib/rag/board/types';
-import { playSnap, playPop } from '@/lib/rag/board/sound';
+import { playSnap } from '@/lib/rag/board/sound';
 import { Check, Loader2, CloudOff } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { ChipNode } from './chip-node';
@@ -170,13 +168,13 @@ function BoardCanvasInner() {
   );
 
   /**
-   * Sibling-sync drag session. A welded stack moves as ONE unit; yanking a
-   * piece sideways past PEEL_BREAK pops it loose (yank-to-peel) and the
-   * column closes the gap behind it. Stacks stay emergent — this only
-   * coordinates movement, never the data model.
+   * Sibling-sync drag session. A welded stack ALWAYS moves as ONE unit —
+   * dragging any member translates the whole column rigidly. Pieces never
+   * disconnect by dragging; the ONLY way to separate is the un-snap (✂) seam
+   * button between two pieces. Stacks stay emergent — this only coordinates
+   * movement, never the data model.
    */
   const dragSession = useRef<{
-    mode: 'undecided' | 'stack' | 'peel';
     startX: number;
     startY: number;
     mates: { id: string; x: number; y: number }[];
@@ -195,7 +193,6 @@ function BoardCanvasInner() {
       );
       if (!mates.length) return; // lone piece — plain drag
       dragSession.current = {
-        mode: 'undecided',
         startX: self.position.x,
         startY: self.position.y,
         mates: mates.map((m) => ({ id: m.id, x: m.position.x, y: m.position.y }))
@@ -229,55 +226,16 @@ function BoardCanvasInner() {
       let stackPatch: ((nodes: BoardNode[]) => BoardNode[]) | null = null;
 
       if (s) {
+        // Rigid translate: the whole welded column follows the lead delta.
         const dx = node.position.x - s.startX;
         const dy = node.position.y - s.startY;
-
-        if (s.mode === 'undecided') {
-          if (Math.abs(dx) >= PEEL_BREAK && Math.abs(dx) > Math.abs(dy)) {
-            // POP: the piece breaks free; the column seals the gap behind it.
-            s.mode = 'peel';
-            playPop();
-            const gapY = s.startY;
-            stackPatch = (nodes) =>
-              nodes.map((n) => {
-                if (n.id === node.id)
-                  return { ...n, data: { ...n.data, peel: true, tug: false } };
-                const mate = s.mates.find((m) => m.id === n.id);
-                if (mate && mate.y > gapY)
-                  return { ...n, position: { x: mate.x, y: mate.y - STACK_PITCH } };
-                return n;
-              });
-            s.mates = s.mates.map((m) =>
-              m.y > gapY ? { ...m, y: m.y - STACK_PITCH } : m
-            );
-          } else if (Math.abs(dy) >= STACK_GRAB && Math.abs(dy) > Math.abs(dx)) {
-            // Vertical intent grabs the whole welded block.
-            s.mode = 'stack';
-          } else {
-            // Sideways tug under the break distance: the piece resists —
-            // warm seam glow warns it's about to pop loose.
-            const tug = Math.abs(dx) > 10;
-            stackPatch = (nodes) =>
-              nodes.map((n) =>
-                n.id === node.id && !!n.data.tug !== tug
-                  ? { ...n, data: { ...n.data, tug } }
-                  : n
-              );
-          }
-        }
-
-        if (s.mode === 'stack') {
-          // Rigid translate: every mate follows the lead piece's delta.
-          stackPatch = (nodes) =>
-            nodes.map((n) => {
-              if (n.id === node.id && n.data.tug)
-                return { ...n, data: { ...n.data, tug: false } };
-              const mate = s.mates.find((m) => m.id === n.id);
-              return mate
-                ? { ...n, position: { x: mate.x + dx, y: mate.y + dy } }
-                : n;
-            });
-        }
+        stackPatch = (nodes) =>
+          nodes.map((n) => {
+            const mate = s.mates.find((m) => m.id === n.id);
+            return mate
+              ? { ...n, position: { x: mate.x + dx, y: mate.y + dy } }
+              : n;
+          });
       }
 
       // Snap preview: when NOT heading into a hub, find the free same-type
@@ -392,11 +350,10 @@ function BoardCanvasInner() {
       }
 
       if (node.type !== 'chip') return;
-      // The set of pieces travelling together this gesture.
-      const unitIds =
-        s && s.mode === 'stack'
-          ? new Set([node.id, ...s.mates.map((m) => m.id)])
-          : new Set([node.id]);
+      // The set of pieces travelling together this gesture (the whole stack).
+      const unitIds = s
+        ? new Set([node.id, ...s.mates.map((m) => m.id)])
+        : new Set([node.id]);
       const hub = hitHub(node);
 
       // Defer one tick: React Flow flushes its final drag position AFTER this
@@ -408,11 +365,8 @@ function BoardCanvasInner() {
           let out = n;
           if (n.type === 'hub' && n.data.glow)
             out = { ...out, data: { ...out.data, glow: false } };
-          if (n.type === 'chip' && (n.data.tug || n.data.peel || n.data.snapTarget))
-            out = {
-              ...out,
-              data: { ...out.data, tug: false, peel: false, snapTarget: false }
-            };
+          if (n.type === 'chip' && n.data.snapTarget)
+            out = { ...out, data: { ...out.data, snapTarget: false } };
           return out;
         });
         let edges = prev.edges;

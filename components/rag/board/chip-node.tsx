@@ -7,7 +7,7 @@ import { useRag } from '@/lib/rag/store';
 import { useBoard } from '@/lib/rag/board/store';
 import { MediaIcon } from '@/components/rag/shared';
 import { MEDIA_TYPES } from '@/lib/rag/media-config';
-import { Loader2, StickyNote, Layers, RotateCcw } from 'lucide-react';
+import { Loader2, StickyNote, Layers, RotateCcw, Scissors } from 'lucide-react';
 import {
   CHIP_W,
   CHIP_H,
@@ -28,7 +28,7 @@ import {
 function ChipNodeInner({ id, data, selected, parentId }: NodeProps) {
   const d = data as ChipData;
   const { media, updateMedia } = useRag();
-  const { removeBoardNode } = useBoard();
+  const { removeBoardNode, unsnapPiece } = useBoard();
   const item = media.find((m) => m.id === d.mediaId);
 
   // Stack awareness: interlocked same-type neighbors weld into ONE piece.
@@ -83,8 +83,6 @@ function ChipNodeInner({ id, data, selected, parentId }: NodeProps) {
   const isTop = inStack && !above;
   const isBottom = inStack && !below;
   const meta = MEDIA_TYPES[item.type];
-  const tug = !!d.tug;
-  const peel = !!d.peel;
   const pulse = !!d.pulse; // a citation in some brain is pointing at this piece
   const snapTarget = !!d.snapTarget; // a dragged piece is about to click onto this
   const settle = (d.settle as number) ?? 0;
@@ -100,18 +98,13 @@ function ChipNodeInner({ id, data, selected, parentId }: NodeProps) {
 
   // Seamless monolith: in-stack pieces drop their individual card shadows —
   // only the block's exposed top/bottom edges cast, so the stack reads as
-  // ONE object. Tug = warm "about to pop" seam glow; peel = floating lift;
-  // pulse = a hovered citation proving an answer against THIS piece.
+  // ONE object. snapTarget = about to weld; pulse = a hovered citation.
   const filter = snapTarget
     ? 'drop-shadow(0 0 0.5px hsl(var(--accent))) drop-shadow(0 0 12px hsl(var(--accent)/0.85))'
     : pulse
     ? 'drop-shadow(0 0 10px hsl(var(--accent)/0.9)) drop-shadow(0 2px 8px hsl(var(--accent)/0.4))'
     : selected
     ? 'drop-shadow(0 0 0.5px hsl(var(--accent))) drop-shadow(0 2px 8px hsl(var(--accent)/0.45))'
-    : peel
-    ? 'drop-shadow(0 2px 4px rgb(0 0 0/0.10)) drop-shadow(0 16px 28px rgb(0 0 0/0.20))'
-    : tug
-    ? 'drop-shadow(0 0 7px rgb(251 146 60/0.75)) drop-shadow(0 2px 6px rgb(0 0 0/0.10))'
     : docked
     ? 'drop-shadow(0 1px 2px rgb(0 0 0/0.10))'
     : inStack
@@ -135,12 +128,26 @@ function ChipNodeInner({ id, data, selected, parentId }: NodeProps) {
       className={cn(
         'group relative transition-all',
         settle > 0 && 'animate-stack-settle',
-        peel && 'scale-[1.03] animate-peel-pop',
         snapTarget && 'animate-pulse',
         // a duplicate copy reads as redundant — desaturated + faded
         duplicate && !snapTarget && 'opacity-55 grayscale'
       )}
     >
+      {/* un-snap (✂) — sits in the seam between this piece and the one above;
+          click to split the stack here (this piece + below detach). Pieces
+          stay welded otherwise, so dragging never accidentally disconnects. */}
+      {above && (
+        <button
+          title="Un-snap here"
+          onClick={(e) => {
+            e.stopPropagation();
+            unsnapPiece(id);
+          }}
+          className="nodrag absolute -top-2.5 left-1/2 z-20 flex h-5 w-5 -translate-x-1/2 items-center justify-center rounded-full border border-card bg-card text-muted-foreground/70 opacity-0 shadow-[0_1px_5px_rgb(0_0_0/0.18)] transition-opacity hover:text-foreground group-hover:opacity-100"
+        >
+          <Scissors className="h-2.5 w-2.5" />
+        </button>
+      )}
       {duplicate && (
         <span
           title="Duplicate — this source is already on the board. A brain only counts it once."
