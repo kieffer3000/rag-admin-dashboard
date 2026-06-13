@@ -442,7 +442,24 @@ export function BoardProvider({ children }: { children: ReactNode }) {
         const node = prev.nodes.find((n) => n.id === nodeId);
         if (!node) return prev;
         const parentId = node.parentId;
-        let nodes = prev.nodes.filter((n) => n.id !== nodeId);
+        let nodes = prev.nodes;
+        // Removing a BOX/hub: undock its pieces to the canvas (absolute
+        // coords) so they're never orphaned or lost.
+        if (node.type === 'hub') {
+          nodes = nodes.map((n) =>
+            n.parentId === nodeId
+              ? {
+                  ...n,
+                  parentId: undefined,
+                  position: {
+                    x: node.position.x + n.position.x,
+                    y: node.position.y + n.position.y
+                  }
+                }
+              : n
+          );
+        }
+        nodes = nodes.filter((n) => n.id !== nodeId);
         if (parentId) {
           let i = 0;
           nodes = nodes.map((n) =>

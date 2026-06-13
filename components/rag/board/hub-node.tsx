@@ -15,7 +15,7 @@ import {
 } from '@/lib/rag/board/types';
 import { MediaType } from '@/lib/rag/types';
 import { MediaIcon } from '@/components/rag/shared';
-import { Sparkles, Puzzle } from 'lucide-react';
+import { Sparkles, Puzzle, X } from 'lucide-react';
 import { useRag } from '@/lib/rag/store';
 import { useBoard } from '@/lib/rag/board/store';
 
@@ -31,7 +31,7 @@ import { useBoard } from '@/lib/rag/board/store';
 function HubNodeInner({ id, data, selected }: NodeProps) {
   const d = data as HubData;
   const { projectMedia, media } = useRag();
-  const { updateBoardNodeData } = useBoard();
+  const { updateBoardNodeData, removeBoardNode } = useBoard();
   const [editing, setEditing] = useState(false);
 
   // Docked members (joined ids keep the selector's equality check cheap).
@@ -86,7 +86,7 @@ function HubNodeInner({ id, data, selected }: NodeProps) {
         // The tray BODY is a bezel/lip flush with the desk: frosted white,
         // a crisp ultra-fine outer border, a gentle raise. The recess lives
         // in the inner WELL below (separate, darker surface).
-        'relative rounded-[18px] backdrop-blur-xl transition-all',
+        'group relative rounded-[18px] backdrop-blur-xl transition-all',
         everything
           ? 'bg-gradient-to-br from-indigo-500/[0.09] to-violet-500/[0.13] ring-1 ring-accent/25'
           : 'bg-white/72 ring-1 ring-black/[0.07] shadow-[0_1px_2px_rgb(0_0_0/0.04),0_6px_20px_-8px_rgb(0_0_0/0.12)] dark:bg-white/[0.045] dark:ring-white/[0.08]',
@@ -136,6 +136,18 @@ function HubNodeInner({ id, data, selected }: NodeProps) {
           })}
         </div>
       )}
+
+      {/* remove this box / hide the Everything hub (pieces undock, never lost) */}
+      <button
+        title={everything ? 'Hide the Everything hub' : 'Remove this box (pieces stay on the board)'}
+        onClick={(e) => {
+          e.stopPropagation();
+          removeBoardNode(id);
+        }}
+        className="nodrag absolute -right-2 -top-2 z-10 flex h-5 w-5 items-center justify-center rounded-full bg-card text-muted-foreground/60 opacity-0 shadow-[0_1px_4px_rgb(0_0_0/0.14)] transition-opacity hover:text-foreground group-hover:opacity-100"
+      >
+        <X className="h-3 w-3" />
+      </button>
 
       {/* rim header — the box's grab handle / lip; a hairline divider separates
           it from the recessed well below */}
