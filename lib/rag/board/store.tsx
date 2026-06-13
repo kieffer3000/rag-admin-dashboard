@@ -144,6 +144,9 @@ export function BoardProvider({ children }: { children: ReactNode }) {
   const [brainMessages, setBrainMessages] = useState<Record<string, ChatMessage[]>>({});
   /** Projects whose saved state we've already loaded (don't reload/overwrite). */
   const hydrated = useRef<Set<string>>(new Set());
+  /** Projects the user has edited this session — never let a late DB load
+   *  clobber fresh local work (e.g. a note typed before the fetch resolved). */
+  const touched = useRef<Set<string>>(new Set());
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const board = useMemo<BoardState>(() => {
@@ -197,10 +200,12 @@ export function BoardProvider({ children }: { children: ReactNode }) {
                 ? n
                 : { ...n, position: slot };
             });
-            setBoards((prev) => ({
-              ...prev,
-              [pid]: { nodes, edges: data.edges ?? [] }
-            }));
+            // Don't clobber work the user started before this load resolved.
+            if (!touched.current.has(pid))
+              setBoards((prev) => ({
+                ...prev,
+                [pid]: { nodes, edges: data.edges ?? [] }
+              }));
             if (data.brainMessages)
               setBrainMessages((prev) => ({ ...prev, ...data.brainMessages }));
           }
@@ -247,6 +252,7 @@ export function BoardProvider({ children }: { children: ReactNode }) {
 
   const setBoard = useCallback(
     (updater: (prev: BoardState) => BoardState) => {
+      touched.current.add(activeProjectId);
       setBoards((prev) => {
         const cur = prev[activeProjectId] ?? board;
         return { ...prev, [activeProjectId]: updater(cur) };
