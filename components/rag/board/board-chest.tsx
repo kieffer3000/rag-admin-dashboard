@@ -6,7 +6,7 @@ import { useRag } from '@/lib/rag/store';
 import { MEDIA_TYPES, MEDIA_TYPE_ORDER } from '@/lib/rag/media-config';
 import { MediaIcon } from '@/components/rag/shared';
 import { MediaType } from '@/lib/rag/types';
-import { Search, Sparkles, Lightbulb, Check } from 'lucide-react';
+import { Search, Sparkles, Lightbulb, RotateCcw } from 'lucide-react';
 
 /** Drag payload the canvas reads in its onDrop handler. */
 export const CHEST_MIME = 'application/answersdoc-chest';
@@ -31,11 +31,13 @@ const PROMPT_PRESETS = [
 export function BoardChest({
   placedIds,
   onPlaceMedia,
-  onPlacePrompt
+  onPlacePrompt,
+  onRecallMedia
 }: {
   placedIds: Set<string>;
   onPlaceMedia: (mediaId: string) => void;
   onPlacePrompt: (text: string) => void;
+  onRecallMedia: (mediaId: string) => void;
 }) {
   const { projectMedia } = useRag();
   const [open, setOpen] = useState<string | null>(null);
@@ -128,16 +130,27 @@ export function BoardChest({
                 return (
                   <div
                     key={m.id}
-                    draggable
-                    onDragStart={(e) => {
-                      e.dataTransfer.setData(
-                        CHEST_MIME,
-                        JSON.stringify({ kind: 'media', id: m.id })
-                      );
-                      e.dataTransfer.effectAllowed = 'copy';
-                    }}
-                    onClick={() => onPlaceMedia(m.id)}
-                    className="flex cursor-grab items-center gap-2.5 rounded-[10px] px-2 py-1.5 transition-colors hover:bg-[rgb(var(--hairline)/0.05)] active:cursor-grabbing"
+                    // Already on the board → can't add a second copy; greyed,
+                    // not draggable, with a Recall button to pull it back.
+                    draggable={!placed}
+                    onDragStart={
+                      placed
+                        ? undefined
+                        : (e) => {
+                            e.dataTransfer.setData(
+                              CHEST_MIME,
+                              JSON.stringify({ kind: 'media', id: m.id })
+                            );
+                            e.dataTransfer.effectAllowed = 'copy';
+                          }
+                    }
+                    onClick={() => !placed && onPlaceMedia(m.id)}
+                    className={cn(
+                      'flex items-center gap-2.5 rounded-[10px] px-2 py-1.5 transition-colors',
+                      placed
+                        ? 'cursor-default opacity-50'
+                        : 'cursor-grab hover:bg-[rgb(var(--hairline)/0.05)] active:cursor-grabbing'
+                    )}
                   >
                     <MediaIcon type={m.type} size="sm" />
                     <span className="min-w-0 flex-1">
@@ -145,11 +158,24 @@ export function BoardChest({
                         {m.name}
                       </span>
                       <span className="block text-[10.5px] text-muted-foreground/65">
-                        {m.status === 'indexed' ? `${m.chunks} chunks` : m.status}
+                        {placed
+                          ? 'on the board'
+                          : m.status === 'indexed'
+                          ? `${m.chunks} chunks`
+                          : m.status}
                       </span>
                     </span>
                     {placed && (
-                      <Check className="h-3.5 w-3.5 shrink-0 text-emerald-500" />
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onRecallMedia(m.id);
+                        }}
+                        title="Recall — remove from the board and return it here"
+                        className="flex h-6 shrink-0 items-center gap-1 rounded-full bg-foreground/[0.06] px-2 text-[10px] font-bold uppercase tracking-wide text-muted-foreground transition-colors hover:bg-foreground/[0.12] hover:text-foreground"
+                      >
+                        <RotateCcw className="h-3 w-3" /> R
+                      </button>
                     )}
                   </div>
                 );

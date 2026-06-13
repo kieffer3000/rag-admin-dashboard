@@ -134,6 +134,10 @@ interface BoardCtxState {
   /** Board for the ACTIVE project (lazily seeded). */
   board: BoardState;
   setBoard: (updater: (prev: BoardState) => BoardState) => void;
+  /** Update the board WITHOUT marking the project user-edited — for React
+   *  Flow's internal noise (node measurement, selection) so it can't block
+   *  the saved-board load on mount. */
+  setBoardSilent: (updater: (prev: BoardState) => BoardState) => void;
   /** Chat messages per brain node id. */
   brainMessages: Record<string, ChatMessage[]>;
   addBrainMessage: (brainId: string, m: ChatMessage) => void;
@@ -357,15 +361,22 @@ export function BoardProvider({ children }: { children: ReactNode }) {
       .catch(() => setSaveStatus('local'));
   }, [activeProjectId, buildDoc]);
 
-  const setBoard = useCallback(
+  const setBoardSilent = useCallback(
     (updater: (prev: BoardState) => BoardState) => {
-      touched.current.add(activeProjectId);
       setBoards((prev) => {
         const cur = prev[activeProjectId] ?? board;
         return { ...prev, [activeProjectId]: updater(cur) };
       });
     },
     [activeProjectId, board]
+  );
+
+  const setBoard = useCallback(
+    (updater: (prev: BoardState) => BoardState) => {
+      touched.current.add(activeProjectId); // a genuine user edit
+      setBoardSilent(updater);
+    },
+    [activeProjectId, setBoardSilent]
   );
 
   const updateBoardNodeData = useCallback(
@@ -528,6 +539,7 @@ export function BoardProvider({ children }: { children: ReactNode }) {
   const value: BoardCtxState = {
     board,
     setBoard,
+    setBoardSilent,
     brainMessages,
     addBrainMessage,
     updateBrainMessage,

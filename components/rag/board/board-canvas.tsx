@@ -80,7 +80,7 @@ function retile(nodes: BoardNode[], hubId: string): BoardNode[] {
 }
 
 function BoardCanvasInner() {
-  const { board, setBoard, nextBoardId, busyBrains, saveStatus, saveNow } =
+  const { board, setBoard, setBoardSilent, nextBoardId, busyBrains, saveStatus, saveNow } =
     useBoard();
   const { media, projectMedia, addMedia, updateMedia } = useRag();
   const { getIntersectingNodes, screenToFlowPosition, fitView } = useReactFlow();
@@ -118,21 +118,36 @@ function BoardCanvasInner() {
   );
 
   const onNodesChange = useCallback(
-    (changes: NodeChange[]) =>
-      setBoard((prev) => ({
+    (changes: NodeChange[]) => {
+      // Only a genuine edit (drag/add/remove) marks the project touched; mount
+      // measurement ('dimensions') + selection must NOT, or they'd block the
+      // saved-board load on refresh.
+      const userEdit = changes.some(
+        (c) =>
+          c.type === 'position' ||
+          c.type === 'add' ||
+          c.type === 'remove' ||
+          c.type === 'replace'
+      );
+      (userEdit ? setBoard : setBoardSilent)((prev) => ({
         ...prev,
         nodes: applyNodeChanges(changes, prev.nodes as Node[]) as BoardNode[]
-      })),
-    [setBoard]
+      }));
+    },
+    [setBoard, setBoardSilent]
   );
 
   const onEdgesChange = useCallback(
-    (changes: EdgeChange[]) =>
-      setBoard((prev) => ({
+    (changes: EdgeChange[]) => {
+      const userEdit = changes.some(
+        (c) => c.type === 'add' || c.type === 'remove' || c.type === 'replace'
+      );
+      (userEdit ? setBoard : setBoardSilent)((prev) => ({
         ...prev,
         edges: applyEdgeChanges(changes, prev.edges as Edge[])
-      })),
-    [setBoard]
+      }));
+    },
+    [setBoard, setBoardSilent]
   );
 
   const onConnect = useCallback(
@@ -589,6 +604,11 @@ function BoardCanvasInner() {
       }
       const pos = screenToFlowPosition({ x: e.clientX, y: e.clientY });
       if (payload.kind === 'media' && payload.id) {
+        // One copy of a source per board — refuse a duplicate drop.
+        const exists = board.nodes.some(
+          (n) => n.type === 'chip' && n.data.mediaId === payload.id
+        );
+        if (exists) return;
         pushNode({
           id: nextBoardId('chip'),
           type: 'chip',
@@ -609,7 +629,32 @@ function BoardCanvasInner() {
         });
       }
     },
-    [screenToFlowPosition, pushNode, nextBoardId]
+    [screenToFlowPosition, pushNode, nextBoardId, board.nodes]
+  );
+
+  /** Recall: pull every copy of a source off the board (and out of any box),
+   *  returning it to "available" in the Chest. */
+  const recallMedia = useCallback(
+    (mediaId: string) => {
+      setBoard((prev) => {
+        const removeIds = new Set(
+          prev.nodes
+            .filter((n) => n.type === 'chip' && n.data.mediaId === mediaId)
+            .map((n) => n.id)
+        );
+        if (!removeIds.size) return prev;
+        const hubs = new Set(
+          prev.nodes
+            .filter((n) => removeIds.has(n.id) && n.parentId)
+            .map((n) => n.parentId as string)
+        );
+        let nodes = prev.nodes.filter((n) => !removeIds.has(n.id));
+        for (const h of hubs) nodes = retile(nodes, h);
+        const edges = prev.edges.filter((e) => !removeIds.has(e.source));
+        return { ...prev, nodes, edges };
+      });
+    },
+    [setBoard]
   );
 
   // Ants march ONLY while a brain is thinking — and only on ITS edges.
@@ -1067,14 +1112,16 @@ function BoardCanvasInner() {
           the canvas as puzzle pieces */}
       <BoardChest
         placedIds={placedIds}
-        onPlaceMedia={(mediaId) =>
+        onRecallMedia={recallMedia}
+        onPlaceMedia={(mediaId) => {
+          if (placedIds.has(mediaId)) return; // no duplicate sources
           pushNode({
             id: nextBoardId('chip'),
             type: 'chip',
             position: centerPos(),
             data: { mediaId }
-          })
-        }
+          });
+        }}
         onPlacePrompt={(text) =>
           pushNode({
             id: nextBoardId('prompt'),
