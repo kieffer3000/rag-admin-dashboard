@@ -29,6 +29,27 @@ import {
 let boardIdCounter = 5000;
 const nextId = (prefix: string) => `${prefix}${++boardIdCounter}`;
 
+// ---- Local persistence (the safety net) ----------------------------------
+// The DB (Neon) gives cross-device sync, but can be unconfigured or fail
+// silently. localStorage GUARANTEES the board survives a refresh on this
+// device, so a user can never lose their work to a backend hiccup.
+const LS_PREFIX = 'answersdoc_board_v2_';
+function readLocal(pid: string): any | null {
+  try {
+    const s = localStorage.getItem(LS_PREFIX + pid);
+    return s ? JSON.parse(s) : null;
+  } catch {
+    return null;
+  }
+}
+function writeLocal(pid: string, doc: unknown) {
+  try {
+    localStorage.setItem(LS_PREFIX + pid, JSON.stringify(doc));
+  } catch {
+    /* quota / private mode — DB + in-memory still hold it */
+  }
+}
+
 /** After loading a saved board, advance the counter past existing numeric ids
  *  so freshly-created nodes/edges never collide with persisted ones. */
 function bumpCounterFrom(ids: string[]) {
@@ -136,6 +157,10 @@ interface BoardCtxState {
   busyBrains: Set<string>;
   setBrainBusy: (brainId: string, busy: boolean) => void;
   nextBoardId: (prefix: string) => string;
+  /** Persistence status for the save indicator. */
+  saveStatus: 'saved' | 'saving' | 'local';
+  /** Force an immediate save (the manual Save button). */
+  saveNow: () => void;
 }
 
 const Ctx = createContext<BoardCtxState | null>(null);
@@ -150,6 +175,9 @@ export function BoardProvider({ children }: { children: ReactNode }) {
    *  clobber fresh local work (e.g. a note typed before the fetch resolved). */
   const touched = useRef<Set<string>>(new Set());
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [saveStatus, setSaveStatus] = useState<'saved' | 'saving' | 'local'>('saved');
+  /** Latest serialized doc per project — for synchronous flush on page-hide. */
+  const latestDoc = useRef<{ pid: string; doc: any } | null>(null);
 
   const board = useMemo<BoardState>(() => {
     return boards[activeProjectId] ?? seedBoard(projectMedia);
@@ -164,9 +192,24 @@ export function BoardProvider({ children }: { children: ReactNode }) {
     let cancelled = false;
     (async () => {
       try {
-        const res = await fetch(`/api/board?projectId=${encodeURIComponent(pid)}`);
-        if (res.ok) {
-          const { data } = await res.json();
+        // Load from the DB AND localStorage; use whichever is newer so a
+        // stale/offline DB can never wipe fresher local work, and a DB
+        // outage still restores from this device.
+        let dbData: any = null;
+        try {
+          const res = await fetch(`/api/board?projectId=${encodeURIComponent(pid)}`);
+          if (res.ok) dbData = (await res.json()).data;
+        } catch {
+          /* network/DB down — fall back to local */
+        }
+        const localData = readLocal(pid);
+        let data = dbData;
+        if (
+          localData &&
+          (!dbData || (localData.savedAt ?? 0) > (dbData.savedAt ?? 0))
+        )
+          data = localData;
+        {
           if (!cancelled && data) {
             if (Array.isArray(data.media)) hydrateMedia(data.media, pid);
             bumpCounterFrom([
@@ -223,34 +266,92 @@ export function BoardProvider({ children }: { children: ReactNode }) {
     };
   }, [activeProjectId, hydrateMedia]);
 
-  // ---- AUTOSAVE (debounced) once the project is hydrated ----
+  /** Build the persistable document for the active project. */
+  const buildDoc = useCallback(() => {
+    const brainIds = new Set(
+      board.nodes.filter((n) => n.type === 'brain').map((n) => n.id)
+    );
+    const msgs = Object.fromEntries(
+      Object.entries(brainMessages).filter(([k]) => brainIds.has(k))
+    );
+    return {
+      nodes: board.nodes,
+      edges: board.edges,
+      brainMessages: msgs,
+      media: projectMedia,
+      savedAt: Date.now()
+    };
+  }, [board, brainMessages, projectMedia]);
+
+  // ---- AUTOSAVE: local IMMEDIATELY (guaranteed), DB debounced ----
   useEffect(() => {
     const pid = activeProjectId;
     if (!hydrated.current.has(pid)) return;
+    const doc = buildDoc();
+    latestDoc.current = { pid, doc };
+    writeLocal(pid, doc); // synchronous — survives an instant refresh
+    setSaveStatus('saving');
     if (saveTimer.current) clearTimeout(saveTimer.current);
     saveTimer.current = setTimeout(() => {
-      const brainIds = new Set(
-        board.nodes.filter((n) => n.type === 'brain').map((n) => n.id)
-      );
-      const msgs = Object.fromEntries(
-        Object.entries(brainMessages).filter(([k]) => brainIds.has(k))
-      );
-      const doc = {
-        nodes: board.nodes,
-        edges: board.edges,
-        brainMessages: msgs,
-        media: projectMedia
-      };
       fetch('/api/board', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ projectId: pid, data: doc })
-      }).catch(() => {});
-    }, 1000);
+      })
+        .then((r) => setSaveStatus(r.ok ? 'saved' : 'local'))
+        .catch(() => setSaveStatus('local')); // saved on-device, cloud failed
+    }, 800);
     return () => {
       if (saveTimer.current) clearTimeout(saveTimer.current);
     };
-  }, [board, brainMessages, projectMedia, activeProjectId]);
+  }, [buildDoc, activeProjectId]);
+
+  // ---- FLUSH on page-hide / tab-switch (closes the debounce gap) ----
+  useEffect(() => {
+    const flush = () => {
+      const ld = latestDoc.current;
+      if (!ld) return;
+      writeLocal(ld.pid, ld.doc); // sync, always succeeds
+      try {
+        // keepalive lets the request outlive the page (best-effort cloud save)
+        fetch('/api/board', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ projectId: ld.pid, data: ld.doc }),
+          keepalive: true
+        }).catch(() => {});
+      } catch {
+        /* ignore */
+      }
+    };
+    const onVis = () => {
+      if (document.visibilityState === 'hidden') flush();
+    };
+    window.addEventListener('pagehide', flush);
+    window.addEventListener('beforeunload', flush);
+    document.addEventListener('visibilitychange', onVis);
+    return () => {
+      window.removeEventListener('pagehide', flush);
+      window.removeEventListener('beforeunload', flush);
+      document.removeEventListener('visibilitychange', onVis);
+    };
+  }, []);
+
+  const saveNow = useCallback(() => {
+    const pid = activeProjectId;
+    const doc = buildDoc();
+    latestDoc.current = { pid, doc };
+    writeLocal(pid, doc);
+    setSaveStatus('saving');
+    if (saveTimer.current) clearTimeout(saveTimer.current);
+    fetch('/api/board', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ projectId: pid, data: doc })
+    })
+      .then((r) => setSaveStatus(r.ok ? 'saved' : 'local'))
+      .catch(() => setSaveStatus('local'));
+  }, [activeProjectId, buildDoc]);
 
   const setBoard = useCallback(
     (updater: (prev: BoardState) => BoardState) => {
@@ -426,7 +527,9 @@ export function BoardProvider({ children }: { children: ReactNode }) {
     removeBoardEdge,
     busyBrains,
     setBrainBusy,
-    nextBoardId: nextId
+    nextBoardId: nextId,
+    saveStatus,
+    saveNow
   };
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;

@@ -37,6 +37,8 @@ import {
   STACK_GRAB
 } from '@/lib/rag/board/types';
 import { playSnap, playPop } from '@/lib/rag/board/sound';
+import { Check, Loader2, CloudOff } from 'lucide-react';
+import { cn } from '@/lib/utils';
 import { ChipNode } from './chip-node';
 import { HubNode } from './hub-node';
 import { BrainNode } from './brain-node';
@@ -77,7 +79,8 @@ function retile(nodes: BoardNode[], hubId: string): BoardNode[] {
 }
 
 function BoardCanvasInner() {
-  const { board, setBoard, nextBoardId, busyBrains } = useBoard();
+  const { board, setBoard, nextBoardId, busyBrains, saveStatus, saveNow } =
+    useBoard();
   const { media, projectMedia, addMedia, updateMedia } = useRag();
   const { getIntersectingNodes, screenToFlowPosition, fitView } = useReactFlow();
   const wrapRef = useRef<HTMLDivElement>(null);
@@ -770,6 +773,31 @@ function BoardCanvasInner() {
             'radial-gradient(560px circle at var(--spot-x, 50%) var(--spot-y, 40%), hsl(var(--accent) / 0.06), transparent 70%)'
         }}
       />
+
+      {/* save indicator + manual save — work persists locally on this device
+          AND to the cloud; click to force a save. */}
+      <button
+        onClick={saveNow}
+        title="Everything autosaves. Click to save now."
+        className={cn(
+          'absolute right-4 top-4 z-20 flex items-center gap-1.5 rounded-full bg-card px-3 py-1.5 text-[11.5px] font-medium shadow-[0_2px_8px_rgb(0_0_0/0.08)] transition-colors hover:bg-[rgb(var(--hairline)/0.04)] dark:ring-1 dark:ring-white/[0.08]',
+          saveStatus === 'local' ? 'text-amber-600' : 'text-muted-foreground'
+        )}
+      >
+        {saveStatus === 'saving' ? (
+          <>
+            <Loader2 className="h-3.5 w-3.5 animate-spin" /> Saving…
+          </>
+        ) : saveStatus === 'local' ? (
+          <>
+            <CloudOff className="h-3.5 w-3.5" /> Saved on device
+          </>
+        ) : (
+          <>
+            <Check className="h-3.5 w-3.5 text-emerald-500" /> Saved
+          </>
+        )}
+      </button>
       <ReactFlow
         nodes={board.nodes as Node[]}
         edges={liveEdges}
