@@ -5,16 +5,43 @@ import { Handle, NodeResizer, Position, type NodeProps } from '@xyflow/react';
 import { cn } from '@/lib/utils';
 import { Type } from 'lucide-react';
 import { useBoard } from '@/lib/rag/board/store';
-import type { TextNodeData } from '@/lib/rag/board/types';
+import { CHIP_W, CHIP_H, type TextNodeData } from '@/lib/rag/board/types';
 
 /**
  * Ephemeral context node ("Your Goal or Offer"). Wired text rides into the
  * brain's PROMPT — it is never indexed into the knowledge base. Drag by the
- * header; resize from the corners when selected.
+ * header; resize from the corners when selected. When docked inside a box it
+ * renders as a compact context tile (the box becomes its plug).
  */
-function TextNodeInner({ id, data, selected }: NodeProps) {
+function TextNodeInner({ id, data, selected, parentId }: NodeProps) {
   const d = data as TextNodeData;
   const { updateBoardNodeData } = useBoard();
+
+  // Docked in a box → compact context tile that fits the grid.
+  if (parentId) {
+    return (
+      <div
+        style={{ width: CHIP_W, height: CHIP_H }}
+        title={d.text || 'Context note'}
+        className={cn(
+          'relative flex items-center gap-2 overflow-hidden rounded-[11px] bg-card px-3 ring-1 ring-black/[0.04] dark:ring-white/[0.06]',
+          'shadow-[0_1px_2px_rgb(0_0_0/0.10)]',
+          selected && 'ring-2 ring-sky-400/60'
+        )}
+      >
+        <span className="pointer-events-none absolute bottom-0 left-0 top-0 w-[3px] rounded-l-[11px] bg-sky-500" />
+        <Type className="h-3.5 w-3.5 shrink-0 text-sky-600" />
+        <span className="min-w-0 flex-1 leading-tight">
+          <span className="block text-[11px] font-semibold text-sky-700 dark:text-sky-400">
+            Context note
+          </span>
+          <span className="block truncate text-[10px] text-muted-foreground/70">
+            {d.text?.trim() || 'empty'}
+          </span>
+        </span>
+      </div>
+    );
+  }
 
   return (
     <div

@@ -373,6 +373,13 @@ export function BoardProvider({ children }: { children: ReactNode }) {
             nodes
               .filter((n) => n.type === 'chip' && n.parentId === src.id)
               .forEach((n) => ids.push(n.data.mediaId as string));
+            // Context notes docked in the box ride along as prompt context.
+            nodes
+              .filter((n) => n.type === 'textNode' && n.parentId === src.id)
+              .forEach((n) => {
+                const t = (n.data.text as string)?.trim();
+                if (t) contextTexts.push(t);
+              });
           }
         } else if (src.type === 'textNode') {
           const t = (src.data.text as string)?.trim();

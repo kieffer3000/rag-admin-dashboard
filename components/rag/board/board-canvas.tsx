@@ -59,11 +59,11 @@ const edgeTypes = { scope: ScopeEdge };
 
 const SOURCE_TYPES = new Set(['chip', 'hub', 'textNode']);
 
-/** Re-tile a hub's docked chips into the compact 2-col grid. */
+/** Re-tile a hub's docked tiles (chips + context notes) into the 2-col grid. */
 function retile(nodes: BoardNode[], hubId: string): BoardNode[] {
   let i = 0;
   return nodes.map((n) =>
-    n.type === 'chip' && n.parentId === hubId
+    (n.type === 'chip' || n.type === 'textNode') && n.parentId === hubId
       ? { ...n, position: hubSlot(i++) }
       : n
   );
@@ -94,6 +94,16 @@ function BoardCanvasInner() {
       ) as Node | undefined;
     },
     [getIntersectingNodes, mediaTypeOf]
+  );
+
+  /** A cluster box under a dragged node — context notes only dock into
+   *  clusters (a named sub-project), never typed media hubs. */
+  const hitCluster = useCallback(
+    (node: Node): Node | undefined =>
+      getIntersectingNodes(node).find(
+        (n) => n.type === 'hub' && n.data.mediaType === 'cluster'
+      ) as Node | undefined,
+    [getIntersectingNodes]
   );
 
   const onNodesChange = useCallback(
@@ -171,6 +181,21 @@ function BoardCanvasInner() {
   /** Magnetic hub glow + stack movement, per drag tick. */
   const onNodeDrag = useCallback(
     (_: unknown, node: Node) => {
+      // Context notes glow a cluster box they're dragged over (dock target).
+      if (node.type === 'textNode') {
+        const cl = hitCluster(node);
+        setBoard((prev) => ({
+          ...prev,
+          nodes: prev.nodes.map((n) =>
+            n.type === 'hub'
+              ? n.data.glow === (n.id === cl?.id)
+                ? n
+                : { ...n, data: { ...n.data, glow: n.id === cl?.id } }
+              : n
+          )
+        }));
+        return;
+      }
       if (node.type !== 'chip') return;
       const hub = hitHub(node);
 
@@ -241,7 +266,7 @@ function BoardCanvasInner() {
         return { ...prev, nodes };
       });
     },
-    [hitHub, setBoard]
+    [hitHub, hitCluster, setBoard]
   );
 
   /** Dock / undock / snap on drop — stack-aware (the unit lands together). */
@@ -249,6 +274,57 @@ function BoardCanvasInner() {
     (_: unknown, node: Node) => {
       const s = dragSession.current;
       dragSession.current = null;
+
+      // Context note dropped on a cluster box → dock it (it joins the family
+      // as prompt context); dropped outside → undock to the canvas.
+      if (node.type === 'textNode') {
+        const cl = hitCluster(node);
+        setTimeout(() => setBoard((prev) => {
+          let nodes = prev.nodes.map((n) =>
+            n.type === 'hub' && n.data.glow
+              ? { ...n, data: { ...n.data, glow: false } }
+              : n
+          );
+          let edges = prev.edges;
+          const tn = nodes.find((n) => n.id === node.id);
+          if (!tn) return { ...prev, nodes };
+          if (cl && tn.parentId !== cl.id) {
+            const oldHub = tn.parentId;
+            nodes = nodes.filter((n) => n.id !== tn.id);
+            nodes.push({
+              ...tn,
+              parentId: cl.id,
+              position: { x: 0, y: 0 },
+              width: CHIP_W,
+              height: CHIP_H
+            });
+            nodes = retile(nodes, cl.id);
+            if (oldHub) nodes = retile(nodes, oldHub);
+            edges = edges.filter((e) => e.source !== tn.id); // box is the plug
+          } else if (!cl && tn.parentId) {
+            const parent = nodes.find((n) => n.id === tn.parentId);
+            const abs = parent
+              ? {
+                  x: parent.position.x + node.position.x,
+                  y: parent.position.y + node.position.y
+                }
+              : node.position;
+            const oldHub = tn.parentId;
+            nodes = nodes.map((n) =>
+              n.id === tn.id
+                ? { ...n, parentId: undefined, position: abs, width: 234, height: 132 }
+                : n
+            );
+            nodes = retile(nodes, oldHub);
+          } else if (cl && tn.parentId === cl.id) {
+            // dropped inside its own box → settle back into the grid
+            nodes = retile(nodes, cl.id);
+          }
+          return { ...prev, nodes, edges };
+        }), 0);
+        return;
+      }
+
       if (node.type !== 'chip') return;
       // The set of pieces travelling together this gesture.
       const unitIds =
@@ -436,7 +512,7 @@ function BoardCanvasInner() {
         return { ...prev, nodes, edges };
       }), 0);
     },
-    [hitHub, setBoard, media, mediaTypeOf]
+    [hitHub, hitCluster, setBoard, media, mediaTypeOf]
   );
 
   /** Double-click a module to zoom the viewport straight to it. Ignores
