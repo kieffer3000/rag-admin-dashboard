@@ -53,7 +53,10 @@ import {
   Pencil,
   Quote,
   Sparkles,
-  Volume2
+  Volume2,
+  Copy,
+  FileText,
+  Type as TypeIcon
 } from 'lucide-react';
 import type { BrainData } from '@/lib/rag/board/types';
 
@@ -319,6 +322,36 @@ function BrainNodeInner({ id, data, selected }: NodeProps) {
       }
     },
     [voicingId, d.name, board, id, addMedia, updateMedia, setBoard, nextBoardId]
+  );
+
+  /**
+   * Edit in Text Block: pop the answer out as an editable text node on the
+   * canvas — a reusable artifact you can refine and re-wire as context. Places
+   * it just below-right of the brain.
+   */
+  const handleEditInText = useCallback(
+    (msg: ChatMessage) => {
+      if (!msg.content) return;
+      const self = board.nodes.find((n) => n.id === id);
+      const pos = self
+        ? { x: self.position.x + (self.width ?? 380) + 40, y: self.position.y + 90 }
+        : { x: 0, y: 0 };
+      setBoard((prev) => ({
+        ...prev,
+        nodes: [
+          ...prev.nodes,
+          {
+            id: nextBoardId('text'),
+            type: 'textNode',
+            position: pos,
+            width: 300,
+            height: 200,
+            data: { text: msg.content }
+          }
+        ]
+      }));
+    },
+    [board, id, setBoard, nextBoardId]
   );
 
   function appendToComposer(text: string) {
@@ -818,6 +851,7 @@ function BrainNodeInner({ id, data, selected }: NodeProps) {
             modelLabel={model.label}
             onVoiceover={handleVoiceover}
             voicing={voicingId === m.id}
+            onEdit={handleEditInText}
           />
         ))}
       </div>
@@ -1028,7 +1062,8 @@ function BrainMessage({
   onCiteHover,
   modelLabel,
   onVoiceover,
-  voicing = false
+  voicing = false,
+  onEdit
 }: {
   m: ChatMessage;
   large?: boolean;
@@ -1037,7 +1072,39 @@ function BrainMessage({
   modelLabel?: string;
   onVoiceover?: (m: ChatMessage) => void;
   voicing?: boolean;
+  onEdit?: (m: ChatMessage) => void;
 }) {
+  const bodyRef = useRef<HTMLDivElement>(null);
+  const [copyMenu, setCopyMenu] = useState(false);
+  const [copied, setCopied] = useState<'rich' | 'plain' | null>(null);
+
+  const copyRich = async () => {
+    const el = bodyRef.current;
+    if (!el) return;
+    const html = el.innerHTML;
+    const text = el.innerText;
+    try {
+      await navigator.clipboard.write([
+        new ClipboardItem({
+          'text/html': new Blob([html], { type: 'text/html' }),
+          'text/plain': new Blob([text], { type: 'text/plain' })
+        })
+      ]);
+    } catch {
+      await navigator.clipboard.writeText(text); // fallback if ClipboardItem unsupported
+    }
+    setCopied('rich');
+    setTimeout(() => setCopied(null), 1400);
+    setCopyMenu(false);
+  };
+
+  const copyPlain = async () => {
+    const text = bodyRef.current?.innerText ?? m.content;
+    await navigator.clipboard.writeText(text);
+    setCopied('plain');
+    setTimeout(() => setCopied(null), 1400);
+    setCopyMenu(false);
+  };
   if (m.role === 'user') {
     return (
       // "Gel" bubble: a bright vertical gradient + a translucent white top
@@ -1055,7 +1122,9 @@ function BrainMessage({
   return (
     <div className="group self-start">
       {m.content ? (
-        <AnswerBody content={m.content} large={large} />
+        <div ref={bodyRef}>
+          <AnswerBody content={m.content} large={large} />
+        </div>
       ) : (
         <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground/50" />
       )}
@@ -1066,6 +1135,15 @@ function BrainMessage({
             <span className="text-[11px] text-muted-foreground/55">{modelLabel}</span>
           )}
           <div className="ml-auto flex items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100">
+            {onEdit && (
+              <button
+                onClick={() => onEdit(m)}
+                title="Edit in text block"
+                className="nodrag flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground/70 transition-colors hover:bg-accent/10 hover:text-accent"
+              >
+                <Pencil className="h-4 w-4" />
+              </button>
+            )}
             {onVoiceover && (
               <button
                 onClick={() => !voicing && onVoiceover(m)}
@@ -1080,6 +1158,58 @@ function BrainMessage({
                 )}
               </button>
             )}
+            <div className="relative">
+              <button
+                onClick={() => setCopyMenu((v) => !v)}
+                title="Copy"
+                className="nodrag flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground/70 transition-colors hover:bg-accent/10 hover:text-accent"
+              >
+                {copied ? (
+                  <Check className="h-4 w-4 text-emerald-500" />
+                ) : (
+                  <Copy className="h-4 w-4" />
+                )}
+              </button>
+              {copyMenu && (
+                <>
+                  {/* click-away catcher */}
+                  <div
+                    className="fixed inset-0 z-10"
+                    onClick={() => setCopyMenu(false)}
+                  />
+                  <div className="absolute right-0 z-20 mt-1 w-56 overflow-hidden rounded-xl border border-[rgb(var(--hairline)/0.16)] bg-card p-1 shadow-xl">
+                    <button
+                      onClick={copyRich}
+                      className="nodrag flex w-full items-start gap-2.5 rounded-lg px-2.5 py-2 text-left transition-colors hover:bg-accent/10"
+                    >
+                      <FileText className="mt-0.5 h-4 w-4 shrink-0 text-foreground/70" />
+                      <span className="leading-tight">
+                        <span className="block text-[13px] font-semibold">
+                          Copy with formatting
+                        </span>
+                        <span className="block text-[11px] text-muted-foreground/70">
+                          Perfect for pasting into Notion, Google Docs or blogs
+                        </span>
+                      </span>
+                    </button>
+                    <button
+                      onClick={copyPlain}
+                      className="nodrag flex w-full items-start gap-2.5 rounded-lg px-2.5 py-2 text-left transition-colors hover:bg-accent/10"
+                    >
+                      <TypeIcon className="mt-0.5 h-4 w-4 shrink-0 text-foreground/70" />
+                      <span className="leading-tight">
+                        <span className="block text-[13px] font-semibold">
+                          Copy as plain text
+                        </span>
+                        <span className="block text-[11px] text-muted-foreground/70">
+                          Great for tweets, plain editors, or clean sharing
+                        </span>
+                      </span>
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
           </div>
         </div>
       )}
