@@ -1138,7 +1138,7 @@ function BrainMessage({
             {onEdit && (
               <button
                 onClick={() => onEdit(m)}
-                title="Edit in text block"
+                title="Open as editable note"
                 className="nodrag flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground/70 transition-colors hover:bg-accent/10 hover:text-accent"
               >
                 <Pencil className="h-4 w-4" />
@@ -1148,7 +1148,7 @@ function BrainMessage({
               <button
                 onClick={() => !voicing && onVoiceover(m)}
                 disabled={voicing}
-                title="Create voiceover"
+                title="Read aloud"
                 className="nodrag flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground/70 transition-colors hover:bg-accent/10 hover:text-accent disabled:opacity-60"
               >
                 {voicing ? (
@@ -1185,10 +1185,10 @@ function BrainMessage({
                       <FileText className="mt-0.5 h-4 w-4 shrink-0 text-foreground/70" />
                       <span className="leading-tight">
                         <span className="block text-[13px] font-semibold">
-                          Copy with formatting
+                          Copy formatted
                         </span>
                         <span className="block text-[11px] text-muted-foreground/70">
-                          Perfect for pasting into Notion, Google Docs or blogs
+                          Keeps headings, bold &amp; links — drops cleanly into docs and editors
                         </span>
                       </span>
                     </button>
@@ -1199,10 +1199,10 @@ function BrainMessage({
                       <TypeIcon className="mt-0.5 h-4 w-4 shrink-0 text-foreground/70" />
                       <span className="leading-tight">
                         <span className="block text-[13px] font-semibold">
-                          Copy as plain text
+                          Copy plain
                         </span>
                         <span className="block text-[11px] text-muted-foreground/70">
-                          Great for tweets, plain editors, or clean sharing
+                          Strips all styling to bare text — best for posts and quick pastes
                         </span>
                       </span>
                     </button>
