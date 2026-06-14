@@ -76,6 +76,9 @@ async function deleteExistingChunks(sourceId: string, namespace: string): Promis
       paginationToken = j.pagination?.next;
       if (!paginationToken) break;
     }
+    // Also clear any LEGACY whole-document vector (id = base source_id, no '#'),
+    // left over from before chunking — the prefix list above won't catch it.
+    ids.push(sourceId);
     if (ids.length) {
       await fetch(`${host}/vectors/delete`, {
         method: 'POST',
