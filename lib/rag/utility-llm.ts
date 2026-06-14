@@ -18,13 +18,21 @@ export async function runUtilityLLM(
         body: JSON.stringify({ prompt })
       });
       if (r.ok) {
-        // Accept either a raw-text body (Make response body = {{2.result}}) or
-        // a JSON { result } wrapper — whichever the scenario is set up to return.
         const raw = (await r.text()).trim();
-        if (raw) {
+        // 'Accepted' = Make queued the call (scenario busy/off) — not a result.
+        if (raw && raw !== 'Accepted') {
+          // Accept raw text, or unwrap a single-string JSON value if the model
+          // returned JSON (e.g. {"result":…} / {"query":…} / {"text":…}).
           try {
             const j = JSON.parse(raw);
-            if (typeof j?.result === 'string' && j.result.trim()) return j.result.trim();
+            if (j && typeof j === 'object') {
+              const v =
+                j.result ?? j.query ?? j.text ?? j.answer ?? j.output;
+              if (typeof v === 'string' && v.trim()) return v.trim();
+              const vals = Object.values(j);
+              if (vals.length === 1 && typeof vals[0] === 'string' && vals[0].trim())
+                return (vals[0] as string).trim();
+            }
           } catch {
             /* not JSON — use the raw text */
           }
