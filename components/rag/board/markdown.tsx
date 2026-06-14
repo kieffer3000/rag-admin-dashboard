@@ -2,7 +2,37 @@
 
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import dynamic from 'next/dynamic';
 import { cn } from '@/lib/utils';
+
+// Lazy-loaded so mermaid.js / recharts never land in the main bundle — they
+// load only when an answer actually contains a diagram or chart block.
+const MermaidBlock = dynamic(
+  () => import('./mermaid-block').then((m) => m.MermaidBlock),
+  { ssr: false }
+);
+const ChartBlock = dynamic(
+  () => import('./chart-block').then((m) => m.ChartBlock),
+  { ssr: false }
+);
+
+/** Split an answer into prose + fenced graphic blocks (```mermaid / ```chart). */
+function splitGraphicBlocks(
+  content: string
+): { type: 'prose' | 'mermaid' | 'chart'; text: string }[] {
+  const re = /```(mermaid|chart)\s*\n([\s\S]*?)```/g;
+  const out: { type: 'prose' | 'mermaid' | 'chart'; text: string }[] = [];
+  let last = 0;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(content)) !== null) {
+    if (m.index > last)
+      out.push({ type: 'prose', text: content.slice(last, m.index) });
+    out.push({ type: m[1] as 'mermaid' | 'chart', text: m[2] });
+    last = m.index + m[0].length;
+  }
+  if (last < content.length) out.push({ type: 'prose', text: content.slice(last) });
+  return out;
+}
 
 /** Looks like an HTML document fragment (Make can now return HTML answers). */
 function looksLikeHtml(s: string): boolean {
@@ -24,10 +54,36 @@ function sanitizeHtml(html: string): string {
 }
 
 /**
- * Renders an assistant answer — HTML when Make returns HTML (for richer
- * layouts), otherwise markdown. HTML is sanitized and styled to match.
+ * Renders an assistant answer. Splits out ```mermaid (diagrams) and ```chart
+ * (data charts, JSON spec) blocks into rich renderers; the prose around them
+ * renders as HTML (when Make returns HTML) or markdown.
  */
 export function AnswerBody({
+  content,
+  large = false
+}: {
+  content: string;
+  large?: boolean;
+}) {
+  const segs = splitGraphicBlocks(content);
+  if (segs.length === 1 && segs[0].type === 'prose') {
+    return <Prose content={content} large={large} />;
+  }
+  return (
+    <>
+      {segs.map((s, i) => {
+        if (s.type === 'mermaid') return <MermaidBlock key={i} code={s.text} />;
+        if (s.type === 'chart') return <ChartBlock key={i} code={s.text} />;
+        return s.text.trim() ? (
+          <Prose key={i} content={s.text} large={large} />
+        ) : null;
+      })}
+    </>
+  );
+}
+
+/** Prose body — HTML when Make returns HTML (for richer layouts), else markdown. */
+function Prose({
   content,
   large = false
 }: {
