@@ -2,9 +2,157 @@ import { auth } from '@clerk/nextjs/server';
 
 // Proxies the Board's brain queries to the Make.com Query scenario.
 // The webhook contract is FROZEN (see BOARD_SPEC.md):
-//   request:  { question, source_ids[], scope, namespace, model }
-//   response: { answer, citations: [{ source_name, source_id, snippet, score }] }
+//   request:  { question, source_ids[], filter_json, scope, namespace, model,
+//               answer_mode, guides }
+//   response: { answer, citations: [{ source_name, source_id, snippet, score }],
+//               suggestedQuestions? }
 // Webhook URL stays server-side — this repo is public.
+//
+// Corrective-RAG retry (the old AnswersDoc "search further" loop, in code):
+// if the first call comes back a no-match (weak/empty retrieval), we reformulate
+// the question with Gemini and call Make ONCE more, then keep the better result.
+// This needs no Make change — it just calls the existing webhook again. The
+// deeper retrieval levers (higher topK, full-chunk text) live INSIDE the Make
+// scenario and are specced separately.
+
+export const runtime = 'nodejs';
+
+const NOMATCH_THRESHOLD = Number(process.env.RAG_NOMATCH_THRESHOLD ?? 0.45);
+const RETRY_ENABLED = process.env.RAG_CORRECTIVE_RETRY !== 'off';
+const REFORMULATE_MODEL =
+  process.env.RAG_REFORMULATE_MODEL ?? 'gemini-2.5-flash';
+
+interface RawCitation {
+  source_id?: string | null;
+  score?: number;
+}
+interface MakeResult {
+  answer: string;
+  citations: RawCitation[];
+  topScore: number | null;
+  noMatch: boolean;
+  suggestedQuestions: string[];
+}
+
+function modeDirective(mode: 'cited' | 'hybrid'): string {
+  return mode === 'hybrid'
+    ? 'Answer primarily from the provided sources and cite them. If the sources do not fully cover the question, you MAY add helpful general knowledge — clearly prefix any such part with "Beyond your sources:".'
+    : 'Answer ONLY from the provided sources and cite them. If the sources do not contain the answer, say so plainly rather than guessing.';
+}
+
+/** Wrap the raw user question with the mode directive, guides, and context. */
+function buildPrompt(
+  question: string,
+  mode: 'cited' | 'hybrid',
+  guides: string[],
+  contextTexts: string[]
+): string {
+  const parts = [`Instruction: ${modeDirective(mode)}`];
+  if (guides.length)
+    parts.push(
+      'Additional instructions (follow all of these):\n' +
+        guides.map((g) => `- ${g}`).join('\n')
+    );
+  if (contextTexts.length)
+    parts.push(
+      `Context from the user (not a source, do not cite): ${contextTexts.join(' | ')}`
+    );
+  parts.push(`Question: ${question}`);
+  return parts.join('\n\n');
+}
+
+/** One call to the Make Query scenario; computes the no-match signal. */
+async function callMake(
+  url: string,
+  promptedQuestion: string,
+  sourceIds: string[],
+  mode: 'cited' | 'hybrid',
+  guides: string[],
+  model: string
+): Promise<MakeResult> {
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      question: promptedQuestion,
+      source_ids: sourceIds,
+      // Pre-built Pinecone metadata filter. Make's Simple Filter UI only
+      // carries scalar values (multi-id arrays get string-coerced -> zero
+      // matches), so the scenario maps this verbatim instead.
+      filter_json: JSON.stringify({ source_id: { $in: sourceIds } }),
+      scope: 'selected',
+      answer_mode: mode,
+      guides,
+      namespace: process.env.PINECONE_NAMESPACE ?? 'user_kieffer',
+      model
+    })
+  });
+  if (!res.ok) throw new Error(`Query webhook returned ${res.status}`);
+
+  const data = await res.json();
+  const citations: RawCitation[] = (data.citations ?? []).filter(
+    (c: RawCitation) => c && c.source_id
+  );
+  const scores = citations
+    .map((c) => (typeof c.score === 'number' ? c.score : 0))
+    .filter((s) => Number.isFinite(s));
+  const topScore = scores.length ? Math.max(...scores) : null;
+
+  const rawSuggested = data.suggestedQuestions ?? data.suggested_questions ?? [];
+  const suggestedQuestions: string[] = (
+    Array.isArray(rawSuggested) ? rawSuggested : []
+  )
+    .map((s: unknown) =>
+      typeof s === 'string' ? s : ((s as { question?: string })?.question ?? '')
+    )
+    .filter((s: string) => typeof s === 'string' && s.trim())
+    .slice(0, 6);
+
+  return {
+    answer: data.answer ?? '',
+    citations,
+    topScore,
+    noMatch: topScore === null || topScore < NOMATCH_THRESHOLD,
+    suggestedQuestions
+  };
+}
+
+/** Reformulate a failed query for a second retrieval pass (Gemini). */
+async function reformulate(
+  question: string,
+  failedAnswer: string
+): Promise<string | null> {
+  const key = process.env.GEMINI_API_KEY;
+  if (!key) return null;
+  const prompt = `A vector-database search for the query below did not retrieve relevant results. Rewrite it as ONE different search query that uses alternative terminology, synonyms, and a different angle to improve retrieval. Output ONLY the rewritten query — a single line, no quotes, no preamble.\n\nOriginal query: ${question}${
+    failedAnswer ? `\n\nThe unsuccessful response was: ${failedAnswer.slice(0, 400)}` : ''
+  }`;
+  try {
+    const r = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/${REFORMULATE_MODEL}:generateContent?key=${key}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: prompt }] }],
+          generationConfig: { temperature: 0.4, maxOutputTokens: 120 }
+        })
+      }
+    );
+    if (!r.ok) return null;
+    const j = await r.json();
+    const text: string =
+      j?.candidates?.[0]?.content?.parts
+        ?.map((p: { text?: string }) => p?.text ?? '')
+        .join('') ?? '';
+    const cleaned = text.trim().split('\n')[0].replace(/^["']|["']$/g, '').trim();
+    return cleaned && cleaned.toLowerCase() !== question.toLowerCase()
+      ? cleaned
+      : null;
+  } catch {
+    return null;
+  }
+}
 
 export async function POST(req: Request) {
   const { userId } = await auth();
@@ -34,91 +182,62 @@ export async function POST(req: Request) {
     );
   }
 
-  // Answer mode: 'cited' (sources only) vs 'hybrid' (sources first, then the
-  // model may add its own knowledge for gaps, clearly marked). The Make
-  // scenario can read answer_mode; we also nudge it in-prompt so it works even
-  // before the scenario is updated.
-  const mode = body.answer_mode === 'hybrid' ? 'hybrid' : 'cited';
-  const modeDirective =
-    mode === 'hybrid'
-      ? 'Answer primarily from the provided sources and cite them. If the sources do not fully cover the question, you MAY add helpful general knowledge — clearly prefix any such part with "Beyond your sources:".'
-      : 'Answer ONLY from the provided sources and cite them. If the sources do not contain the answer, say so plainly rather than guessing.';
+  const mode: 'cited' | 'hybrid' =
+    body.answer_mode === 'hybrid' ? 'hybrid' : 'cited';
+  const model = body.model ?? 'gemini-2.5-flash';
+  const rawQuestion: string = body.question;
 
-  // Ephemeral text-node context rides in the prompt — never indexed.
-  const parts = [`Instruction: ${modeDirective}`];
-  // Prompt-piece guides steer HOW the answer is written (tone/format/stance).
-  if (guides.length)
-    parts.push(
-      'Additional instructions (follow all of these):\n' +
-        guides.map((g) => `- ${g}`).join('\n')
-    );
-  if (contextTexts.length)
-    parts.push(
-      `Context from the user (not a source, do not cite): ${contextTexts.join(' | ')}`
-    );
-  parts.push(`Question: ${body.question}`);
-  const question = parts.join('\n\n');
-
-  const res = await fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      question,
-      source_ids: sourceIds,
-      // Pre-built Pinecone metadata filter. Make's Simple Filter UI only
-      // carries scalar values (multi-id arrays get string-coerced -> zero
-      // matches), so the scenario maps this verbatim instead.
-      filter_json: JSON.stringify({ source_id: { $in: sourceIds } }),
-      scope: 'selected',
-      answer_mode: mode,
+  // First retrieval pass.
+  let result: MakeResult;
+  try {
+    result = await callMake(
+      url,
+      buildPrompt(rawQuestion, mode, guides, contextTexts),
+      sourceIds,
+      mode,
       guides,
-      namespace: process.env.PINECONE_NAMESPACE ?? 'user_kieffer',
-      model: body.model ?? 'gemini-2.5-flash'
-    })
-  });
-
-  if (!res.ok) {
+      model
+    );
+  } catch (e) {
     return Response.json(
-      { error: `Query webhook returned ${res.status}` },
+      { error: e instanceof Error ? e.message : 'Query failed' },
       { status: 502 }
     );
   }
 
-  const data = await res.json();
-  // Zero-match runs emit one hollow citation element — filter it here.
-  const citations = (data.citations ?? []).filter(
-    (c: { source_id?: string | null }) => c && c.source_id
-  );
-
-  // No-match gating (the honesty guardrail): if the best retrieved chunk is
-  // weak — or nothing came back — flag it so the brain can warn the user
-  // rather than present a confident-looking answer that isn't grounded.
-  const scores: number[] = citations
-    .map((c: { score?: number }) => (typeof c.score === 'number' ? c.score : 0))
-    .filter((s: number) => Number.isFinite(s));
-  const topScore = scores.length ? Math.max(...scores) : null;
-  const threshold = Number(process.env.RAG_NOMATCH_THRESHOLD ?? 0.45);
-  const noMatch = topScore === null || topScore < threshold;
-
-  // Related/follow-up questions are GENERATED in Make (LLM) and ride back on
-  // the response; we just normalize + pass them through for the brain to chip.
-  const rawSuggested = data.suggestedQuestions ?? data.suggested_questions ?? [];
-  const suggestedQuestions: string[] = (
-    Array.isArray(rawSuggested) ? rawSuggested : []
-  )
-    .map((s: unknown) =>
-      typeof s === 'string'
-        ? s
-        : ((s as { question?: string })?.question ?? '')
-    )
-    .filter((s: string) => typeof s === 'string' && s.trim())
-    .slice(0, 6);
+  // Corrective retry: weak/empty retrieval → reformulate once and try again,
+  // keep whichever pass retrieved better.
+  let retried = false;
+  if (RETRY_ENABLED && result.noMatch) {
+    const newQuery = await reformulate(rawQuestion, result.answer);
+    if (newQuery) {
+      try {
+        const second = await callMake(
+          url,
+          buildPrompt(newQuery, mode, guides, contextTexts),
+          sourceIds,
+          mode,
+          guides,
+          model
+        );
+        retried = true;
+        // prefer the pass that isn't a no-match; otherwise the higher score.
+        const better =
+          (!second.noMatch && result.noMatch) ||
+          (second.topScore ?? -1) > (result.topScore ?? -1);
+        if (better) result = second;
+      } catch {
+        /* keep the first result if the retry call fails */
+      }
+    }
+  }
 
   return Response.json({
-    answer: data.answer ?? '',
-    citations,
-    topScore,
-    noMatch,
-    suggestedQuestions
+    answer: result.answer,
+    citations: result.citations,
+    topScore: result.topScore,
+    noMatch: result.noMatch,
+    suggestedQuestions: result.suggestedQuestions,
+    retried
   });
 }
