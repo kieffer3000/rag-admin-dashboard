@@ -38,14 +38,21 @@ export async function POST(req: Request) {
     return Response.json({ summary: prior, configured: false });
   }
 
+  const messages = Array.isArray(body.messages) ? body.messages : [];
+  // Pre-joined text so the Make prompt is trivial ({{1.summary}} + {{1.messages_text}})
+  // and never has to iterate/coerce the array.
+  const messagesText = messages
+    .map((m) => {
+      const mm = m as { role?: string; content?: string };
+      return `${mm.role === 'assistant' ? 'Assistant' : 'User'}: ${mm.content ?? ''}`;
+    })
+    .join('\n');
+
   try {
     const res = await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        summary: prior,
-        messages: Array.isArray(body.messages) ? body.messages : []
-      })
+      body: JSON.stringify({ summary: prior, messages, messages_text: messagesText })
     });
     if (!res.ok) return Response.json({ summary: prior, configured: true });
     const data = await res.json().catch(() => ({}));
