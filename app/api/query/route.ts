@@ -65,6 +65,7 @@ function buildPrompt(
 async function callMake(
   url: string,
   promptedQuestion: string,
+  queryText: string,
   sourceIds: string[],
   mode: 'cited' | 'hybrid',
   guides: string[],
@@ -75,6 +76,10 @@ async function callMake(
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       question: promptedQuestion,
+      // raw question/query for the RETRIEVAL embedding + multi-query expander
+      // (embedding the wrapped prompt would dilute the search vector with the
+      // instruction boilerplate). Generation still uses `question`.
+      query_text: queryText,
       source_ids: sourceIds,
       // Pre-built Pinecone metadata filter. Make's Simple Filter UI only
       // carries scalar values (multi-id arrays get string-coerced -> zero
@@ -193,6 +198,7 @@ export async function POST(req: Request) {
     result = await callMake(
       url,
       buildPrompt(rawQuestion, mode, guides, contextTexts),
+      rawQuestion,
       sourceIds,
       mode,
       guides,
@@ -215,6 +221,7 @@ export async function POST(req: Request) {
         const second = await callMake(
           url,
           buildPrompt(newQuery, mode, guides, contextTexts),
+          newQuery,
           sourceIds,
           mode,
           guides,
