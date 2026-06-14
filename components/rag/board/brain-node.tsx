@@ -137,6 +137,17 @@ const nextMsgId = () => `bm${++msgCounter}`;
  * WIRED to it: direct chips, typed hubs, the Everything hub. Text nodes add
  * ephemeral prompt context. This is the visual face of the Query webhook.
  */
+/** Last-N verbatim window; older turns get folded into the rolling summary. */
+const HISTORY_WINDOW = 30;
+/** Answers are HTML (charts/tables); the rewriter + summarizer only need words. */
+function toPlainText(s: string): string {
+  return s
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/&[a-z]+;/gi, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
 function BrainNodeInner({ id, data, selected }: NodeProps) {
   const d = data as BrainData & { color?: string; answerMode?: 'cited' | 'hybrid' };
   const {
@@ -439,6 +450,41 @@ function BrainNodeInner({ id, data, selected }: NodeProps) {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight });
   }, [messages]);
 
+  // Rolling summary: once the conversation exceeds the verbatim window, fold the
+  // messages that scrolled out into a running summary (via /api/summarize → Make)
+  // and store it on the brain so far-back facts survive for the query rewrite.
+  // Stored in brain data → persists with the conversation, cleared automatically
+  // when the conversation is cleared.
+  async function maybeUpdateSummary(q: string, answer: string) {
+    const all = [
+      ...messages.map((m) => ({ role: m.role, content: m.content })),
+      { role: 'user' as const, content: q },
+      { role: 'assistant' as const, content: answer }
+    ];
+    if (all.length <= HISTORY_WINDOW) return;
+    const through = (d.summarizedThrough as number) ?? 0;
+    const foldEnd = all.length - HISTORY_WINDOW;
+    if (foldEnd <= through) return;
+    const toFold = all
+      .slice(through, foldEnd)
+      .filter((m) => m.content && m.content.trim())
+      .map((m) => ({ role: m.role, content: toPlainText(m.content).slice(0, 800) }));
+    if (toFold.length === 0) return;
+    try {
+      const res = await fetch('/api/summarize', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ summary: (d.summary as string) ?? '', messages: toFold })
+      });
+      const j = await res.json();
+      if (typeof j.summary === 'string') {
+        updateBoardNodeData(id, { summary: j.summary, summarizedThrough: foldEnd });
+      }
+    } catch {
+      /* keep the existing summary on failure */
+    }
+  }
+
   function send() {
     const q = question.trim();
     if (!q || busy) return;
@@ -497,7 +543,8 @@ function BrainNodeInner({ id, data, selected }: NodeProps) {
         modelId,
         answerMode,
         scope.guides,
-        history
+        history,
+        (d.summary as string) ?? ''
       );
       content = r.answer;
       citations = r.citations;
@@ -522,6 +569,7 @@ function BrainNodeInner({ id, data, selected }: NodeProps) {
         setBrainBusy(id, false);
         stopHum();
         playChime(); // the answer landed
+        void maybeUpdateSummary(q, content); // fold far-back turns (long convos)
       }
     );
   }
@@ -540,8 +588,11 @@ function BrainNodeInner({ id, data, selected }: NodeProps) {
 
   function clearConversation() {
     if (messages.length === 0) return;
-    if (window.confirm('Clear this entire conversation? This cannot be undone.'))
+    if (window.confirm('Clear this entire conversation? This cannot be undone.')) {
       clearBrainMessages(id);
+      // drop the rolling summary too — it's part of this conversation
+      updateBoardNodeData(id, { summary: '', summarizedThrough: 0 });
+    }
   }
 
   /** Export the transcript. Markdown (.md), plain text (.txt), Word (.doc via

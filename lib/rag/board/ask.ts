@@ -40,7 +40,9 @@ export async function askBrain(
   guides: string[] = [],
   /** Recent conversation turns (role + plain-text content) so the server can
    *  rewrite a follow-up ("his street") into a standalone retrieval query. */
-  history: { role: 'user' | 'assistant'; content: string }[] = []
+  history: { role: 'user' | 'assistant'; content: string }[] = [],
+  /** Rolling summary of turns older than the verbatim window (long convos). */
+  summary = ''
 ): Promise<AskResult> {
   const res = await fetch('/api/query', {
     method: 'POST',
@@ -52,7 +54,8 @@ export async function askBrain(
       guides,
       model: modelId,
       answer_mode: mode,
-      history
+      history,
+      summary
     })
   });
 

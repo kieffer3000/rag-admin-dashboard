@@ -168,14 +168,18 @@ async function reformulate(
  *  rewrite fails. We don't classify new-vs-old — we always contextualize. */
 async function contextualize(
   question: string,
-  history: { role: string; content: string }[]
+  history: { role: string; content: string }[],
+  summary = ''
 ): Promise<string> {
   const key = process.env.GEMINI_API_KEY;
-  if (!key || history.length === 0) return question;
+  if (!key || (history.length === 0 && !summary.trim())) return question;
   const convo = history
     .map((h) => `${h.role === 'assistant' ? 'Assistant' : 'User'}: ${h.content}`)
     .join('\n');
-  const prompt = `Given the conversation below, rewrite the user's LATEST question into a standalone, self-contained search query that resolves every pronoun and reference using the conversation (e.g. "his street" → the actual street name discussed earlier). If the latest question is already self-contained, return it unchanged. Output ONLY the rewritten query — one line, no quotes, no preamble.\n\nConversation:\n${convo}\n\nLatest question: ${question}`;
+  const earlier = summary.trim()
+    ? `Summary of earlier conversation:\n${summary.trim()}\n\n`
+    : '';
+  const prompt = `Given the conversation below, rewrite the user's LATEST question into a standalone, self-contained search query that resolves every pronoun and reference using the conversation and the earlier-conversation summary (e.g. "his street" → the actual street name discussed earlier). If the latest question is already self-contained, return it unchanged. Output ONLY the rewritten query — one line, no quotes, no preamble.\n\n${earlier}Recent conversation:\n${convo}\n\nLatest question: ${question}`;
   try {
     const r = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/${CONTEXTUALIZE_MODEL}:generateContent?key=${key}`,
@@ -248,7 +252,8 @@ export async function POST(req: Request) {
       role: h.role === 'assistant' ? 'assistant' : 'user',
       content: h.content.slice(0, 500)
     }));
-  const rawQuestion = await contextualize(userQuestion, history);
+  const summary = typeof body.summary === 'string' ? body.summary : '';
+  const rawQuestion = await contextualize(userQuestion, history, summary);
 
   // First retrieval pass.
   let result: MakeResult;
