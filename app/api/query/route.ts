@@ -90,5 +90,35 @@ export async function POST(req: Request) {
     (c: { source_id?: string | null }) => c && c.source_id
   );
 
-  return Response.json({ answer: data.answer ?? '', citations });
+  // No-match gating (the honesty guardrail): if the best retrieved chunk is
+  // weak — or nothing came back — flag it so the brain can warn the user
+  // rather than present a confident-looking answer that isn't grounded.
+  const scores: number[] = citations
+    .map((c: { score?: number }) => (typeof c.score === 'number' ? c.score : 0))
+    .filter((s: number) => Number.isFinite(s));
+  const topScore = scores.length ? Math.max(...scores) : null;
+  const threshold = Number(process.env.RAG_NOMATCH_THRESHOLD ?? 0.45);
+  const noMatch = topScore === null || topScore < threshold;
+
+  // Related/follow-up questions are GENERATED in Make (LLM) and ride back on
+  // the response; we just normalize + pass them through for the brain to chip.
+  const rawSuggested = data.suggestedQuestions ?? data.suggested_questions ?? [];
+  const suggestedQuestions: string[] = (
+    Array.isArray(rawSuggested) ? rawSuggested : []
+  )
+    .map((s: unknown) =>
+      typeof s === 'string'
+        ? s
+        : ((s as { question?: string })?.question ?? '')
+    )
+    .filter((s: string) => typeof s === 'string' && s.trim())
+    .slice(0, 6);
+
+  return Response.json({
+    answer: data.answer ?? '',
+    citations,
+    topScore,
+    noMatch,
+    suggestedQuestions
+  });
 }
