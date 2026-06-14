@@ -37,7 +37,10 @@ export async function askBrain(
    *  the model fill gaps from its own knowledge (clearly marked). */
   mode: 'cited' | 'hybrid' = 'cited',
   /** Instruction guides from wired prompt pieces (how to answer). */
-  guides: string[] = []
+  guides: string[] = [],
+  /** Recent conversation turns (role + plain-text content) so the server can
+   *  rewrite a follow-up ("his street") into a standalone retrieval query. */
+  history: { role: 'user' | 'assistant'; content: string }[] = []
 ): Promise<AskResult> {
   const res = await fetch('/api/query', {
     method: 'POST',
@@ -48,7 +51,8 @@ export async function askBrain(
       context_texts: contextTexts,
       guides,
       model: modelId,
-      answer_mode: mode
+      answer_mode: mode,
+      history
     })
   });
 

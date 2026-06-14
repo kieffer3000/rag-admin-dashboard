@@ -475,13 +475,29 @@ function BrainNodeInner({ id, data, selected }: NodeProps) {
     let noMatch = false;
     let suggestedQuestions: string[] = [];
     try {
+      // Recent turns → lets the server rewrite a follow-up ("his street")
+      // into a standalone retrieval query. Strip HTML (answers are HTML for
+      // charts) to plain text, truncate, cap at the last 30 messages.
+      const history = messages
+        .filter((mm) => mm.content && mm.content.trim())
+        .slice(-30)
+        .map((mm) => ({
+          role: mm.role,
+          content: mm.content
+            .replace(/<[^>]+>/g, ' ')
+            .replace(/&[a-z]+;/gi, ' ')
+            .replace(/\s+/g, ' ')
+            .trim()
+            .slice(0, 500)
+        }));
       const r = await askBrain(
         q,
         scope.items,
         scope.contextTexts,
         modelId,
         answerMode,
-        scope.guides
+        scope.guides,
+        history
       );
       content = r.answer;
       citations = r.citations;

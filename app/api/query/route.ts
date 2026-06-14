@@ -21,6 +21,9 @@ const NOMATCH_THRESHOLD = Number(process.env.RAG_NOMATCH_THRESHOLD ?? 0.45);
 const RETRY_ENABLED = process.env.RAG_CORRECTIVE_RETRY !== 'off';
 const REFORMULATE_MODEL =
   process.env.RAG_REFORMULATE_MODEL ?? 'gemini-2.5-flash';
+const CONTEXTUALIZE_MODEL =
+  process.env.RAG_CONTEXTUALIZE_MODEL ?? 'gemini-2.5-flash';
+const HISTORY_MAX_MESSAGES = 30;
 
 interface RawCitation {
   source_id?: string | null;
@@ -159,6 +162,45 @@ async function reformulate(
   }
 }
 
+/** History-aware query rewrite: resolve a follow-up ("who else was born on his
+ *  street?") into a standalone, self-contained retrieval query using the recent
+ *  conversation. Returns the question unchanged when there's no history or the
+ *  rewrite fails. We don't classify new-vs-old — we always contextualize. */
+async function contextualize(
+  question: string,
+  history: { role: string; content: string }[]
+): Promise<string> {
+  const key = process.env.GEMINI_API_KEY;
+  if (!key || history.length === 0) return question;
+  const convo = history
+    .map((h) => `${h.role === 'assistant' ? 'Assistant' : 'User'}: ${h.content}`)
+    .join('\n');
+  const prompt = `Given the conversation below, rewrite the user's LATEST question into a standalone, self-contained search query that resolves every pronoun and reference using the conversation (e.g. "his street" → the actual street name discussed earlier). If the latest question is already self-contained, return it unchanged. Output ONLY the rewritten query — one line, no quotes, no preamble.\n\nConversation:\n${convo}\n\nLatest question: ${question}`;
+  try {
+    const r = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/${CONTEXTUALIZE_MODEL}:generateContent?key=${key}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: prompt }] }],
+          generationConfig: { temperature: 0.2, maxOutputTokens: 200 }
+        })
+      }
+    );
+    if (!r.ok) return question;
+    const j = await r.json();
+    const text: string =
+      j?.candidates?.[0]?.content?.parts
+        ?.map((p: { text?: string }) => p?.text ?? '')
+        .join('') ?? '';
+    const cleaned = text.trim().split('\n')[0].replace(/^["']|["']$/g, '').trim();
+    return cleaned.length >= 3 ? cleaned : question;
+  } catch {
+    return question;
+  }
+}
+
 export async function POST(req: Request) {
   const { userId } = await auth();
   if (!userId) {
@@ -190,7 +232,23 @@ export async function POST(req: Request) {
   const mode: 'cited' | 'hybrid' =
     body.answer_mode === 'hybrid' ? 'hybrid' : 'cited';
   const model = body.model ?? 'gemini-2.5-flash';
-  const rawQuestion: string = body.question;
+  const userQuestion: string = body.question;
+
+  // Conversation history (capped, plain text) → resolve follow-up references
+  // into a standalone query for retrieval AND generation. No history = no-op.
+  const history = (Array.isArray(body.history) ? body.history : [])
+    .filter(
+      (h: unknown): h is { role: string; content: string } =>
+        !!h &&
+        typeof (h as { content?: unknown }).content === 'string' &&
+        (h as { content: string }).content.trim().length > 0
+    )
+    .slice(-HISTORY_MAX_MESSAGES)
+    .map((h: { role: string; content: string }) => ({
+      role: h.role === 'assistant' ? 'assistant' : 'user',
+      content: h.content.slice(0, 500)
+    }));
+  const rawQuestion = await contextualize(userQuestion, history);
 
   // First retrieval pass.
   let result: MakeResult;
@@ -245,6 +303,9 @@ export async function POST(req: Request) {
     topScore: result.topScore,
     noMatch: result.noMatch,
     suggestedQuestions: result.suggestedQuestions,
-    retried
+    retried,
+    // present only when history-aware rewrite changed the query (for an
+    // optional "interpreted as …" hint in the UI)
+    resolvedQuestion: rawQuestion !== userQuestion ? rawQuestion : null
   });
 }
