@@ -1,20 +1,14 @@
 import { auth } from '@clerk/nextjs/server';
+import { runUtilityLLM } from '@/lib/rag/utility-llm';
 
 // Rolling-summary updater for long conversations — folds messages that scrolled
 // out of the verbatim window into a compact running summary so far-back facts
 // survive for the history-aware query rewrite.
 //
-// The summarizing LLM lives in a Make.com scenario (MAKE_SUMMARIZE_WEBHOOK_URL),
-// NOT in code — so the model version is managed in the Make UI alongside the
-// other RAG models and never silently drifts. This route is a thin auth'd proxy
-// (webhook URL stays server-side; the repo is public). It degrades to a no-op
-// (returns the prior summary unchanged) until the Make scenario is wired.
-//
-// Make "rag summarize" scenario contract:
-//   request:  { summary, messages:[{role,content}] }
-//   response: { summary }   (the updated rolling summary)
-// The summary itself is stored on the brain by the client, so it persists with
-// the conversation and is deleted automatically when the conversation is cleared.
+// Runs through the shared LLM-utility gateway (Make "rag-llm-utility" webhook
+// when wired, else direct Gemini fallback) so the model lives in the Make UI.
+// The summary is stored on the brain by the client → persists with the
+// conversation and is deleted automatically when it's cleared.
 
 export const runtime = 'nodejs';
 
@@ -22,46 +16,21 @@ export async function POST(req: Request) {
   const { userId } = await auth();
   if (!userId) return Response.json({ error: 'Unauthorized' }, { status: 401 });
 
-  let body: { summary?: string; messages?: unknown[] };
+  let body: { summary?: string; messages?: { role?: string; content?: string }[] };
   try {
     body = await req.json();
   } catch {
     return Response.json({ error: 'Invalid JSON' }, { status: 400 });
   }
-  const prior = typeof body.summary === 'string' ? body.summary : '';
-
-  const url = process.env.MAKE_SUMMARIZE_WEBHOOK_URL;
-  if (!url) {
-    // Not wired yet — no-op so long conversations still work (just without
-    // far-back compression). Keeps the feature inert until the Make scenario
-    // exists.
-    return Response.json({ summary: prior, configured: false });
-  }
-
-  const messages = Array.isArray(body.messages) ? body.messages : [];
-  // Pre-joined text so the Make prompt is trivial ({{1.summary}} + {{1.messages_text}})
-  // and never has to iterate/coerce the array.
-  const messagesText = messages
-    .map((m) => {
-      const mm = m as { role?: string; content?: string };
-      return `${mm.role === 'assistant' ? 'Assistant' : 'User'}: ${mm.content ?? ''}`;
-    })
+  const prior = typeof body.summary === 'string' ? body.summary.trim() : '';
+  const messagesText = (Array.isArray(body.messages) ? body.messages : [])
+    .filter((m) => typeof m?.content === 'string' && m.content!.trim())
+    .map((m) => `${m.role === 'assistant' ? 'Assistant' : 'User'}: ${m.content!.slice(0, 800)}`)
     .join('\n');
+  if (!messagesText) return Response.json({ summary: prior });
 
-  try {
-    const res = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ summary: prior, messages, messages_text: messagesText })
-    });
-    if (!res.ok) return Response.json({ summary: prior, configured: true });
-    const data = await res.json().catch(() => ({}));
-    const next =
-      typeof data?.summary === 'string' && data.summary.trim()
-        ? data.summary.trim()
-        : prior;
-    return Response.json({ summary: next, configured: true });
-  } catch {
-    return Response.json({ summary: prior, configured: true });
-  }
+  const prompt = `You maintain a running summary of a conversation so its key facts survive after the raw messages scroll out of view. Fold the NEW messages into the summary so far, preserving every name, place, number, date, and established fact. Be factual and third-person. Keep the whole summary under 180 words. Output ONLY the updated summary, no preamble.\n\nSummary so far:\n${prior || '(none yet)'}\n\nNew messages to fold in:\n${messagesText}`;
+
+  const next = await runUtilityLLM(prompt, { temperature: 0.2, maxOutputTokens: 400 });
+  return Response.json({ summary: next && next.trim() ? next.trim() : prior });
 }

@@ -1,4 +1,5 @@
 import { auth } from '@clerk/nextjs/server';
+import { runUtilityLLM } from '@/lib/rag/utility-llm';
 
 // Proxies the Board's brain queries to the Make.com Query scenario.
 // The webhook contract is FROZEN (see BOARD_SPEC.md):
@@ -19,10 +20,6 @@ export const runtime = 'nodejs';
 
 const NOMATCH_THRESHOLD = Number(process.env.RAG_NOMATCH_THRESHOLD ?? 0.45);
 const RETRY_ENABLED = process.env.RAG_CORRECTIVE_RETRY !== 'off';
-const REFORMULATE_MODEL =
-  process.env.RAG_REFORMULATE_MODEL ?? 'gemini-2.5-flash';
-const CONTEXTUALIZE_MODEL =
-  process.env.RAG_CONTEXTUALIZE_MODEL ?? 'gemini-2.5-flash';
 const HISTORY_MAX_MESSAGES = 30;
 
 interface RawCitation {
@@ -130,36 +127,13 @@ async function reformulate(
   question: string,
   failedAnswer: string
 ): Promise<string | null> {
-  const key = process.env.GEMINI_API_KEY;
-  if (!key) return null;
   const prompt = `A vector-database search for the query below did not retrieve relevant results. Rewrite it as ONE different search query that uses alternative terminology, synonyms, and a different angle to improve retrieval. Output ONLY the rewritten query — a single line, no quotes, no preamble.\n\nOriginal query: ${question}${
     failedAnswer ? `\n\nThe unsuccessful response was: ${failedAnswer.slice(0, 400)}` : ''
   }`;
-  try {
-    const r = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/${REFORMULATE_MODEL}:generateContent?key=${key}`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: prompt }] }],
-          generationConfig: { temperature: 0.4, maxOutputTokens: 120 }
-        })
-      }
-    );
-    if (!r.ok) return null;
-    const j = await r.json();
-    const text: string =
-      j?.candidates?.[0]?.content?.parts
-        ?.map((p: { text?: string }) => p?.text ?? '')
-        .join('') ?? '';
-    const cleaned = text.trim().split('\n')[0].replace(/^["']|["']$/g, '').trim();
-    return cleaned && cleaned.toLowerCase() !== question.toLowerCase()
-      ? cleaned
-      : null;
-  } catch {
-    return null;
-  }
+  const text = await runUtilityLLM(prompt, { temperature: 0.4, maxOutputTokens: 120 });
+  if (!text) return null;
+  const cleaned = text.split('\n')[0].replace(/^["']|["']$/g, '').trim();
+  return cleaned && cleaned.toLowerCase() !== question.toLowerCase() ? cleaned : null;
 }
 
 /** History-aware query rewrite: resolve a follow-up ("who else was born on his
@@ -171,8 +145,7 @@ async function contextualize(
   history: { role: string; content: string }[],
   summary = ''
 ): Promise<string> {
-  const key = process.env.GEMINI_API_KEY;
-  if (!key || (history.length === 0 && !summary.trim())) return question;
+  if (history.length === 0 && !summary.trim()) return question;
   const convo = history
     .map((h) => `${h.role === 'assistant' ? 'Assistant' : 'User'}: ${h.content}`)
     .join('\n');
@@ -180,29 +153,10 @@ async function contextualize(
     ? `Summary of earlier conversation:\n${summary.trim()}\n\n`
     : '';
   const prompt = `Given the conversation below, rewrite the user's LATEST question into a standalone, self-contained search query that resolves every pronoun and reference using the conversation and the earlier-conversation summary (e.g. "his street" → the actual street name discussed earlier). If the latest question is already self-contained, return it unchanged. Output ONLY the rewritten query — one line, no quotes, no preamble.\n\n${earlier}Recent conversation:\n${convo}\n\nLatest question: ${question}`;
-  try {
-    const r = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/${CONTEXTUALIZE_MODEL}:generateContent?key=${key}`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: prompt }] }],
-          generationConfig: { temperature: 0.2, maxOutputTokens: 200 }
-        })
-      }
-    );
-    if (!r.ok) return question;
-    const j = await r.json();
-    const text: string =
-      j?.candidates?.[0]?.content?.parts
-        ?.map((p: { text?: string }) => p?.text ?? '')
-        .join('') ?? '';
-    const cleaned = text.trim().split('\n')[0].replace(/^["']|["']$/g, '').trim();
-    return cleaned.length >= 3 ? cleaned : question;
-  } catch {
-    return question;
-  }
+  const text = await runUtilityLLM(prompt, { temperature: 0.2, maxOutputTokens: 200 });
+  if (!text) return question;
+  const cleaned = text.split('\n')[0].replace(/^["']|["']$/g, '').trim();
+  return cleaned.length >= 3 ? cleaned : question;
 }
 
 export async function POST(req: Request) {
