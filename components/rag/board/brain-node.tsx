@@ -18,7 +18,11 @@ import { WavRecorder, transcribeAudio } from '@/lib/rag/board/dictation';
 import { ChatMessage } from '@/lib/rag/types';
 import { MediaIcon } from '@/components/rag/shared';
 import { MEDIA_TYPES } from '@/lib/rag/media-config';
-import { AnswerBody } from '@/components/rag/board/markdown';
+import {
+  AnswerBody,
+  splitGraphicBlocks,
+  sanitizeHtml
+} from '@/components/rag/board/markdown';
 import { LLM_MODELS, PROVIDER_META } from '@/lib/rag/models';
 import {
   DropdownMenu,
@@ -599,81 +603,123 @@ function BrainNodeInner({ id, data, selected }: NodeProps) {
    *  an HTML blob), or Print → the browser's Save-as-PDF. */
   function exportConversation(format: 'md' | 'txt' | 'doc' | 'pdf') {
     const title = d.name || 'answersDoc Brain';
-    const lines = messages
-      .filter((m) => m.content)
-      .map((m) => {
-        if (m.role === 'user') return `**You:** ${m.content}`;
-        const cites = m.citations?.length
-          ? '\n\n_Sources: ' +
-            m.citations.map((c) => `${c.mediaName} (${c.locator})`).join(', ') +
-            '_'
-          : '';
-        return `**${title}:** ${m.content}${cites}`;
-      });
+    // The already-rendered chart/diagram SVGs, in DOM (= message) order, so the
+    // export shows real charts instead of raw ```chart JSON.
+    const graphics = scrollRef.current
+      ? Array.from(scrollRef.current.querySelectorAll('[data-graphic]'))
+      : [];
+    let gi = 0;
 
-    if (format === 'pdf') {
-      const w = window.open('', '_blank');
-      if (!w) return;
-      w.document.write(
-        `<html><head><title>${title}</title><meta charset="utf-8">` +
-          `<style>body{font:15px/1.6 -apple-system,Segoe UI,Roboto,sans-serif;max-width:680px;margin:40px auto;padding:0 24px;color:#1a1a2e}h1{font-size:20px}.u{font-weight:600;color:#4f46e5;margin-top:18px}.a{margin:6px 0 4px}.s{color:#666;font-size:12px}</style></head><body>` +
-          `<h1>${escapeHtml(title)}</h1>` +
-          messages
-            .filter((m) => m.content)
-            .map((m) =>
-              m.role === 'user'
-                ? `<p class="u">You: ${escapeHtml(m.content)}</p>`
-                : `<p class="a">${escapeHtml(m.content).replace(/\n/g, '<br>')}</p>` +
-                  (m.citations?.length
-                    ? `<p class="s">Sources: ${m.citations
-                        .map((c) => escapeHtml(`${c.mediaName} (${c.locator})`))
-                        .join(', ')}</p>`
-                    : '')
-            )
-            .join('') +
-          `</body></html>`
+    // Assistant answer → HTML: prose rendered as HTML, each graphic block
+    // replaced by its captured rendered SVG.
+    const answerHtml = (content: string): string =>
+      splitGraphicBlocks(content)
+        .map((s) => {
+          if (s.type === 'prose')
+            return s.text.trim() ? sanitizeHtml(s.text) : '';
+          const el = graphics[gi++] as HTMLElement | undefined;
+          return el ? el.outerHTML : '';
+        })
+        .join('\n');
+
+    // Assistant answer → plain text (charts collapse to a data line).
+    const answerText = (content: string): string =>
+      splitGraphicBlocks(content)
+        .map((s) => {
+          if (s.type === 'prose')
+            return s.text
+              .replace(/<[^>]+>/g, '')
+              .replace(/&[a-z]+;/gi, ' ')
+              .replace(/\n{3,}/g, '\n\n')
+              .trim();
+          if (s.type === 'chart') {
+            try {
+              const spec = JSON.parse(s.text);
+              const rows = (spec.data ?? [])
+                .map(
+                  (d: Record<string, unknown>) =>
+                    `${d.name}: ${Object.entries(d)
+                      .filter(([k]) => k !== 'name')
+                      .map(([, v]) => v)
+                      .join(', ')}`
+                )
+                .join('; ');
+              return `[Chart: ${spec.title ?? spec.type}] ${rows}`;
+            } catch {
+              return s.text;
+            }
+          }
+          return '[Diagram]';
+        })
+        .filter(Boolean)
+        .join('\n\n');
+
+    if (format === 'pdf' || format === 'doc') {
+      const body =
+        `<h1>${escapeHtml(title)}</h1>` +
+        messages
+          .filter((m) => m.content)
+          .map((m) =>
+            m.role === 'user'
+              ? `<p class="u">You: ${escapeHtml(m.content)}</p>`
+              : `<div class="a">${answerHtml(m.content)}</div>` +
+                (m.citations?.length
+                  ? `<p class="s">Sources: ${m.citations
+                      .map((c) => escapeHtml(`${c.mediaName} (${c.locator})`))
+                      .join(', ')}</p>`
+                  : '')
+          )
+          .join('');
+      const doc =
+        `<html><head><title>${escapeHtml(title)}</title><meta charset="utf-8">` +
+        `<style>body{font:15px/1.6 -apple-system,Segoe UI,Roboto,sans-serif;max-width:720px;margin:40px auto;padding:0 24px;color:#1a1a2e}` +
+        `h1{font-size:20px}.u{font-weight:600;color:#4f46e5;margin-top:18px}.a{margin:6px 0 4px}.s{color:#666;font-size:12px}` +
+        `svg{max-width:100%;height:auto}figure{border:1px solid #eee;border-radius:10px;padding:10px;margin:10px 0}figcaption{font-weight:600;margin-bottom:6px}` +
+        `mark{background:#fef08a}table{border-collapse:collapse;width:100%}td,th{border:1px solid #ddd;padding:4px 8px;text-align:left}</style></head><body>` +
+        body +
+        `</body></html>`;
+      if (format === 'pdf') {
+        const w = window.open('', '_blank');
+        if (!w) return;
+        w.document.write(doc);
+        w.document.close();
+        setTimeout(() => w.print(), 400);
+        return;
+      }
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(
+        new Blob([doc], { type: 'application/msword' })
       );
-      w.document.close();
-      setTimeout(() => w.print(), 300);
+      a.download = `${title.replace(/[^\w-]+/g, '_')}.doc`;
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(a.href), 2000);
       return;
     }
 
-    let blob: Blob;
-    let ext = format;
-    if (format === 'doc') {
-      const html =
-        `<html><head><meta charset="utf-8"></head><body><h2>${escapeHtml(
-          title
-        )}</h2>` +
-        messages
-          .filter((m) => m.content)
-          .map(
-            (m) =>
-              `<p><b>${m.role === 'user' ? 'You' : escapeHtml(title)}:</b> ${escapeHtml(
-                m.content
-              ).replace(/\n/g, '<br>')}</p>`
-          )
-          .join('') +
-        `</body></html>`;
-      blob = new Blob([html], { type: 'application/msword' });
-    } else {
-      const text =
-        format === 'md'
-          ? `# ${title}\n\n${lines.join('\n\n')}`
-          : `${title}\n\n` +
-            messages
-              .filter((m) => m.content)
-              .map(
-                (m) => `${m.role === 'user' ? 'You' : title}: ${m.content}`
-              )
-              .join('\n\n');
-      blob = new Blob([text], {
-        type: format === 'md' ? 'text/markdown' : 'text/plain'
-      });
-    }
+    // md / txt
+    const text =
+      `${format === 'md' ? '# ' : ''}${title}\n\n` +
+      messages
+        .filter((m) => m.content)
+        .map((m) =>
+          m.role === 'user'
+            ? `${format === 'md' ? '**You:**' : 'You:'} ${m.content}`
+            : `${answerText(m.content)}${
+                m.citations?.length
+                  ? `\n\n${format === 'md' ? '_Sources: ' : 'Sources: '}${m.citations
+                      .map((c) => `${c.mediaName} (${c.locator})`)
+                      .join(', ')}${format === 'md' ? '_' : ''}`
+                  : ''
+              }`
+        )
+        .join('\n\n');
     const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = `${title.replace(/[^\w-]+/g, '_')}.${ext}`;
+    a.href = URL.createObjectURL(
+      new Blob([text], {
+        type: format === 'md' ? 'text/markdown' : 'text/plain'
+      })
+    );
+    a.download = `${title.replace(/[^\w-]+/g, '_')}.${format}`;
     a.click();
     setTimeout(() => URL.revokeObjectURL(a.href), 2000);
   }

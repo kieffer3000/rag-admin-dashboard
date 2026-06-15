@@ -59,6 +59,7 @@ export function MermaidBlock({ code }: { code: string }) {
   }
   return (
     <figure
+      data-graphic="mermaid"
       className="my-3 flex justify-center overflow-auto rounded-xl border border-[rgb(var(--hairline)/0.16)] bg-card p-3 [&_svg]:max-w-full"
       dangerouslySetInnerHTML={{ __html: svg }}
     />

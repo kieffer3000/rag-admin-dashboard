@@ -17,7 +17,7 @@ const ChartBlock = dynamic(
 );
 
 /** Split an answer into prose + fenced graphic blocks (```mermaid / ```chart). */
-function splitGraphicBlocks(
+export function splitGraphicBlocks(
   content: string
 ): { type: 'prose' | 'mermaid' | 'chart'; text: string }[] {
   const re = /```(mermaid|chart)\s*\n([\s\S]*?)```/g;
@@ -43,7 +43,7 @@ function looksLikeHtml(s: string): boolean {
 /** Minimal sanitizer for model-returned HTML: strips scripts/styles, event
  *  handlers, and javascript: URLs. Our answer pipeline is trusted (Make ->
  *  our own LLM), but we never inject raw on* handlers or <script> regardless. */
-function sanitizeHtml(html: string): string {
+export function sanitizeHtml(html: string): string {
   return html
     .replace(/<\s*(script|style|iframe|object|embed|link|meta)[\s\S]*?<\/\s*\1\s*>/gi, '')
     .replace(/<\s*(script|style|iframe|object|embed|link|meta)\b[^>]*\/?>/gi, '')

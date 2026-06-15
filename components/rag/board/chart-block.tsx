@@ -152,7 +152,10 @@ export function ChartBlock({ code }: { code: string }) {
   })();
 
   return (
-    <figure className="my-3 rounded-xl border border-[rgb(var(--hairline)/0.16)] bg-card p-3">
+    <figure
+      data-graphic="chart"
+      className="my-3 rounded-xl border border-[rgb(var(--hairline)/0.16)] bg-card p-3"
+    >
       {spec.title && (
         <figcaption className="mb-2 text-[13px] font-semibold text-foreground/80">
           {spec.title}
