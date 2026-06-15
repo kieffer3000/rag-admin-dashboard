@@ -28,7 +28,10 @@ export const maxDuration = 60;
 // Gemini inline image cap is generous (~20MB/request); we keep uploads well
 // under that and reject oversize so the base64 payload to Make stays sane.
 const MAX_BYTES = 12 * 1024 * 1024; // 12 MB
-const ALLOWED = new Set(['image/png', 'image/jpeg', 'image/webp']);
+// gemini-embedding-2's image embedding accepts PNG/JPEG (per the embeddings
+// guide). 2.5-Pro vision is broader, but we gate to what BOTH steps accept so a
+// file can't caption-but-fail-to-embed.
+const ALLOWED = new Set(['image/png', 'image/jpeg']);
 
 export async function POST(req: Request) {
   const { userId } = await auth();
@@ -70,7 +73,7 @@ export async function POST(req: Request) {
       { status: 500 }
     );
   }
-  const ext = mime === 'image/jpeg' ? 'jpg' : mime === 'image/webp' ? 'webp' : 'png';
+  const ext = mime === 'image/jpeg' ? 'jpg' : 'png';
   const blob = await put(`images/${userId}/${sourceId}.${ext}`, bytes, {
     access: 'public',
     contentType: mime,

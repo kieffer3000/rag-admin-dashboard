@@ -447,7 +447,7 @@ export function BoardToolbar(p: BoardToolbarProps) {
                     <Label>Image file</Label>
                     <input
                       type="file"
-                      accept="image/png,image/jpeg,image/webp"
+                      accept="image/png,image/jpeg"
                       onChange={(e) => setFile(e.target.files?.[0] ?? null)}
                       className="block w-full cursor-pointer rounded-lg border border-input bg-card text-[13px] file:mr-3 file:cursor-pointer file:border-0 file:bg-accent/10 file:px-3 file:py-2 file:text-accent hover:border-accent/40"
                     />
@@ -457,8 +457,8 @@ export function BoardToolbar(p: BoardToolbarProps) {
                       </p>
                     ) : (
                       <p className="text-[11.5px] text-muted-foreground/55">
-                        PNG, JPEG, or WebP · up to 12 MB. The image is embedded by
-                        its pixels and captioned, so it’s searchable by look and by
+                        PNG or JPEG · up to 12 MB. The image is embedded by its
+                        pixels and captioned, so it’s searchable by look and by
                         words.
                       </p>
                     )}
