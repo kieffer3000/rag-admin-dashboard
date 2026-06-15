@@ -6,7 +6,17 @@ import { useRag } from '@/lib/rag/store';
 import { MEDIA_TYPES, MEDIA_TYPE_ORDER } from '@/lib/rag/media-config';
 import { MediaIcon } from '@/components/rag/shared';
 import { MediaType } from '@/lib/rag/types';
-import { Search, MessageSquareQuote, RotateCcw, X, Trash2 } from 'lucide-react';
+import {
+  Search,
+  MessageSquareQuote,
+  RotateCcw,
+  X,
+  Trash2,
+  Check,
+  Loader2,
+  CloudOff
+} from 'lucide-react';
+import type { RefObject } from 'react';
 
 /** Drag payload the canvas reads in its onDrop handler. */
 export const CHEST_MIME = 'application/answersdoc-chest';
@@ -32,12 +42,22 @@ export function BoardChest({
   placedIds,
   onPlaceMedia,
   onPlacePrompt,
-  onRecallMedia
+  onRecallMedia,
+  saveStatus,
+  onSave,
+  binRef,
+  binHot,
+  onDeleteSelected
 }: {
   placedIds: Set<string>;
   onPlaceMedia: (mediaId: string) => void;
   onPlacePrompt: (text: string) => void;
   onRecallMedia: (mediaId: string) => void;
+  saveStatus: 'saved' | 'saving' | 'local';
+  onSave: () => void;
+  binRef: RefObject<HTMLButtonElement | null>;
+  binHot: boolean;
+  onDeleteSelected: () => void;
 }) {
   const { projectMedia, deleteMedia } = useRag();
   const [open, setOpen] = useState<string | null>(null);
@@ -259,6 +279,39 @@ export function BoardChest({
           )}
         >
           <MessageSquareQuote className="h-[18px] w-[18px] text-indigo-500" strokeWidth={2.25} />
+        </button>
+
+        <div className="mx-0.5 h-7 w-px bg-[rgb(var(--hairline)/0.12)]" />
+        {/* save status / force-save */}
+        <button
+          onClick={onSave}
+          title="Everything autosaves. Click to save now."
+          className={cn(
+            'flex h-10 w-10 items-center justify-center rounded-full transition-all hover:brightness-95',
+            saveStatus === 'local' ? 'text-amber-600' : 'text-muted-foreground'
+          )}
+        >
+          {saveStatus === 'saving' ? (
+            <Loader2 className="h-[18px] w-[18px] animate-spin" />
+          ) : saveStatus === 'local' ? (
+            <CloudOff className="h-[18px] w-[18px]" />
+          ) : (
+            <Check className="h-[18px] w-[18px] text-emerald-500" />
+          )}
+        </button>
+        {/* garbage bin: drag a source chip here, or select a node + click to delete */}
+        <button
+          ref={binRef}
+          onClick={onDeleteSelected}
+          title="Garbage bin — drag a source here, or select a node and click to delete it"
+          className={cn(
+            'flex h-10 w-10 items-center justify-center rounded-full transition-all',
+            binHot
+              ? 'scale-110 bg-red-500/15 text-red-500 ring-2 ring-red-400'
+              : 'text-muted-foreground/70 hover:bg-red-500/10 hover:text-red-500'
+          )}
+        >
+          <Trash2 className="h-[18px] w-[18px]" />
         </button>
       </div>
     </div>

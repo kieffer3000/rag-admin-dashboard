@@ -35,7 +35,6 @@ import {
   STACK_SNAP
 } from '@/lib/rag/board/types';
 import { playSnap } from '@/lib/rag/board/sound';
-import { Check, Loader2, CloudOff, Trash2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { ChipNode } from './chip-node';
 import { HubNode } from './hub-node';
@@ -78,13 +77,14 @@ function retile(nodes: BoardNode[], hubId: string): BoardNode[] {
 }
 
 function BoardCanvasInner() {
-  const { board, setBoard, setBoardSilent, nextBoardId, busyBrains, saveStatus, saveNow } =
+  const { board, setBoard, setBoardSilent, nextBoardId, busyBrains, saveStatus, saveNow, removeBoardNode } =
     useBoard();
   const { media, projectMedia, addMedia, updateMedia, deleteMedia } = useRag();
   // Garbage bin (bottom-left): drag a source chip onto it to delete the source
   // and its Pinecone vectors. `binHot` highlights it while a chip hovers over.
-  const binRef = useRef<HTMLDivElement>(null);
+  const binRef = useRef<HTMLButtonElement>(null);
   const [binHot, setBinHot] = useState(false);
+  const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const { getIntersectingNodes, screenToFlowPosition, fitView } = useReactFlow();
   const wrapRef = useRef<HTMLDivElement>(null);
 
@@ -693,6 +693,35 @@ function BoardCanvasInner() {
     [setBoard]
   );
 
+  // Garbage-bin click: delete the currently-selected node. A source chip →
+  // delete the source + its Pinecone vectors; anything else → remove the node.
+  const onDeleteSelected = useCallback(() => {
+    if (!selectedNodeId) {
+      window.alert(
+        'Select a node first (click it), then click the bin — or drag a source chip onto the bin.'
+      );
+      return;
+    }
+    const node = board.nodes.find((n) => n.id === selectedNodeId);
+    if (!node) return;
+    if (node.type === 'chip') {
+      const mediaId = node.data?.mediaId as string | undefined;
+      const item = mediaId ? media.find((m) => m.id === mediaId) : undefined;
+      if (
+        mediaId &&
+        window.confirm(
+          `Delete "${item?.name ?? mediaId}" permanently? This removes it from your knowledge base and Pinecone. This cannot be undone.`
+        )
+      ) {
+        recallMedia(mediaId);
+        deleteMedia(mediaId);
+      }
+    } else if (window.confirm('Delete this from the board?')) {
+      removeBoardNode(selectedNodeId);
+    }
+    setSelectedNodeId(null);
+  }, [selectedNodeId, board.nodes, media, recallMedia, deleteMedia, removeBoardNode]);
+
   // Ants march ONLY while a brain is thinking — and only on ITS edges.
   // Idle canvas = zero animation work (battery + visual calm).
   const liveEdges = useMemo(
@@ -902,45 +931,7 @@ function BoardCanvasInner() {
         }}
       />
 
-      {/* bottom-left controls: save status/button + garbage bin. Moved off the
-          top-right so it never overlaps a brain. Drag a source chip onto the bin
-          to delete it (and its Pinecone vectors). */}
-      <div className="absolute bottom-4 left-4 z-20 flex items-center gap-2">
-        <button
-          onClick={saveNow}
-          title="Everything autosaves. Click to save now."
-          className={cn(
-            'flex items-center gap-1.5 rounded-full bg-card px-3 py-1.5 text-[11.5px] font-medium shadow-[0_2px_8px_rgb(0_0_0/0.08)] transition-colors hover:bg-[rgb(var(--hairline)/0.04)] dark:ring-1 dark:ring-white/[0.08]',
-            saveStatus === 'local' ? 'text-amber-600' : 'text-muted-foreground'
-          )}
-        >
-          {saveStatus === 'saving' ? (
-            <>
-              <Loader2 className="h-3.5 w-3.5 animate-spin" /> Saving…
-            </>
-          ) : saveStatus === 'local' ? (
-            <>
-              <CloudOff className="h-3.5 w-3.5" /> Saved on device
-            </>
-          ) : (
-            <>
-              <Check className="h-3.5 w-3.5 text-emerald-500" /> Saved
-            </>
-          )}
-        </button>
-        <div
-          ref={binRef}
-          title="Garbage bin — drag a source chip here to delete it and its data"
-          className={cn(
-            'flex h-9 w-9 items-center justify-center rounded-full shadow-[0_2px_8px_rgb(0_0_0/0.08)] transition-all dark:ring-1 dark:ring-white/[0.08]',
-            binHot
-              ? 'scale-110 bg-red-500/15 text-red-500 ring-2 ring-red-400'
-              : 'bg-card text-muted-foreground/70'
-          )}
-        >
-          <Trash2 className="h-4 w-4" />
-        </div>
-      </div>
+      {/* Save + garbage bin live in the bottom-middle dock (BoardChest). */}
       <ReactFlow
         nodes={board.nodes as Node[]}
         edges={liveEdges}
@@ -954,6 +945,9 @@ function BoardCanvasInner() {
         onNodeDrag={onNodeDrag}
         onNodeDragStop={onNodeDragStop}
         onNodeDoubleClick={onNodeDoubleClick}
+        onSelectionChange={({ nodes }) =>
+          setSelectedNodeId(nodes.length === 1 ? nodes[0].id : null)
+        }
         zoomOnDoubleClick={false}
         // Gesture contract: plain drag on a node MOVES it; plain drag on the
         // canvas PANS; the rubber-band multi-select box appears ONLY while
@@ -1166,6 +1160,11 @@ function BoardCanvasInner() {
           the canvas as puzzle pieces */}
       <BoardChest
         placedIds={placedIds}
+        saveStatus={saveStatus}
+        onSave={saveNow}
+        binRef={binRef}
+        binHot={binHot}
+        onDeleteSelected={onDeleteSelected}
         onRecallMedia={recallMedia}
         onPlaceMedia={(mediaId) => {
           if (placedIds.has(mediaId)) return; // no duplicate sources
