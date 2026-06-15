@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useMemo, useRef } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import {
   ReactFlow,
   ReactFlowProvider,
@@ -35,7 +35,7 @@ import {
   STACK_SNAP
 } from '@/lib/rag/board/types';
 import { playSnap } from '@/lib/rag/board/sound';
-import { Check, Loader2, CloudOff } from 'lucide-react';
+import { Check, Loader2, CloudOff, Trash2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { ChipNode } from './chip-node';
 import { HubNode } from './hub-node';
@@ -80,7 +80,11 @@ function retile(nodes: BoardNode[], hubId: string): BoardNode[] {
 function BoardCanvasInner() {
   const { board, setBoard, setBoardSilent, nextBoardId, busyBrains, saveStatus, saveNow } =
     useBoard();
-  const { media, projectMedia, addMedia, updateMedia } = useRag();
+  const { media, projectMedia, addMedia, updateMedia, deleteMedia } = useRag();
+  // Garbage bin (bottom-left): drag a source chip onto it to delete the source
+  // and its Pinecone vectors. `binHot` highlights it while a chip hovers over.
+  const binRef = useRef<HTMLDivElement>(null);
+  const [binHot, setBinHot] = useState(false);
   const { getIntersectingNodes, screenToFlowPosition, fitView } = useReactFlow();
   const wrapRef = useRef<HTMLDivElement>(null);
 
@@ -203,7 +207,18 @@ function BoardCanvasInner() {
 
   /** Magnetic hub glow + stack movement, per drag tick. */
   const onNodeDrag = useCallback(
-    (_: unknown, node: Node) => {
+    (e: unknown, node: Node) => {
+      // Highlight the garbage bin when a source chip is dragged over it.
+      if (node.type === 'chip' && binRef.current) {
+        const me = e as MouseEvent;
+        const r = binRef.current.getBoundingClientRect();
+        const over =
+          me.clientX >= r.left &&
+          me.clientX <= r.right &&
+          me.clientY >= r.top &&
+          me.clientY <= r.bottom;
+        setBinHot((prev: boolean) => (prev !== over ? over : prev));
+      }
       // Context notes / prompt pieces glow a cluster box they're over.
       if (DOCKABLE_CONTEXT.has(node.type!)) {
         const cl = hitCluster(node);
@@ -291,9 +306,37 @@ function BoardCanvasInner() {
 
   /** Dock / undock / snap on drop — stack-aware (the unit lands together). */
   const onNodeDragStop = useCallback(
-    (_: unknown, node: Node) => {
+    (e: unknown, node: Node) => {
       const s = dragSession.current;
       dragSession.current = null;
+
+      // Garbage bin: a source chip dropped on the bin → delete the source AND
+      // its Pinecone vectors (via deleteMedia → /api/delete-source).
+      if (node.type === 'chip' && binRef.current) {
+        const me = e as MouseEvent;
+        const r = binRef.current.getBoundingClientRect();
+        if (
+          me.clientX >= r.left &&
+          me.clientX <= r.right &&
+          me.clientY >= r.top &&
+          me.clientY <= r.bottom
+        ) {
+          setBinHot(false);
+          const mediaId = node.data?.mediaId as string | undefined;
+          const item = mediaId ? media.find((m) => m.id === mediaId) : undefined;
+          if (
+            mediaId &&
+            window.confirm(
+              `Delete "${item?.name ?? mediaId}" permanently? This removes it from your knowledge base and Pinecone. This cannot be undone.`
+            )
+          ) {
+            recallMedia(mediaId);
+            deleteMedia(mediaId);
+          }
+          return;
+        }
+      }
+      setBinHot(false);
 
       // Context note / prompt piece dropped on a cluster box → dock it (joins
       // the family as context/guidance); dropped outside → undock.
@@ -859,30 +902,45 @@ function BoardCanvasInner() {
         }}
       />
 
-      {/* save indicator + manual save — work persists locally on this device
-          AND to the cloud; click to force a save. */}
-      <button
-        onClick={saveNow}
-        title="Everything autosaves. Click to save now."
-        className={cn(
-          'absolute right-4 top-4 z-20 flex items-center gap-1.5 rounded-full bg-card px-3 py-1.5 text-[11.5px] font-medium shadow-[0_2px_8px_rgb(0_0_0/0.08)] transition-colors hover:bg-[rgb(var(--hairline)/0.04)] dark:ring-1 dark:ring-white/[0.08]',
-          saveStatus === 'local' ? 'text-amber-600' : 'text-muted-foreground'
-        )}
-      >
-        {saveStatus === 'saving' ? (
-          <>
-            <Loader2 className="h-3.5 w-3.5 animate-spin" /> Saving…
-          </>
-        ) : saveStatus === 'local' ? (
-          <>
-            <CloudOff className="h-3.5 w-3.5" /> Saved on device
-          </>
-        ) : (
-          <>
-            <Check className="h-3.5 w-3.5 text-emerald-500" /> Saved
-          </>
-        )}
-      </button>
+      {/* bottom-left controls: save status/button + garbage bin. Moved off the
+          top-right so it never overlaps a brain. Drag a source chip onto the bin
+          to delete it (and its Pinecone vectors). */}
+      <div className="absolute bottom-4 left-4 z-20 flex items-center gap-2">
+        <button
+          onClick={saveNow}
+          title="Everything autosaves. Click to save now."
+          className={cn(
+            'flex items-center gap-1.5 rounded-full bg-card px-3 py-1.5 text-[11.5px] font-medium shadow-[0_2px_8px_rgb(0_0_0/0.08)] transition-colors hover:bg-[rgb(var(--hairline)/0.04)] dark:ring-1 dark:ring-white/[0.08]',
+            saveStatus === 'local' ? 'text-amber-600' : 'text-muted-foreground'
+          )}
+        >
+          {saveStatus === 'saving' ? (
+            <>
+              <Loader2 className="h-3.5 w-3.5 animate-spin" /> Saving…
+            </>
+          ) : saveStatus === 'local' ? (
+            <>
+              <CloudOff className="h-3.5 w-3.5" /> Saved on device
+            </>
+          ) : (
+            <>
+              <Check className="h-3.5 w-3.5 text-emerald-500" /> Saved
+            </>
+          )}
+        </button>
+        <div
+          ref={binRef}
+          title="Garbage bin — drag a source chip here to delete it and its data"
+          className={cn(
+            'flex h-9 w-9 items-center justify-center rounded-full shadow-[0_2px_8px_rgb(0_0_0/0.08)] transition-all dark:ring-1 dark:ring-white/[0.08]',
+            binHot
+              ? 'scale-110 bg-red-500/15 text-red-500 ring-2 ring-red-400'
+              : 'bg-card text-muted-foreground/70'
+          )}
+        >
+          <Trash2 className="h-4 w-4" />
+        </div>
+      </div>
       <ReactFlow
         nodes={board.nodes as Node[]}
         edges={liveEdges}

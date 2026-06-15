@@ -6,7 +6,7 @@ import { useRag } from '@/lib/rag/store';
 import { MEDIA_TYPES, MEDIA_TYPE_ORDER } from '@/lib/rag/media-config';
 import { MediaIcon } from '@/components/rag/shared';
 import { MediaType } from '@/lib/rag/types';
-import { Search, MessageSquareQuote, RotateCcw, X } from 'lucide-react';
+import { Search, MessageSquareQuote, RotateCcw, X, Trash2 } from 'lucide-react';
 
 /** Drag payload the canvas reads in its onDrop handler. */
 export const CHEST_MIME = 'application/answersdoc-chest';
@@ -39,7 +39,7 @@ export function BoardChest({
   onPlacePrompt: (text: string) => void;
   onRecallMedia: (mediaId: string) => void;
 }) {
-  const { projectMedia } = useRag();
+  const { projectMedia, deleteMedia } = useRag();
   const [open, setOpen] = useState<string | null>(null);
   const [q, setQ] = useState('');
   const rootRef = useRef<HTMLDivElement>(null);
@@ -170,7 +170,7 @@ export function BoardChest({
                     }
                     onClick={() => !placed && onPlaceMedia(m.id)}
                     className={cn(
-                      'flex items-center gap-2.5 rounded-[10px] px-2 py-1.5 transition-colors',
+                      'group flex items-center gap-2.5 rounded-[10px] px-2 py-1.5 transition-colors',
                       placed
                         ? 'cursor-default opacity-50'
                         : 'cursor-grab hover:bg-[rgb(var(--hairline)/0.05)] active:cursor-grabbing'
@@ -201,6 +201,23 @@ export function BoardChest({
                         <RotateCcw className="h-3 w-3" /> R
                       </button>
                     )}
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (
+                          window.confirm(
+                            `Delete "${m.name}" permanently? This removes it from your knowledge base and Pinecone. This cannot be undone.`
+                          )
+                        ) {
+                          if (placed) onRecallMedia(m.id);
+                          deleteMedia(m.id);
+                        }
+                      }}
+                      title="Delete permanently — removes it from your knowledge base and Pinecone"
+                      className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-muted-foreground/50 opacity-0 transition-all hover:bg-red-500/10 hover:text-red-500 group-hover:opacity-100"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
                   </div>
                 );
               })
