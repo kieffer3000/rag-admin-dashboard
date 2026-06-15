@@ -195,6 +195,13 @@ export function RagProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const deleteMedia = useCallback((id: string) => {
+    // Delete the source's vectors from Pinecone too (best-effort, fire-and-
+    // forget) so a removed source doesn't leave orphaned, still-searchable data.
+    fetch('/api/delete-source', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ source_id: id })
+    }).catch(() => {});
     setMedia((prev) => prev.filter((m) => m.id !== id));
     setProjects((prev) =>
       prev.map((p) => ({ ...p, sourceIds: p.sourceIds.filter((s) => s !== id) }))

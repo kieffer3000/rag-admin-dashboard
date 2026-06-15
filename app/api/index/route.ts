@@ -1,4 +1,5 @@
 import { auth } from '@clerk/nextjs/server';
+import { deleteSourceVectors } from '@/lib/rag/pinecone-delete';
 
 // Proxies Board ingestion to the Make.com Indexing scenario.
 // Contract (per chunk): { chunk_id, source_id, name, type, namespace, text }
@@ -47,49 +48,6 @@ function chunkText(text: string): string[] {
   }
   if (cur.trim()) chunks.push(cur.trim());
   return chunks.filter((c) => c.length > 0);
-}
-
-/** Delete a source's existing chunk vectors before re-indexing, so a now-
- *  shorter document can't leave orphaned higher-index chunks behind. Lists
- *  vector ids by the `${sourceId}#` prefix (Pinecone serverless) and deletes
- *  them. Best-effort: never blocks the upsert if Pinecone creds are absent or
- *  the calls fail. */
-async function deleteExistingChunks(sourceId: string, namespace: string): Promise<number> {
-  const rawHost = process.env.PINECONE_HOST;
-  const key = process.env.PINECONE_API_KEY;
-  if (!rawHost || !key) return 0;
-  const host = `https://${rawHost.replace(/^https?:\/\//, '')}`;
-  const prefix = `${sourceId}#`;
-  const ids: string[] = [];
-  try {
-    let paginationToken: string | undefined;
-    for (let page = 0; page < 20; page++) {
-      const u = new URL(`${host}/vectors/list`);
-      u.searchParams.set('prefix', prefix);
-      u.searchParams.set('namespace', namespace);
-      u.searchParams.set('limit', '100');
-      if (paginationToken) u.searchParams.set('paginationToken', paginationToken);
-      const r = await fetch(u, { headers: { 'Api-Key': key } });
-      if (!r.ok) break;
-      const j = await r.json();
-      for (const v of j.vectors ?? []) if (v?.id) ids.push(v.id);
-      paginationToken = j.pagination?.next;
-      if (!paginationToken) break;
-    }
-    // Also clear any LEGACY whole-document vector (id = base source_id, no '#'),
-    // left over from before chunking — the prefix list above won't catch it.
-    ids.push(sourceId);
-    if (ids.length) {
-      await fetch(`${host}/vectors/delete`, {
-        method: 'POST',
-        headers: { 'Api-Key': key, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ids, namespace })
-      });
-    }
-  } catch {
-    /* best-effort; proceed to upsert regardless */
-  }
-  return ids.length;
 }
 
 /** Run upserts with a small concurrency cap (Make ops + serverless time). */
@@ -141,7 +99,7 @@ export async function POST(req: Request) {
   }
 
   // Clear any prior chunks for this source so a re-index can't leave orphans.
-  const deleted = await deleteExistingChunks(sourceId, namespace);
+  const deleted = await deleteSourceVectors(sourceId, namespace);
 
   const failures: number[] = [];
   await runPool(
