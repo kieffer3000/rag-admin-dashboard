@@ -19,6 +19,13 @@ import {
   type IsValidConnection
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
+import {
+  ArrowUpToLine,
+  ArrowDownToLine,
+  Copy,
+  Unplug,
+  Trash2
+} from 'lucide-react';
 
 import { useRag } from '@/lib/rag/store';
 import { useBoard } from '@/lib/rag/board/store';
@@ -60,6 +67,16 @@ const nodeTypes = {
 const edgeTypes = { scope: ScopeEdge };
 
 const SOURCE_TYPES = new Set(['chip', 'hub', 'textNode', 'prompt']);
+/** Node types the right-click menu can duplicate (content artifacts — chips
+ *  are one-per-source, hubs/brains aren't sensibly cloned). */
+const DUPLICABLE = new Set(['textNode', 'prompt', 'annotation', 'mindmap']);
+/** New-id prefix per duplicable node type. */
+const DUP_PREFIX: Record<string, string> = {
+  textNode: 'text',
+  prompt: 'prompt',
+  annotation: 'ann',
+  mindmap: 'mm'
+};
 /** Node types that dock into cluster boxes as compact tiles (non-source
  *  context: notes + prompt guides). */
 const DOCKABLE_CONTEXT = new Set(['textNode', 'prompt']);
@@ -85,6 +102,11 @@ function BoardCanvasInner() {
   const binRef = useRef<HTMLButtonElement>(null);
   const [binHot, setBinHot] = useState(false);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
+  // Right-click context menu (Make-style): anchored at the cursor, acts on the
+  // node it was opened over.
+  const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; nodeId: string } | null>(
+    null
+  );
   const { getIntersectingNodes, screenToFlowPosition, fitView } = useReactFlow();
   const wrapRef = useRef<HTMLDivElement>(null);
 
@@ -693,8 +715,32 @@ function BoardCanvasInner() {
     [setBoard]
   );
 
-  // Garbage-bin click: delete the currently-selected node. A source chip →
-  // delete the source + its Pinecone vectors; anything else → remove the node.
+  // Delete one node by id. A source chip → delete the source + its Pinecone
+  // vectors (confirmed); anything else → remove the node from the board.
+  const deleteNodeById = useCallback(
+    (nodeId: string) => {
+      const node = board.nodes.find((n) => n.id === nodeId);
+      if (!node) return;
+      if (node.type === 'chip') {
+        const mediaId = node.data?.mediaId as string | undefined;
+        const item = mediaId ? media.find((m) => m.id === mediaId) : undefined;
+        if (
+          mediaId &&
+          window.confirm(
+            `Delete "${item?.name ?? mediaId}" permanently? This removes it from your knowledge base and Pinecone. This cannot be undone.`
+          )
+        ) {
+          recallMedia(mediaId);
+          deleteMedia(mediaId);
+        }
+      } else if (window.confirm('Delete this from the board?')) {
+        removeBoardNode(nodeId);
+      }
+    },
+    [board.nodes, media, recallMedia, deleteMedia, removeBoardNode]
+  );
+
+  // Garbage-bin click: delete the currently-selected node (or hint how to use it).
   const onDeleteSelected = useCallback(() => {
     if (!selectedNodeId) {
       window.alert(
@@ -702,25 +748,76 @@ function BoardCanvasInner() {
       );
       return;
     }
-    const node = board.nodes.find((n) => n.id === selectedNodeId);
-    if (!node) return;
-    if (node.type === 'chip') {
-      const mediaId = node.data?.mediaId as string | undefined;
-      const item = mediaId ? media.find((m) => m.id === mediaId) : undefined;
-      if (
-        mediaId &&
-        window.confirm(
-          `Delete "${item?.name ?? mediaId}" permanently? This removes it from your knowledge base and Pinecone. This cannot be undone.`
-        )
-      ) {
-        recallMedia(mediaId);
-        deleteMedia(mediaId);
-      }
-    } else if (window.confirm('Delete this from the board?')) {
-      removeBoardNode(selectedNodeId);
-    }
+    deleteNodeById(selectedNodeId);
     setSelectedNodeId(null);
-  }, [selectedNodeId, board.nodes, media, recallMedia, deleteMedia, removeBoardNode]);
+  }, [selectedNodeId, deleteNodeById]);
+
+  // ---- right-click context-menu actions ----
+  /** Z-order: move a node (with its docked children, so parent-before-child
+   *  holds) to the array's end (front = on top) or start (back). */
+  const reorderNode = useCallback(
+    (nodeId: string, dir: 'front' | 'back') => {
+      setBoard((prev) => {
+        if (!prev.nodes.some((n) => n.id === nodeId)) return prev;
+        const groupIds = new Set([
+          nodeId,
+          ...prev.nodes.filter((n) => n.parentId === nodeId).map((n) => n.id)
+        ]);
+        const group = prev.nodes.filter((n) => groupIds.has(n.id));
+        const rest = prev.nodes.filter((n) => !groupIds.has(n.id));
+        return {
+          ...prev,
+          nodes: dir === 'front' ? [...rest, ...group] : [...group, ...rest]
+        };
+      });
+    },
+    [setBoard]
+  );
+
+  /** Clone a content artifact (note/prompt/annotation/mindmap) onto the canvas,
+   *  offset from the original and detached from any box. */
+  const duplicateNode = useCallback(
+    (nodeId: string) => {
+      setBoard((prev) => {
+        const n = prev.nodes.find((x) => x.id === nodeId);
+        if (!n || !DUPLICABLE.has(n.type!)) return prev;
+        const copy: BoardNode = {
+          ...n,
+          id: nextBoardId(DUP_PREFIX[n.type!] ?? 'node'),
+          parentId: undefined,
+          position: { x: n.position.x + 28, y: n.position.y + 28 },
+          data: JSON.parse(JSON.stringify(n.data ?? {}))
+        };
+        return { ...prev, nodes: [...prev.nodes, copy] };
+      });
+    },
+    [setBoard, nextBoardId]
+  );
+
+  /** Cut every wire touching a node (as a source or into a brain). */
+  const disconnectNode = useCallback(
+    (nodeId: string) => {
+      setBoard((prev) => ({
+        ...prev,
+        edges: prev.edges.filter(
+          (e) => e.source !== nodeId && e.target !== nodeId
+        )
+      }));
+    },
+    [setBoard]
+  );
+
+  const onNodeContextMenu = useCallback((e: React.MouseEvent, node: Node) => {
+    e.preventDefault();
+    setCtxMenu({ x: e.clientX, y: e.clientY, nodeId: node.id });
+  }, []);
+
+  const ctxNode = ctxMenu
+    ? board.nodes.find((n) => n.id === ctxMenu.nodeId)
+    : null;
+  const ctxHasEdges = ctxNode
+    ? board.edges.some((e) => e.source === ctxNode.id || e.target === ctxNode.id)
+    : false;
 
   // Ants march ONLY while a brain is thinking — and only on ITS edges.
   // Idle canvas = zero animation work (battery + visual calm).
@@ -945,6 +1042,9 @@ function BoardCanvasInner() {
         onNodeDrag={onNodeDrag}
         onNodeDragStop={onNodeDragStop}
         onNodeDoubleClick={onNodeDoubleClick}
+        onNodeContextMenu={onNodeContextMenu}
+        onPaneClick={() => setCtxMenu(null)}
+        onMoveStart={() => setCtxMenu(null)}
         onSelectionChange={({ nodes }) =>
           setSelectedNodeId(nodes.length === 1 ? nodes[0].id : null)
         }
@@ -982,7 +1082,10 @@ function BoardCanvasInner() {
         minZoom={0.2}
         maxZoom={2}
         proOptions={{ hideAttribution: true }}
-        className="bg-transparent"
+        // `isolate` gives the canvas its OWN stacking context, so a node's high
+        // drag/select z-index can't escape and paint over the bottom dock or
+        // toolbar (which sit at z-20+ as siblings above this isolated block).
+        className="isolate bg-transparent"
       >
         <Background
           variant={BackgroundVariant.Dots}
@@ -1186,6 +1289,80 @@ function BoardCanvasInner() {
           })
         }
       />
+
+      {/* Right-click context menu — Make-style per-node actions. */}
+      {ctxMenu && ctxNode && (
+        <>
+          {/* click / right-click anywhere away closes it */}
+          <div
+            className="fixed inset-0 z-[55]"
+            onClick={() => setCtxMenu(null)}
+            onContextMenu={(e) => {
+              e.preventDefault();
+              setCtxMenu(null);
+            }}
+          />
+          <div
+            className="fixed z-[60] w-52 overflow-hidden rounded-xl border border-[rgb(var(--hairline)/0.16)] bg-card p-1 text-[13px] shadow-[0_10px_34px_-6px_rgb(0_0_0/0.32)]"
+            style={{
+              left: Math.min(ctxMenu.x, window.innerWidth - 220),
+              top: Math.min(ctxMenu.y, window.innerHeight - 250)
+            }}
+          >
+            <button
+              onClick={() => {
+                reorderNode(ctxMenu.nodeId, 'front');
+                setCtxMenu(null);
+              }}
+              className="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-left transition-colors hover:bg-accent/10"
+            >
+              <ArrowUpToLine className="h-4 w-4 text-foreground/70" /> Bring to front
+            </button>
+            <button
+              onClick={() => {
+                reorderNode(ctxMenu.nodeId, 'back');
+                setCtxMenu(null);
+              }}
+              className="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-left transition-colors hover:bg-accent/10"
+            >
+              <ArrowDownToLine className="h-4 w-4 text-foreground/70" /> Send to back
+            </button>
+            {DUPLICABLE.has(ctxNode.type!) && (
+              <button
+                onClick={() => {
+                  duplicateNode(ctxMenu.nodeId);
+                  setCtxMenu(null);
+                }}
+                className="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-left transition-colors hover:bg-accent/10"
+              >
+                <Copy className="h-4 w-4 text-foreground/70" /> Duplicate
+              </button>
+            )}
+            {ctxHasEdges && (
+              <button
+                onClick={() => {
+                  disconnectNode(ctxMenu.nodeId);
+                  setCtxMenu(null);
+                }}
+                className="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-left transition-colors hover:bg-accent/10"
+              >
+                <Unplug className="h-4 w-4 text-foreground/70" /> Disconnect wires
+              </button>
+            )}
+            <div className="my-1 h-px bg-[rgb(var(--hairline)/0.12)]" />
+            <button
+              onClick={() => {
+                const id = ctxMenu.nodeId;
+                setCtxMenu(null);
+                deleteNodeById(id);
+              }}
+              className="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-left text-red-600 transition-colors hover:bg-red-500/10"
+            >
+              <Trash2 className="h-4 w-4" /> Delete
+            </button>
+          </div>
+        </>
+      )}
     </div>
   );
 }

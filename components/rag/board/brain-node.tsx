@@ -244,6 +244,17 @@ function BrainNodeInner({ id, data, selected }: NodeProps) {
       30
     );
   }
+  // Accessibility text size: zooms the whole answer column so low-vision users
+  // can read comfortably. Cycles 100% → 115% → 130% → 150% → back. Independent
+  // of the size-mode (window dimensions) above. Persisted on the brain.
+  const TEXT_STEPS = [1, 1.15, 1.3, 1.5];
+  const textScale = (d.textScale as number) ?? 1;
+  function cycleTextScale() {
+    const i = TEXT_STEPS.indexOf(textScale);
+    const next = TEXT_STEPS[(i + 1) % TEXT_STEPS.length] ?? 1.15;
+    updateBoardNodeData(id, { textScale: next });
+  }
+
   const modelId = (d.modelId as string) ?? BOARD_DEFAULT_MODEL;
   const model = LLM_MODELS.find((m) => m.id === modelId) ?? LLM_MODELS[3];
 
@@ -867,6 +878,23 @@ function BrainNodeInner({ id, data, selected }: NodeProps) {
             </DropdownMenuContent>
           </DropdownMenu>
 
+          {/* accessibility text size — cycles the answer column's zoom */}
+          <button
+            onClick={cycleTextScale}
+            title={`Text size: ${Math.round(textScale * 100)}% — click to enlarge (for easier reading)`}
+            className={cn(
+              'nodrag flex h-6 items-center justify-center gap-0.5 rounded-[8px] px-1 transition-colors hover:bg-black/[0.05] dark:hover:bg-white/[0.07]',
+              textScale > 1
+                ? 'text-accent'
+                : 'text-muted-foreground/70 hover:text-foreground'
+            )}
+          >
+            <TypeIcon className="h-3.5 w-3.5" />
+            <span className="text-[9px] font-bold tabular-nums">
+              {textScale > 1 ? `${Math.round(textScale * 100)}` : 'A'}
+            </span>
+          </button>
+
           <button
             onClick={cycleSize}
             title={
@@ -948,6 +976,10 @@ function BrainNodeInner({ id, data, selected }: NodeProps) {
       {/* messages */}
       <div
         ref={scrollRef}
+        // `zoom` scales the whole answer column (text, tables, charts, spacing)
+        // for the accessibility text-size control, so larger type genuinely
+        // takes more room — exactly what low-vision reading needs.
+        style={textScale !== 1 ? { zoom: textScale } : undefined}
         className={cn(
           'nodrag nowheel select-text scroll-brain flex min-h-0 flex-1 flex-col gap-2.5 overflow-y-auto py-3',
           // Reading mode: a comfortable ~70ch centered measure (not full-bleed)
