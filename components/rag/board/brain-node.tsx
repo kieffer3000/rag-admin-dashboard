@@ -574,6 +574,14 @@ function BrainNodeInner({ id, data, selected }: NodeProps) {
         stopHum();
         playChime(); // the answer landed
         void maybeUpdateSummary(q, content); // fold far-back turns (long convos)
+        // long-term memory: remember this Q&A across sessions (skip no-match)
+        if (content && !noMatch) {
+          void fetch('/api/memory/store', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ question: q, answer: content })
+          }).catch(() => {});
+        }
       }
     );
   }

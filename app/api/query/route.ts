@@ -1,5 +1,6 @@
 import { auth } from '@clerk/nextjs/server';
 import { runUtilityLLM } from '@/lib/rag/utility-llm';
+import { retrieveMemories } from '@/lib/rag/memory';
 
 // Proxies the Board's brain queries to the Make.com Query scenario.
 // The webhook contract is FROZEN (see BOARD_SPEC.md):
@@ -21,6 +22,7 @@ export const runtime = 'nodejs';
 const NOMATCH_THRESHOLD = Number(process.env.RAG_NOMATCH_THRESHOLD ?? 0.45);
 const RETRY_ENABLED = process.env.RAG_CORRECTIVE_RETRY !== 'off';
 const VALIDATOR_ENABLED = process.env.RAG_VALIDATOR !== 'off';
+const MEMORY_ENABLED = process.env.RAG_MEMORY !== 'off';
 const HISTORY_MAX_MESSAGES = 30;
 
 interface RawCitation {
@@ -230,12 +232,22 @@ export async function POST(req: Request) {
   const summary = typeof body.summary === 'string' ? body.summary : '';
   const rawQuestion = await contextualize(userQuestion, history, summary);
 
+  // Long-term memory: pull relevant past-conversation summaries and feed them in
+  // as context so the brain "remembers" across sessions.
+  const memories = MEMORY_ENABLED ? await retrieveMemories(rawQuestion) : [];
+  const ctx = memories.length
+    ? [
+        ...contextTexts,
+        ...memories.map((m) => `(recalled from an earlier conversation) ${m}`)
+      ]
+    : contextTexts;
+
   // First retrieval pass.
   let result: MakeResult;
   try {
     result = await callMake(
       url,
-      buildPrompt(rawQuestion, mode, guides, contextTexts),
+      buildPrompt(rawQuestion, mode, guides, ctx),
       rawQuestion,
       sourceIds,
       mode,
@@ -258,7 +270,7 @@ export async function POST(req: Request) {
       try {
         const second = await callMake(
           url,
-          buildPrompt(newQuery, mode, guides, contextTexts),
+          buildPrompt(newQuery, mode, guides, ctx),
           newQuery,
           sourceIds,
           mode,
