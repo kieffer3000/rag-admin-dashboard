@@ -981,7 +981,11 @@ function BrainNodeInner({ id, data, selected }: NodeProps) {
         // takes more room — exactly what low-vision reading needs.
         style={textScale !== 1 ? { zoom: textScale } : undefined}
         className={cn(
-          'nodrag nowheel select-text scroll-brain flex min-h-0 flex-1 flex-col gap-2.5 overflow-y-auto py-3',
+          // NOT `nodrag`: the message area is a drag surface so the brain can be
+          // grabbed from its whole body, not just the header. The answer text
+          // bubbles below opt back out (nodrag + select-text) so reading and
+          // selecting still work; buttons click fine (a click isn't a drag).
+          'nowheel scroll-brain flex min-h-0 flex-1 flex-col gap-2.5 overflow-y-auto py-3',
           // Reading mode: a comfortable ~70ch centered measure (not full-bleed)
           // plus larger type — a premium reading column, not a stretched page.
           sizeMode === 'full'
@@ -1304,7 +1308,7 @@ function BrainMessage({
       // inner-edge make it pop off the canvas like a premium iMessage bubble.
       <div
         className={cn(
-          'max-w-[88%] self-end whitespace-pre-wrap rounded-[14px] rounded-br-[5px] bg-gradient-to-b from-indigo-500 to-indigo-600 px-3.5 py-2 leading-relaxed text-white shadow-[inset_0_1px_0_rgb(255_255_255/0.25),0_2px_8px_hsl(var(--accent)/0.32)]',
+          'nodrag select-text max-w-[88%] self-end whitespace-pre-wrap rounded-[14px] rounded-br-[5px] bg-gradient-to-b from-indigo-500 to-indigo-600 px-3.5 py-2 leading-relaxed text-white shadow-[inset_0_1px_0_rgb(255_255_255/0.25),0_2px_8px_hsl(var(--accent)/0.32)]',
           large ? 'text-[15px]' : 'text-[14px]'
         )}
       >
@@ -1315,7 +1319,7 @@ function BrainMessage({
   return (
     <div className="group self-start">
       {m.content ? (
-        <div ref={bodyRef}>
+        <div ref={bodyRef} className="nodrag select-text">
           <AnswerBody content={m.content} large={large} />
         </div>
       ) : (

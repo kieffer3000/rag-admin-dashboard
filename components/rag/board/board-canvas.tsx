@@ -100,6 +100,9 @@ function BoardCanvasInner() {
   // Garbage bin (bottom-left): drag a source chip onto it to delete the source
   // and its Pinecone vectors. `binHot` highlights it while a chip hovers over.
   const binRef = useRef<HTMLButtonElement>(null);
+  // The bottom dock's screen bounds — used to bounce a dropped node up so it
+  // can never come to rest hidden behind the dock.
+  const dockRef = useRef<HTMLDivElement>(null);
   const [binHot, setBinHot] = useState(false);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   // Right-click context menu (Make-style): anchored at the cursor, acts on the
@@ -326,6 +329,49 @@ function BoardCanvasInner() {
     [hitHub, hitCluster, setBoard, board.nodes, mediaTypeOf]
   );
 
+  /** If a just-dropped node came to rest overlapping the bottom dock, bounce it
+   *  up (in flow space, pan/zoom aware) so it's never trapped behind the dock. */
+  const clearDock = useCallback(
+    (nodeId: string) => {
+      const dock = dockRef.current;
+      const el = document.querySelector(
+        `.react-flow__node[data-id="${nodeId}"]`
+      ) as HTMLElement | null;
+      if (!dock || !el) return;
+      const nr = el.getBoundingClientRect();
+      const dr = dock.getBoundingClientRect();
+      const GAP = 14;
+      if (nr.right < dr.left || nr.left > dr.right) return; // no horizontal overlap
+      const overlapPx = nr.bottom + GAP - dr.top; // intrusion past the dock's top
+      if (overlapPx <= 0) return;
+      const a = screenToFlowPosition({ x: nr.left, y: nr.top });
+      const b = screenToFlowPosition({ x: nr.left, y: nr.top - overlapPx });
+      const dy = a.y - b.y;
+      if (dy <= 0) return;
+      setBoard((prev) => {
+        const self = prev.nodes.find((n) => n.id === nodeId);
+        if (!self || self.parentId) return prev; // docked pieces aren't loose
+        // Lift the whole welded unit together so a stack doesn't split.
+        const typeOf = (n: BoardNode) =>
+          media.find((m) => m.id === n.data.mediaId)?.type;
+        const unitIds = new Set(
+          (self.type === 'chip' ? stackOf(self, prev.nodes, typeOf) : [self]).map(
+            (n) => n.id
+          )
+        );
+        return {
+          ...prev,
+          nodes: prev.nodes.map((n) =>
+            unitIds.has(n.id)
+              ? { ...n, position: { x: n.position.x, y: n.position.y - dy } }
+              : n
+          )
+        };
+      });
+    },
+    [screenToFlowPosition, setBoard, media]
+  );
+
   /** Dock / undock / snap on drop — stack-aware (the unit lands together). */
   const onNodeDragStop = useCallback(
     (e: unknown, node: Node) => {
@@ -359,6 +405,10 @@ function BoardCanvasInner() {
         }
       }
       setBinHot(false);
+
+      // Once the drop settles, bounce the node up if it landed behind the dock
+      // (covers brains, notes, and chips — all share the same dock no-go zone).
+      setTimeout(() => clearDock(node.id), 60);
 
       // Context note / prompt piece dropped on a cluster box → dock it (joins
       // the family as context/guidance); dropped outside → undock.
@@ -600,7 +650,7 @@ function BoardCanvasInner() {
         return { ...prev, nodes, edges };
       }), 0);
     },
-    [hitHub, hitCluster, setBoard, media, mediaTypeOf]
+    [hitHub, hitCluster, setBoard, media, mediaTypeOf, clearDock]
   );
 
   /** Double-click a module to zoom the viewport straight to it. Ignores
@@ -1267,6 +1317,7 @@ function BoardCanvasInner() {
         onSave={saveNow}
         binRef={binRef}
         binHot={binHot}
+        dockRef={dockRef}
         onDeleteSelected={onDeleteSelected}
         onRecallMedia={recallMedia}
         onPlaceMedia={(mediaId) => {

@@ -7,7 +7,7 @@ import {
   getBezierPath,
   type EdgeProps
 } from '@xyflow/react';
-import { X } from 'lucide-react';
+import { Scissors } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useBoard } from '@/lib/rag/board/store';
 
@@ -111,8 +111,12 @@ export function ScopeEdge({
         onMouseLeave={() => setHover(false)}
       />
       <EdgeLabelRenderer>
+        {/* A scissor sits on EVERY cable, always visible (so each connection is
+            individually snippable at a glance — no hover-hunting). It rests
+            subtle and lifts to full red on hover. Anchored beside its own
+            source (cutX/cutY) so many cables don't stack their scissors. */}
         <button
-          title="Disconnect"
+          title="Cut this connection"
           onMouseEnter={() => setHover(true)}
           onMouseLeave={() => setHover(false)}
           onClick={(e) => {
@@ -125,11 +129,13 @@ export function ScopeEdge({
             pointerEvents: 'all'
           }}
           className={cn(
-            'nodrag nopan flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-white shadow-[0_2px_6px_rgb(0_0_0/0.25)] ring-2 ring-card transition-all duration-150',
-            hover ? 'scale-100 opacity-100' : 'pointer-events-none scale-50 opacity-0'
+            'nodrag nopan flex h-[22px] w-[22px] items-center justify-center rounded-full ring-2 ring-card transition-all duration-150',
+            hover
+              ? 'scale-110 bg-red-500 text-white shadow-[0_2px_8px_rgb(239_68_68/0.5)]'
+              : 'scale-100 bg-card text-red-500/80 opacity-85 shadow-[0_1px_5px_rgb(0_0_0/0.22)]'
           )}
         >
-          <X className="h-3 w-3" strokeWidth={3} />
+          <Scissors className="h-3.5 w-3.5" strokeWidth={2.5} />
         </button>
       </EdgeLabelRenderer>
     </>

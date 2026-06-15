@@ -47,7 +47,8 @@ export function BoardChest({
   onSave,
   binRef,
   binHot,
-  onDeleteSelected
+  onDeleteSelected,
+  dockRef
 }: {
   placedIds: Set<string>;
   onPlaceMedia: (mediaId: string) => void;
@@ -58,6 +59,8 @@ export function BoardChest({
   binRef: RefObject<HTMLButtonElement | null>;
   binHot: boolean;
   onDeleteSelected: () => void;
+  /** Canvas reads the dock's screen bounds to push dropped nodes off it. */
+  dockRef?: RefObject<HTMLDivElement | null>;
 }) {
   const { projectMedia, deleteMedia } = useRag();
   const [open, setOpen] = useState<string | null>(null);
@@ -247,7 +250,10 @@ export function BoardChest({
       )}
 
       {/* the dock: a bubble per media type + a prompts bubble */}
-      <div className="flex items-center gap-1.5 rounded-full bg-card px-2.5 py-2 shadow-[0_4px_24px_rgb(0_0_0/0.12)] ring-1 ring-black/[0.05] dark:ring-white/[0.08]">
+      <div
+        ref={dockRef}
+        className="flex items-center gap-1.5 rounded-full bg-card px-2.5 py-2 shadow-[0_4px_24px_rgb(0_0_0/0.12)] ring-1 ring-black/[0.05] dark:ring-white/[0.08]"
+      >
         {typeBubbles.map((t) => {
           const meta = MEDIA_TYPES[t];
           const count = byType.get(t)?.length ?? 0;
