@@ -617,8 +617,32 @@ function BrainNodeInner({ id, data, selected }: NodeProps) {
         .map((s) => {
           if (s.type === 'prose')
             return s.text.trim() ? sanitizeHtml(s.text) : '';
+          // Use the captured rendered SVG if present…
           const el = graphics[gi++] as HTMLElement | undefined;
-          return el ? el.outerHTML : '';
+          if (el) return el.outerHTML;
+          // …otherwise fall back to a data table for charts (never raw code).
+          if (s.type === 'chart') {
+            try {
+              const spec = JSON.parse(s.text);
+              const rows = (spec.data ?? [])
+                .map(
+                  (d: Record<string, unknown>) =>
+                    `<tr><td>${escapeHtml(String(d.name ?? ''))}</td>` +
+                    Object.entries(d)
+                      .filter(([k]) => k !== 'name')
+                      .map(([, v]) => `<td>${escapeHtml(String(v))}</td>`)
+                      .join('') +
+                    `</tr>`
+                )
+                .join('');
+              return `<figure><figcaption>${escapeHtml(
+                spec.title ?? 'Chart'
+              )}</figcaption><table>${rows}</table></figure>`;
+            } catch {
+              return '';
+            }
+          }
+          return '';
         })
         .join('\n');
 

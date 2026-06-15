@@ -20,11 +20,13 @@ export const runtime = 'nodejs';
 
 const NOMATCH_THRESHOLD = Number(process.env.RAG_NOMATCH_THRESHOLD ?? 0.45);
 const RETRY_ENABLED = process.env.RAG_CORRECTIVE_RETRY !== 'off';
+const VALIDATOR_ENABLED = process.env.RAG_VALIDATOR !== 'off';
 const HISTORY_MAX_MESSAGES = 30;
 
 interface RawCitation {
   source_id?: string | null;
   score?: number;
+  snippet?: string;
 }
 interface MakeResult {
   answer: string;
@@ -159,6 +161,25 @@ async function contextualize(
   return cleaned.length >= 3 ? cleaned : question;
 }
 
+/** LLM answer-validator: does the retrieved context actually address the
+ *  question? Catches off-topic matches that the score gate misses (Gemini
+ *  embeddings score unrelated text high). true = answers it; fails OPEN (returns
+ *  true) if the validator is unavailable, so a hiccup never hides a good answer. */
+async function validateAnswer(
+  question: string,
+  citations: RawCitation[]
+): Promise<boolean> {
+  const snippets = citations
+    .map((c, i) => `[${i + 1}] ${c.snippet ?? ''}`)
+    .join('\n')
+    .slice(0, 3000);
+  if (!snippets.trim()) return false;
+  const prompt = `You decide whether the retrieved context can answer the user's question. If the context clearly does NOT address the SUBJECT of the question, answer "negative". Otherwise answer "positive". Reply with exactly one word.\n\nQuestion: ${question}\n\nRetrieved context:\n${snippets}`;
+  const out = await runUtilityLLM(prompt, { temperature: 0, maxOutputTokens: 6 });
+  if (!out) return true; // fail-open
+  return !/negative/i.test(out);
+}
+
 export async function POST(req: Request) {
   const { userId } = await auth();
   if (!userId) {
@@ -253,6 +274,25 @@ export async function POST(req: Request) {
       } catch {
         /* keep the first result if the retry call fails */
       }
+    }
+  }
+
+  // Answer-validator (cited mode): if the retrieved context doesn't actually
+  // address the question, don't present a confident off-topic answer — replace
+  // it with an honest "not in your sources". More reliable than the score gate.
+  let validated = true;
+  if (
+    VALIDATOR_ENABLED &&
+    mode === 'cited' &&
+    !result.noMatch &&
+    result.citations.length > 0
+  ) {
+    validated = await validateAnswer(userQuestion, result.citations);
+    if (!validated) {
+      result.answer =
+        "I couldn't find an answer to that in your wired sources. Try rephrasing, or wire a source that covers it.";
+      result.citations = [];
+      result.noMatch = true;
     }
   }
 
