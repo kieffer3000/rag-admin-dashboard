@@ -50,6 +50,8 @@ import { Label } from '@/components/ui/label';
 export interface BoardToolbarProps {
   onPlaceMedia: (mediaId: string) => void;
   onNewSource: (type: MediaType, name: string, source: string) => void;
+  /** Upload an actual image file → Blob + multimodal index (Make Image scenario). */
+  onNewImage: (name: string, file: File) => void;
   onAddBrain: () => void;
   onAddText: () => void;
   onAddAnnotation: () => void;
@@ -97,6 +99,8 @@ export function BoardToolbar(p: BoardToolbarProps) {
   const [hubOpen, setHubOpen] = useState(false);
   const [name, setName] = useState('');
   const [url, setUrl] = useState('');
+  // Image uploads carry an actual file (not a URL/text string).
+  const [file, setFile] = useState<File | null>(null);
 
   // ---- voice recording ----
   const [recOpen, setRecOpen] = useState(false);
@@ -171,10 +175,16 @@ export function BoardToolbar(p: BoardToolbarProps) {
 
   function submitSource() {
     if (!sourceType || !name.trim()) return;
-    p.onNewSource(sourceType, name.trim(), url.trim());
+    if (sourceType === 'image') {
+      if (!file) return;
+      p.onNewImage(name.trim(), file);
+    } else {
+      p.onNewSource(sourceType, name.trim(), url.trim());
+    }
     setSourceType(null);
     setName('');
     setUrl('');
+    setFile(null);
   }
 
   function submitHub() {
@@ -395,7 +405,15 @@ export function BoardToolbar(p: BoardToolbarProps) {
       )}
 
       {/* new-source dialog */}
-      <Dialog open={!!sourceType} onOpenChange={(o) => !o && setSourceType(null)}>
+      <Dialog
+        open={!!sourceType}
+        onOpenChange={(o) => {
+          if (!o) {
+            setSourceType(null);
+            setFile(null);
+          }
+        }}
+      >
         <DialogContent className="sm:max-w-md">
           {sourceType && (
             <>
@@ -423,28 +441,62 @@ export function BoardToolbar(p: BoardToolbarProps) {
                     autoFocus
                   />
                 </div>
-                <div className="space-y-1.5">
-                  <Label>
-                    {URL_TYPES.includes(sourceType) ? 'URL' : 'File / content'}
-                  </Label>
-                  <Input
-                    value={url}
-                    onChange={(e) => setUrl(e.target.value)}
-                    placeholder={
-                      sourceType === 'youtube'
-                        ? 'https://youtube.com/watch?v=…'
-                        : sourceType === 'website'
-                          ? 'https://…'
-                          : 'filename or pasted text'
-                    }
-                  />
-                </div>
+                {sourceType === 'image' ? (
+                  // Real file upload → Blob + multimodal (pixel) embedding.
+                  <div className="space-y-1.5">
+                    <Label>Image file</Label>
+                    <input
+                      type="file"
+                      accept="image/png,image/jpeg,image/webp"
+                      onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+                      className="block w-full cursor-pointer rounded-lg border border-input bg-card text-[13px] file:mr-3 file:cursor-pointer file:border-0 file:bg-accent/10 file:px-3 file:py-2 file:text-accent hover:border-accent/40"
+                    />
+                    {file ? (
+                      <p className="text-[11.5px] text-muted-foreground/70">
+                        {file.name} · {(file.size / 1048576).toFixed(1)} MB
+                      </p>
+                    ) : (
+                      <p className="text-[11.5px] text-muted-foreground/55">
+                        PNG, JPEG, or WebP · up to 12 MB. The image is embedded by
+                        its pixels and captioned, so it’s searchable by look and by
+                        words.
+                      </p>
+                    )}
+                  </div>
+                ) : (
+                  <div className="space-y-1.5">
+                    <Label>
+                      {URL_TYPES.includes(sourceType) ? 'URL' : 'File / content'}
+                    </Label>
+                    <Input
+                      value={url}
+                      onChange={(e) => setUrl(e.target.value)}
+                      placeholder={
+                        sourceType === 'youtube'
+                          ? 'https://youtube.com/watch?v=…'
+                          : sourceType === 'website'
+                            ? 'https://…'
+                            : 'filename or pasted text'
+                      }
+                    />
+                  </div>
+                )}
               </div>
               <div className="flex justify-end gap-2 pt-1">
-                <Button variant="ghost" onClick={() => setSourceType(null)}>
+                <Button
+                  variant="ghost"
+                  onClick={() => {
+                    setSourceType(null);
+                    setFile(null);
+                  }}
+                >
                   Cancel
                 </Button>
-                <Button variant="accent" disabled={!name.trim()} onClick={submitSource}>
+                <Button
+                  variant="accent"
+                  disabled={!name.trim() || (sourceType === 'image' && !file)}
+                  onClick={submitSource}
+                >
                   Index &amp; place
                 </Button>
               </div>

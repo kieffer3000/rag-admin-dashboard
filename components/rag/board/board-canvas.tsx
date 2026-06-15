@@ -1199,6 +1199,42 @@ function BoardCanvasInner() {
             })
             .catch(() => updateMedia(id, { status: 'failed' }));
         }}
+        onNewImage={(name, file) => {
+          // Real image upload: optimistic chip now; the route hosts the bytes on
+          // Blob and hands the pixel-embed + caption to the Make Image scenario.
+          const id = addMedia(
+            {
+              type: 'image',
+              name,
+              description: '',
+              date: new Date().toISOString().slice(0, 10),
+              content: name
+            },
+            { simulate: false }
+          );
+          pushNode({
+            id: nextBoardId('chip'),
+            type: 'chip',
+            position: centerPos(),
+            data: { mediaId: id }
+          });
+          const fd = new FormData();
+          fd.append('file', file);
+          fd.append('name', name);
+          fd.append('source_id', id);
+          fetch('/api/index-image', { method: 'POST', body: fd })
+            .then(async (r) => {
+              const j = await r.json().catch(() => ({}));
+              if (!r.ok || !j.ok) throw new Error(j?.error ?? 'upload failed');
+              updateMedia(id, {
+                status: j.indexed ? 'indexed' : 'processing',
+                source: j.image_url, // hosted URL → thumbnail + visual search
+                content: j.caption || name
+              });
+              if (!j.indexed && j.note) console.warn('[image-index]', j.note);
+            })
+            .catch(() => updateMedia(id, { status: 'failed' }));
+        }}
         onAddBrain={() => {
           // Up to 5 brains per board — one per subject/angle in a project.
           const brainCount = board.nodes.filter((n) => n.type === 'brain').length;
