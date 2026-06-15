@@ -126,6 +126,50 @@ export const MOCK_MEDIA: MediaItem[] = [
     chunks: 6,
     content:
       'Key takeaways: 1) Interleaving beats blocked practice. 2) Retrieval practice > rereading. 3) Sleep consolidates memory. 4) Test yourself before you feel ready.'
+  },
+  {
+    id: 's_invoice_pincay',
+    type: 'document',
+    name: 'Invoice — PINCAY (TIO Square)',
+    description: 'Sample invoice with line-item dollar amounts.',
+    date: '2026-06-11',
+    status: 'indexed',
+    chunks: 1,
+    content:
+      'TIO Square Inc. INVOICE. File Number 060826-R211100-sur-ny-PINCAY. Date 6/11/2026. Billed to Command Investigations LLC. Total Due 1019.63 dollars. Line items: Surveillance Tuesday June 9 2026 8 hours at 60 dollars per hour equals 480 dollars; Surveillance Wednesday June 10 2026 8 hours at 60 equals 480 dollars; Parking 44.71 dollars; Tolls 14.92 dollars. Subtotal 1019.63. Balance Due 1019.63 dollars.'
+  },
+  {
+    id: 's_q2_budget',
+    type: 'document',
+    name: 'Q2 2026 Marketing Budget',
+    description: 'Sample budget allocation by channel (USD).',
+    date: '2026-06-08',
+    status: 'indexed',
+    chunks: 1,
+    content:
+      'Q2 2026 Marketing Budget for Acme Co. Allocations by channel: Paid Ads 42000 dollars; Content Marketing 18000 dollars; Events and Conferences 25000 dollars; SEO Tools and Software 9000 dollars; Influencer Partnerships 16000 dollars. Total Q2 marketing budget 110000 dollars. Paid Ads is the largest line at 38 percent of spend.'
+  },
+  {
+    id: 's_monthly_sales',
+    type: 'document',
+    name: 'Monthly Sales H1 2026',
+    description: 'Sample monthly revenue trend (USD).',
+    date: '2026-06-09',
+    status: 'indexed',
+    chunks: 1,
+    content:
+      'Acme Co monthly revenue, first half of 2026 in USD: January 82000; February 91000; March 104000; April 99000; May 121000; June 138000. Revenue grew 68 percent from January to June, with a small dip in April. Q1 total 277000; Q2 total 358000.'
+  },
+  {
+    id: 's_plan_compare',
+    type: 'document',
+    name: 'Pricing Plan Comparison',
+    description: 'Sample SaaS plans with prices and limits.',
+    date: '2026-06-10',
+    status: 'indexed',
+    chunks: 1,
+    content:
+      'Pricing plans for the Acme SaaS product. Starter plan: 29 dollars per month, 3 seats, 10 GB storage, 1000 API calls. Pro plan: 79 dollars per month, 10 seats, 100 GB storage, 50000 API calls. Enterprise plan: 249 dollars per month, unlimited seats, 1000 GB storage, unlimited API calls. Pro is the most popular, chosen by 62 percent of customers.'
   }
 ];
 
@@ -173,7 +217,7 @@ export const MOCK_PROJECTS: Project[] = [
     name: 'Learning Science',
     icon: '🧠',
     description: 'Habits, memory and study technique research.',
-    sourceIds: ['m1', 'm2', 'm4', 'm5', 'm6', 'm7', 'm8', 'm9', 'm10'],
+    sourceIds: ['m1', 'm2', 'm4', 'm5', 'm6', 'm7', 'm8', 'm9', 'm10', 's_invoice_pincay', 's_q2_budget', 's_monthly_sales', 's_plan_compare'],
     createdAt: '2026-05-30'
   },
   {
