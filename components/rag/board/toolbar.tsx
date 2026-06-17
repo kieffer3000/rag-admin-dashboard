@@ -52,6 +52,8 @@ export interface BoardToolbarProps {
   onNewSource: (type: MediaType, name: string, source: string) => void;
   /** Upload an actual image file → Blob + multimodal index (Make Image scenario). */
   onNewImage: (name: string, file: File) => void;
+  /** Upload a PDF/DOCX/TXT → extract text → chunk + index via the text pipeline. */
+  onNewDocument: (name: string, file: File) => void;
   onAddBrain: () => void;
   onAddText: () => void;
   onAddAnnotation: () => void;
@@ -178,6 +180,9 @@ export function BoardToolbar(p: BoardToolbarProps) {
     if (sourceType === 'image') {
       if (!file) return;
       p.onNewImage(name.trim(), file);
+    } else if (sourceType === 'document') {
+      if (!file) return;
+      p.onNewDocument(name.trim(), file);
     } else {
       p.onNewSource(sourceType, name.trim(), url.trim());
     }
@@ -441,13 +446,18 @@ export function BoardToolbar(p: BoardToolbarProps) {
                     autoFocus
                   />
                 </div>
-                {sourceType === 'image' ? (
-                  // Real file upload → Blob + multimodal (pixel) embedding.
+                {sourceType === 'image' || sourceType === 'document' ? (
+                  // Real file upload. Image → Blob + multimodal caption/embed;
+                  // Document → extract text → chunk + index via the text pipeline.
                   <div className="space-y-1.5">
-                    <Label>Image file</Label>
+                    <Label>{sourceType === 'image' ? 'Image file' : 'Document file'}</Label>
                     <input
                       type="file"
-                      accept="image/png,image/jpeg"
+                      accept={
+                        sourceType === 'image'
+                          ? 'image/png,image/jpeg'
+                          : '.pdf,.docx,.txt,.md,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain'
+                      }
                       onChange={(e) => setFile(e.target.files?.[0] ?? null)}
                       className="block w-full cursor-pointer rounded-lg border border-input bg-card text-[13px] file:mr-3 file:cursor-pointer file:border-0 file:bg-accent/10 file:px-3 file:py-2 file:text-accent hover:border-accent/40"
                     />
@@ -457,9 +467,9 @@ export function BoardToolbar(p: BoardToolbarProps) {
                       </p>
                     ) : (
                       <p className="text-[11.5px] text-muted-foreground/55">
-                        PNG or JPEG · up to 12 MB. The image is embedded by its
-                        pixels and captioned, so it’s searchable by look and by
-                        words.
+                        {sourceType === 'image'
+                          ? 'PNG or JPEG · up to 12 MB. The image is embedded by its pixels and captioned, so it’s searchable by look and by words.'
+                          : 'PDF, DOCX, TXT, or MD · up to 25 MB. The text is extracted, chunked, and indexed. (Scanned/image-only PDFs need OCR — coming soon.)'}
                       </p>
                     )}
                   </div>
