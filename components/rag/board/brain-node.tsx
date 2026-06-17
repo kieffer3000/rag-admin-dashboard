@@ -1470,7 +1470,7 @@ function BrainMessage({
           <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/45">
             Footnotes
           </p>
-          <ol className="space-y-1">
+          <div className="flex flex-wrap gap-1.5">
             {m.citations.map((c, i) => {
               const n = i + 1;
               const isJump = !!c.jumpUrl;
@@ -1483,44 +1483,46 @@ function BrainMessage({
                 .slice(0, 160);
               const isTimestamp = c.type === 'youtube' || c.type === 'audio';
               return (
-                <li key={i} className="flex items-start gap-2">
-                  <span className="mt-0.5 shrink-0 text-[11.5px] font-semibold tabular-nums text-accent">
+                // compact chip, content-width — several wrap per row
+                <button
+                  key={i}
+                  title={cleanSnippet || c.mediaName}
+                  onClick={() => onCitation(c, m.content)}
+                  onMouseEnter={() => onCiteHover(c.mediaId, true)}
+                  onMouseLeave={() => onCiteHover(c.mediaId, false)}
+                  className="group/cit relative flex items-center gap-1 overflow-hidden rounded-md bg-black/[0.03] py-1 pl-2 pr-2 text-[11.5px] font-medium transition-all hover:bg-black/[0.06] hover:shadow-sm dark:bg-white/[0.05] dark:hover:bg-white/[0.08]"
+                >
+                  <span className="shrink-0 font-bold tabular-nums text-accent">
                     [{n}]
                   </span>
-                  <button
-                    title={cleanSnippet || c.mediaName}
-                    onClick={() => onCitation(c, m.content)}
-                    onMouseEnter={() => onCiteHover(c.mediaId, true)}
-                    onMouseLeave={() => onCiteHover(c.mediaId, false)}
-                    className="group/cit relative flex min-w-0 flex-1 items-center gap-1.5 overflow-hidden rounded-md bg-black/[0.03] py-1 pl-3 pr-2 text-left text-[11.5px] font-medium transition-all hover:bg-black/[0.06] hover:shadow-sm dark:bg-white/[0.05] dark:hover:bg-white/[0.08]"
-                  >
-                    <span
-                      className={cn(
-                        'absolute inset-y-0 left-0 w-[2.5px]',
-                        MEDIA_TYPES[c.type].solid
-                      )}
-                    />
-                    <MediaIcon type={c.type} size="sm" className="h-3 w-3 shrink-0 rounded" />
-                    <span className="truncate text-foreground/80">{c.mediaName}</span>
-                    {c.locator && (
-                      <span className="flex shrink-0 items-center gap-0.5 text-muted-foreground/60">
-                        {isTimestamp ? <Clock className="h-2.5 w-2.5 shrink-0" /> : null}
-                        {c.locator}
-                      </span>
+                  <span
+                    className={cn(
+                      'h-3.5 w-[2.5px] shrink-0 rounded-full',
+                      MEDIA_TYPES[c.type].solid
                     )}
-                    {scoreLabel && (
-                      <span className="shrink-0 rounded bg-accent/10 px-1 py-0.5 text-[10px] font-semibold text-accent">
-                        {scoreLabel}
-                      </span>
-                    )}
-                    {isJump && (
-                      <ExternalLink className="ml-auto h-3 w-3 shrink-0 text-muted-foreground/40 transition-colors group-hover/cit:text-accent" />
-                    )}
-                  </button>
-                </li>
+                  />
+                  <MediaIcon type={c.type} size="sm" className="h-3 w-3 shrink-0 rounded" />
+                  <span className="max-w-[90px] truncate text-foreground/80">
+                    {c.mediaName}
+                  </span>
+                  {c.locator && (
+                    <span className="flex shrink-0 items-center gap-0.5 text-muted-foreground/60">
+                      {isTimestamp ? <Clock className="h-2.5 w-2.5 shrink-0" /> : null}
+                      {c.locator}
+                    </span>
+                  )}
+                  {scoreLabel && (
+                    <span className="shrink-0 rounded bg-accent/10 px-1 py-0.5 text-[10px] font-semibold text-accent">
+                      {scoreLabel}
+                    </span>
+                  )}
+                  {isJump && (
+                    <ExternalLink className="h-3 w-3 shrink-0 text-muted-foreground/40 transition-colors group-hover/cit:text-accent" />
+                  )}
+                </button>
               );
             })}
-          </ol>
+          </div>
         </div>
       )}
       {m.suggestedQuestions && m.suggestedQuestions.length > 0 && onAsk && (
