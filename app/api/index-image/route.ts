@@ -82,16 +82,18 @@ export async function POST(req: Request) {
 
   const namespace = process.env.PINECONE_NAMESPACE ?? 'user_kieffer';
 
-  // 2) Hand the model work to Make. If the Image webhook isn't wired yet, we
-  //    still return the hosted URL so the chip shows the picture — it just
-  //    isn't searchable until the scenario exists.
-  const webhook = process.env.MAKE_IMAGE_WEBHOOK_URL;
+  // 2) Hand the model work to Make. Image ingestion now shares the ONE UPSERT
+  //    scenario (a Router branches on type=image), so we fall back to the same
+  //    INDEX webhook — no separate image webhook to configure. Override with
+  //    MAKE_IMAGE_WEBHOOK_URL only if you split it back out.
+  const webhook =
+    process.env.MAKE_IMAGE_WEBHOOK_URL ?? process.env.MAKE_INDEX_WEBHOOK_URL;
   if (!webhook) {
     return Response.json({
       ok: true,
       indexed: false,
       image_url: blob.url,
-      note: 'MAKE_IMAGE_WEBHOOK_URL not configured — stored but not indexed.'
+      note: 'No Make webhook configured — stored but not indexed.'
     });
   }
 
