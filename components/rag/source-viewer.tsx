@@ -1,5 +1,6 @@
 'use client';
 
+import type { ReactNode } from 'react';
 import { useRag } from '@/lib/rag/store';
 import { MEDIA_TYPES } from '@/lib/rag/media-config';
 import { MediaIcon } from '@/components/rag/shared';
@@ -17,9 +18,70 @@ function cleanSnippet(s: string): string {
   return s.replace(/\[\d+:\d{2}\]/g, '').replace(/\s+/g, ' ').trim();
 }
 
+const HL_STOP = new Set(
+  ('the and that this with from they them their what when where which while about'
+    + ' have has had will would could should been being your you our are was were'
+    + ' into over under than then there here also some such only just more most'
+    + ' because cannot onto upon does did done very much many said says according'
+    + ' source sources').split(/\s+/)
+);
+const words = (t: string) =>
+  (t.toLowerCase().match(/[a-z0-9]{4,}/g) ?? []).filter((w) => !HL_STOP.has(w));
+
+/**
+ * Highlight the sentence(s) of the cited passage that the ANSWER actually rests
+ * on — same IDF-overlap idea as the citation filter, applied per-sentence. Lets
+ * the user see WHERE in a long chunk the answer lives. Returns React nodes with
+ * the matching sentences wrapped in <mark>.
+ */
+function highlightPassage(passage: string, answer: string): ReactNode {
+  const plainAnswer = answer
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/&[a-z]+;/gi, ' ')
+    .replace(/\[\d+:\d{2}\]/g, ' ');
+  const answerWords = new Set(words(plainAnswer));
+  if (answerWords.size === 0) return passage;
+
+  // split into sentences, keeping the delimiters attached
+  const sentences = passage.match(/[^.!?]+[.!?]*\s*/g) ?? [passage];
+  // IDF across sentences: a word in few sentences is more distinctive
+  const N = sentences.length;
+  const sentWords = sentences.map((s) => new Set(words(s)));
+  const df = new Map<string, number>();
+  for (const w of answerWords) {
+    let d = 0;
+    for (const sw of sentWords) if (sw.has(w)) d++;
+    if (d > 0) df.set(w, d);
+  }
+  const scoreOf = (i: number) => {
+    let s = 0;
+    for (const w of answerWords)
+      if (sentWords[i].has(w)) s += Math.log(1 + N / (df.get(w) ?? N));
+    return s;
+  };
+  const scores = sentences.map((_, i) => scoreOf(i));
+  const max = Math.max(...scores);
+  if (max <= 0) return passage;
+  // mark sentences within 45% of the best supporter (the answer-bearing ones)
+  const cutoff = Math.max(0.45 * max, 0.0001);
+
+  return sentences.map((s, i) =>
+    scores[i] >= cutoff ? (
+      <mark
+        key={i}
+        className="rounded bg-amber-200/70 px-0.5 text-foreground dark:bg-amber-300/30"
+      >
+        {s}
+      </mark>
+    ) : (
+      <span key={i}>{s}</span>
+    )
+  );
+}
+
 /** Global citation-jump sheet: opens from any citation chip (chat, notes…). */
 export function SourceViewer() {
-  const { viewerCitation, closeViewer, media } = useRag();
+  const { viewerCitation, viewerHighlight, closeViewer, media } = useRag();
   const source = viewerCitation
     ? media.find((m) => m.id === viewerCitation.mediaId)
     : null;
@@ -68,8 +130,20 @@ export function SourceViewer() {
                   Cited passage
                 </div>
                 <div className="rounded-[14px] bg-accent/[0.07] p-3.5 text-[13px] leading-relaxed ring-1 ring-inset ring-accent/20">
-                  “{cleanSnippet(viewerCitation.snippet)}”
+                  “
+                  {viewerHighlight
+                    ? highlightPassage(
+                        cleanSnippet(viewerCitation.snippet),
+                        viewerHighlight
+                      )
+                    : cleanSnippet(viewerCitation.snippet)}
+                  ”
                 </div>
+                {viewerHighlight && (
+                  <p className="mt-1.5 text-[10.5px] text-muted-foreground/55">
+                    Highlighted: where this answer draws from the passage.
+                  </p>
+                )}
               </div>
 
               {source && source.content && (

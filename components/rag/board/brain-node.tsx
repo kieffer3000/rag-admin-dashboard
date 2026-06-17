@@ -1271,7 +1271,7 @@ function BrainMessage({
 }: {
   m: ChatMessage;
   large?: boolean;
-  onCitation: (c: any) => void;
+  onCitation: (c: any, highlight?: string) => void;
   onCiteHover: (mediaId: string, on: boolean) => void;
   modelLabel?: string;
   onVoiceover?: (m: ChatMessage) => void;
@@ -1337,7 +1337,7 @@ function BrainMessage({
             if (!ref) return;
             const n = parseInt(ref.getAttribute('data-fn') ?? '', 10);
             const c = m.citations?.[n - 1];
-            if (c) onCitation(c);
+            if (c) onCitation(c, m.content);
           }}
           onMouseOver={(e) => {
             const ref = (e.target as HTMLElement).closest('.fn-ref');
@@ -1483,7 +1483,7 @@ function BrainMessage({
                   </span>
                   <button
                     title={cleanSnippet || c.mediaName}
-                    onClick={() => onCitation(c)}
+                    onClick={() => onCitation(c, m.content)}
                     onMouseEnter={() => onCiteHover(c.mediaId, true)}
                     onMouseLeave={() => onCiteHover(c.mediaId, false)}
                     className="group/cit relative flex min-w-0 flex-1 items-center gap-1.5 overflow-hidden rounded-md bg-black/[0.03] py-1 pl-3 pr-2 text-left text-[11.5px] font-medium transition-all hover:bg-black/[0.06] hover:shadow-sm dark:bg-white/[0.05] dark:hover:bg-white/[0.08]"

@@ -36,6 +36,9 @@ interface RagState {
   modelId: string;
   /** Citation currently open in the source viewer sheet. */
   viewerCitation: Citation | null;
+  /** Answer text the viewer highlights the cited passage against (so the user
+   *  sees WHERE in a long chunk the answer resides). */
+  viewerHighlight: string | null;
 
   // selection
   toggleSelect: (id: string) => void;
@@ -82,7 +85,7 @@ interface RagState {
   deletePrompt: (id: string) => void;
 
   // viewer
-  openViewer: (c: Citation) => void;
+  openViewer: (c: Citation, highlight?: string) => void;
   closeViewer: () => void;
 
   // derived
@@ -115,6 +118,7 @@ export function RagProvider({ children }: { children: ReactNode }) {
   const [activePromptId, setActivePromptId] = useState<string | null>('p1');
   const [modelId, setModelId] = useState<string>(DEFAULT_MODEL_ID);
   const [viewerCitation, setViewerCitation] = useState<Citation | null>(null);
+  const [viewerHighlight, setViewerHighlight] = useState<string | null>(null);
 
   // ---- selection ----
   const toggleSelect = useCallback((id: string) => {
@@ -407,8 +411,14 @@ export function RagProvider({ children }: { children: ReactNode }) {
   }, []);
 
   // ---- viewer ----
-  const openViewer = useCallback((c: Citation) => setViewerCitation(c), []);
-  const closeViewer = useCallback(() => setViewerCitation(null), []);
+  const openViewer = useCallback((c: Citation, highlight?: string) => {
+    setViewerCitation(c);
+    setViewerHighlight(highlight ?? null);
+  }, []);
+  const closeViewer = useCallback(() => {
+    setViewerCitation(null);
+    setViewerHighlight(null);
+  }, []);
 
   // ---- derived ----
   const activeProject = useMemo(
@@ -458,6 +468,7 @@ export function RagProvider({ children }: { children: ReactNode }) {
     activePromptId,
     modelId,
     viewerCitation,
+    viewerHighlight,
     toggleSelect,
     selectAll,
     clearSelection,
