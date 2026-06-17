@@ -5,7 +5,11 @@ import { deleteSourceVectors } from '@/lib/rag/pinecone-delete';
 // /api/index-doc (PDF/DOCX/TXT, after their text is extracted in-route). Keeping
 // chunking + upsert in ONE place means every source type embeds identically.
 
-const CHUNK_CHARS = Number(process.env.RAG_CHUNK_CHARS ?? 1800);
+// Smaller chunks = higher recall for narrow facts (a one-line aside no longer
+// drowns in a long passage). More overlap so a fact spanning a boundary still
+// lands whole. Tradeoff: more vectors/embeddings per source — worth it to not
+// lose information. (Index-time: affects future uploads + re-indexes.)
+const CHUNK_CHARS = Number(process.env.RAG_CHUNK_CHARS ?? 1000);
 const CHUNK_OVERLAP = Number(process.env.RAG_CHUNK_OVERLAP ?? 200);
 const UPSERT_CONCURRENCY = 5;
 
