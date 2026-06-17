@@ -12,7 +12,50 @@ import { indexText } from '@/lib/rag/index-core';
 // path rather than a crash.
 
 export const runtime = 'nodejs';
-export const maxDuration = 120;
+export const maxDuration = 300;
+
+// Fallback transcription: Gemini ingests the YouTube URL directly (Google
+// fetches the video server-side, so it sidesteps YouTube's datacenter-IP block
+// that defeats caption scraping from Vercel). Model id is an env var so it can
+// be bumped without a code change. Thinking disabled so the whole output budget
+// goes to the transcript. Very long videos may still hit the output-token cap.
+async function geminiTranscribe(url: string): Promise<string> {
+  const key = process.env.GEMINI_API_KEY;
+  if (!key) throw new Error('GEMINI_API_KEY is not configured');
+  const model = process.env.RAG_YT_TRANSCRIBE_MODEL ?? 'gemini-2.5-flash';
+  const res = await fetch(
+    `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
+    {
+      method: 'POST',
+      headers: { 'x-goog-api-key': key, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contents: [
+          {
+            parts: [
+              { fileData: { fileUri: url } },
+              {
+                text: 'Transcribe the spoken content of this video as accurately and completely as possible, from start to finish. Output ONLY the transcript text — no timestamps, no speaker labels, no commentary.'
+              }
+            ]
+          }
+        ],
+        generationConfig: {
+          temperature: 0,
+          maxOutputTokens: 32768,
+          thinkingConfig: { thinkingBudget: 0 }
+        }
+      })
+    }
+  );
+  const j = await res.json().catch(() => ({}));
+  if (!res.ok)
+    throw new Error(j?.error?.message ?? `Gemini returned ${res.status}`);
+  const text: string = (j?.candidates?.[0]?.content?.parts ?? [])
+    .map((p: { text?: string }) => p.text ?? '')
+    .join('')
+    .trim();
+  return text;
+}
 
 function parseVideoId(input: string): string | null {
   const url = input.trim();
@@ -61,8 +104,9 @@ export async function POST(req: Request) {
     );
   }
 
-  // Fetch captions — prefer English, fall back to the video's default track.
+  // 1) Try captions (verbatim, free, full-length). Prefer English.
   let transcript = '';
+  let method = 'captions';
   try {
     const { YoutubeTranscript } = await import('youtube-transcript');
     let segs;
@@ -77,12 +121,22 @@ export async function POST(req: Request) {
       .replace(/\s+/g, ' ')
       .trim();
   } catch {
-    return Response.json({
-      ok: false,
-      indexed: false,
-      source_url: url,
-      note: 'No transcript/captions available for this video (or YouTube blocked the fetch). A Gemini video-transcription fallback is planned.'
-    });
+    transcript = ''; // captions blocked/missing → fall through to Gemini
+  }
+
+  // 2) Fallback: Gemini transcribes the video (no datacenter-IP block).
+  if (transcript.length < 20) {
+    method = 'gemini';
+    try {
+      transcript = await geminiTranscribe(url);
+    } catch (e: any) {
+      return Response.json({
+        ok: false,
+        indexed: false,
+        source_url: url,
+        note: `Couldn't get a transcript (captions blocked and Gemini transcription failed: ${e?.message ?? 'error'}).`
+      });
+    }
   }
 
   if (transcript.length < 20) {
@@ -90,7 +144,7 @@ export async function POST(req: Request) {
       ok: false,
       indexed: false,
       source_url: url,
-      note: 'The transcript came back empty.'
+      note: 'No transcript could be produced for this video.'
     });
   }
 
@@ -100,6 +154,7 @@ export async function POST(req: Request) {
       ok: true,
       indexed: true,
       source_url: url,
+      method,
       chunks: r.chunks,
       chars: transcript.length
     });
