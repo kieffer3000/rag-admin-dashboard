@@ -1431,16 +1431,11 @@ function BrainMessage({
           </p>
           <div className="flex flex-wrap gap-1.5">
             {m.citations.map((c, i) => {
-              // For youtube/audio with a timestamp: clicking opens the URL at
-              // the right second. For everything else: opens the source viewer.
+              // Clicking ALWAYS opens the citation panel so you can READ the
+              // cited passage. For youtube/audio the panel also surfaces a
+              // jump-to-timestamp link (the ↗ icon hints it's available).
               const isJump = !!(c.jumpUrl);
-              const handleClick = () => {
-                if (isJump && c.jumpUrl) {
-                  window.open(c.jumpUrl, '_blank', 'noopener,noreferrer');
-                } else {
-                  onCitation(c);
-                }
-              };
+              const handleClick = () => onCitation(c);
               const scoreLabel = c.score !== undefined
                 ? `${Math.round(c.score * 100)}%`
                 : null;
