@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { cn } from '@/lib/utils';
 import { useRag } from '@/lib/rag/store';
+import { useBoard } from '@/lib/rag/board/store';
 import { MEDIA_TYPES, MEDIA_TYPE_ORDER } from '@/lib/rag/media-config';
 import { MediaIcon } from '@/components/rag/shared';
 import { MediaType } from '@/lib/rag/types';
@@ -14,7 +15,8 @@ import {
   Trash2,
   Check,
   Loader2,
-  CloudOff
+  CloudOff,
+  Brain
 } from 'lucide-react';
 import type { RefObject } from 'react';
 
@@ -63,6 +65,8 @@ export function BoardChest({
   dockRef?: RefObject<HTMLDivElement | null>;
 }) {
   const { projectMedia, deleteMedia } = useRag();
+  const { board, unstashBrain } = useBoard();
+  const stashedBrains = board.stashedBrains ?? [];
   const [open, setOpen] = useState<string | null>(null);
   const [q, setQ] = useState('');
   const rootRef = useRef<HTMLDivElement>(null);
@@ -102,6 +106,10 @@ export function BoardChest({
   const panelItems =
     open === 'prompt'
       ? PROMPT_PRESETS.filter((p) => p.toLowerCase().includes(query))
+      : open === 'brains'
+      ? stashedBrains.filter((s) =>
+          String(s.node.data?.name ?? 'Brain').toLowerCase().includes(query)
+        )
       : open
       ? (byType.get(open as MediaType) ?? []).filter((m) =>
           m.name.toLowerCase().includes(query)
@@ -120,11 +128,15 @@ export function BoardChest({
             <span className="text-[12px] font-semibold tracking-tight">
               {open === 'prompt'
                 ? 'Prompt pieces'
+                : open === 'brains'
+                ? 'Parked brains'
                 : MEDIA_TYPES[open as MediaType].plural}
             </span>
             <span className="text-[11px] text-muted-foreground/60">
               {open === 'prompt'
                 ? 'drag a guide onto the board'
+                : open === 'brains'
+                ? 'click to bring one back to the canvas'
                 : `${byType.get(open as MediaType)?.length ?? 0} produced · drag onto board`}
             </span>
             <button
@@ -152,6 +164,33 @@ export function BoardChest({
               <p className="px-2 py-3 text-center text-[12px] text-muted-foreground/60">
                 Nothing here yet.
               </p>
+            ) : open === 'brains' ? (
+              (panelItems as typeof stashedBrains).map((s) => {
+                return (
+                  <div
+                    key={s.node.id}
+                    onClick={() => {
+                      unstashBrain(s.node.id);
+                      setOpen(null);
+                    }}
+                    title="Bring this brain back to the canvas (chats + wiring restored)"
+                    className="group flex cursor-pointer items-center gap-2.5 rounded-[10px] px-2 py-1.5 transition-colors hover:bg-[rgb(var(--hairline)/0.05)]"
+                  >
+                    <Brain className="h-4 w-4 shrink-0 text-indigo-500" />
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-[12.5px] font-medium">
+                        {String(s.node.data?.name ?? 'Brain')}
+                      </span>
+                      <span className="block text-[10.5px] text-muted-foreground/65">
+                        {s.edges.length
+                          ? `${s.edges.length} wire${s.edges.length > 1 ? 's' : ''} · click to restore`
+                          : 'click to restore'}
+                      </span>
+                    </span>
+                    <RotateCcw className="h-3.5 w-3.5 shrink-0 text-muted-foreground/50 group-hover:text-accent" />
+                  </div>
+                );
+              })
             ) : open === 'prompt' ? (
               (panelItems as string[]).map((preset) => (
                 <div
@@ -286,6 +325,24 @@ export function BoardChest({
         >
           <MessageSquareQuote className="h-[18px] w-[18px] text-indigo-500" strokeWidth={2.25} />
         </button>
+
+        {/* Parked brains — appears once a brain is sent here, to declutter the
+            canvas; click to bring one back (chats + wiring restored). */}
+        {stashedBrains.length > 0 && (
+          <button
+            onClick={() => toggle('brains')}
+            title="Parked brains — click to bring one back to the canvas"
+            className={cn(
+              'relative flex h-10 w-10 items-center justify-center rounded-full bg-indigo-50 transition-all dark:bg-indigo-500/[0.12]',
+              open === 'brains' ? 'ring-2 ring-accent' : 'hover:brightness-95'
+            )}
+          >
+            <Brain className="h-[18px] w-[18px] text-indigo-500" strokeWidth={2.25} />
+            <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-foreground px-1 text-[9px] font-bold text-background">
+              {stashedBrains.length}
+            </span>
+          </button>
+        )}
 
         <div className="mx-0.5 h-7 w-px bg-[rgb(var(--hairline)/0.12)]" />
         {/* save status / force-save */}

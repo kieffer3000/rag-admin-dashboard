@@ -162,6 +162,10 @@ interface BoardCtxState {
   /** Un-snap a welded stack at the seam ABOVE this piece — this piece and
    *  everything below it detach into their own stack. */
   unsnapPiece: (nodeId: string) => void;
+  /** Park a brain in the Chest (off-canvas) — keeps its chats + wiring. */
+  stashBrain: (brainId: string) => void;
+  /** Bring a stashed brain back to the canvas (restores position + wiring). */
+  unstashBrain: (brainId: string) => void;
   /** Brains with a query in flight — their inbound edges march. */
   busyBrains: Set<string>;
   setBrainBusy: (brainId: string, busy: boolean) => void;
@@ -258,7 +262,11 @@ export function BoardProvider({ children }: { children: ReactNode }) {
             if (!touched.current.has(pid))
               setBoards((prev) => ({
                 ...prev,
-                [pid]: { nodes, edges: data.edges ?? [] }
+                [pid]: {
+                  nodes,
+                  edges: data.edges ?? [],
+                  stashedBrains: data.stashedBrains ?? []
+                }
               }));
             if (data.brainMessages)
               setBrainMessages((prev) => ({ ...prev, ...data.brainMessages }));
@@ -277,15 +285,19 @@ export function BoardProvider({ children }: { children: ReactNode }) {
 
   /** Build the persistable document for the active project. */
   const buildDoc = useCallback(() => {
-    const brainIds = new Set(
-      board.nodes.filter((n) => n.type === 'brain').map((n) => n.id)
-    );
+    const stashed = board.stashedBrains ?? [];
+    const brainIds = new Set([
+      ...board.nodes.filter((n) => n.type === 'brain').map((n) => n.id),
+      // keep chats for parked brains too, so recall restores the conversation
+      ...stashed.map((s) => s.node.id)
+    ]);
     const msgs = Object.fromEntries(
       Object.entries(brainMessages).filter(([k]) => brainIds.has(k))
     );
     return {
       nodes: board.nodes,
       edges: board.edges,
+      stashedBrains: stashed,
       brainMessages: msgs,
       // Persist source METADATA only — never the full text (a book can be
       // megabytes; it would blow the ~5MB localStorage quota and silently
@@ -481,6 +493,52 @@ export function BoardProvider({ children }: { children: ReactNode }) {
     [setBoard]
   );
 
+  const stashBrain = useCallback(
+    (brainId: string) => {
+      setBoard((prev) => {
+        const node = prev.nodes.find(
+          (n) => n.id === brainId && n.type === 'brain'
+        );
+        if (!node) return prev;
+        const edges = prev.edges.filter(
+          (e) => e.source === brainId || e.target === brainId
+        );
+        return {
+          ...prev,
+          nodes: prev.nodes.filter((n) => n.id !== brainId),
+          edges: prev.edges.filter(
+            (e) => e.source !== brainId && e.target !== brainId
+          ),
+          stashedBrains: [...(prev.stashedBrains ?? []), { node, edges }]
+        };
+      });
+    },
+    [setBoard]
+  );
+
+  const unstashBrain = useCallback(
+    (brainId: string) => {
+      setBoard((prev) => {
+        const stash = prev.stashedBrains ?? [];
+        const entry = stash.find((s) => s.node.id === brainId);
+        if (!entry) return prev;
+        const existing = new Set(prev.nodes.map((n) => n.id));
+        // restore only the edges whose OTHER endpoint still exists on the board
+        const edges = entry.edges.filter((e) => {
+          const other = e.source === brainId ? e.target : e.source;
+          return existing.has(other);
+        });
+        return {
+          ...prev,
+          nodes: [...prev.nodes, entry.node],
+          edges: [...prev.edges, ...edges],
+          stashedBrains: stash.filter((s) => s.node.id !== brainId)
+        };
+      });
+    },
+    [setBoard]
+  );
+
   const unsnapPiece = useCallback(
     (nodeId: string) => {
       setBoard((prev) => {
@@ -624,6 +682,8 @@ export function BoardProvider({ children }: { children: ReactNode }) {
     removeBoardEdge,
     removeBoardNode,
     unsnapPiece,
+    stashBrain,
+    unstashBrain,
     busyBrains,
     setBrainBusy,
     nextBoardId: nextId,

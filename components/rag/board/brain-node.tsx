@@ -64,7 +64,8 @@ import {
   AlertTriangle,
   CornerDownRight,
   ExternalLink,
-  Clock
+  Clock,
+  Archive
 } from 'lucide-react';
 import type { BrainData } from '@/lib/rag/board/types';
 
@@ -174,6 +175,7 @@ function BrainNodeInner({ id, data, selected }: NodeProps) {
     updateBoardNodeData,
     resizeBoardNode,
     setBrainBusy,
+    stashBrain,
     nextBoardId
   } = useBoard();
   const { openViewer, addMedia, updateMedia } = useRag();
@@ -969,6 +971,10 @@ function BrainNodeInner({ id, data, selected }: NodeProps) {
                 className="gap-2.5"
               >
                 <Download className="h-4 w-4 text-foreground/70" /> Export Text
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={() => stashBrain(id)} className="gap-2.5">
+                <Archive className="h-4 w-4 text-foreground/70" /> Send to Chest
               </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem

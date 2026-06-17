@@ -45,9 +45,18 @@ export interface AnnotationData extends Record<string, unknown> {
 export type BoardNode = Node<Record<string, any>>;
 export type BoardEdge = Edge;
 
+/** A brain temporarily removed from the canvas (stashed in the Chest) — its
+ *  node + the edges that touched it, so recall restores it with its wiring. */
+export interface StashedBrain {
+  node: BoardNode;
+  edges: BoardEdge[];
+}
+
 export interface BoardState {
   nodes: BoardNode[];
   edges: BoardEdge[];
+  /** Brains parked in the Chest dock (off-canvas), recallable later. */
+  stashedBrains?: StashedBrain[];
 }
 
 // ---- chip / hub geometry (compact "puzzle" tiling, 2 columns) ----
