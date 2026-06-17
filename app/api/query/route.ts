@@ -212,20 +212,25 @@ async function contextualize(
   return cleaned.length >= 3 ? cleaned : question;
 }
 
-/** LLM answer-validator: does the retrieved context actually address the
- *  question? Catches off-topic matches that the score gate misses (Gemini
- *  embeddings score unrelated text high). true = answers it; fails OPEN (returns
- *  true) if the validator is unavailable, so a hiccup never hides a good answer. */
+/** LLM answer-validator: does the GENERATED ANSWER actually address the
+ *  question's subject? We judge the ANSWER (not the retrieved snippets) because
+ *  the supporting chunk is often NOT the top-scored one — judging a score-sorted
+ *  snippet subset truncated the answer-bearing chunk out of view and vetoed
+ *  correct answers (the reason RAG_VALIDATOR was disabled). The answer is short,
+ *  on-topic when right, and is what the user sees — so it's the reliable signal.
+ *  This still catches the real failure: an off-topic answer (e.g. a "budget"
+ *  answer to an "atomic habits" question). true = addresses it; fails OPEN. */
 async function validateAnswer(
   question: string,
-  citations: RawCitation[]
+  answer: string
 ): Promise<boolean> {
-  const snippets = citations
-    .map((c, i) => `[${i + 1}] ${c.snippet ?? ''}`)
-    .join('\n')
-    .slice(0, 3000);
-  if (!snippets.trim()) return false;
-  const prompt = `You decide whether the retrieved context can answer the user's question. If the context clearly does NOT address the SUBJECT of the question, answer "negative". Otherwise answer "positive". Reply with exactly one word.\n\nQuestion: ${question}\n\nRetrieved context:\n${snippets}`;
+  const plain = answer
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/&[a-z]+;/gi, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  if (!plain) return false;
+  const prompt = `A retrieval system generated the ANSWER below for the QUESTION, using the user's own sources. Decide whether the answer genuinely addresses the SUBJECT of the question. Answer "negative" ONLY if the answer is about a clearly different subject, or is empty / a pure non-answer. If it addresses the question's subject at all (even partially, even if it says some details are missing), answer "positive". Reply with exactly one word.\n\nQUESTION: ${question}\n\nANSWER: ${plain.slice(0, 1800)}`;
   const out = await runUtilityLLM(prompt, { temperature: 0, maxOutputTokens: 6 });
   if (!out) return true; // fail-open
   return !/negative/i.test(out);
@@ -357,7 +362,7 @@ export async function POST(req: Request) {
     !result.noMatch &&
     result.citations.length > 0
   ) {
-    validated = await validateAnswer(userQuestion, result.citations);
+    validated = await validateAnswer(userQuestion, result.answer);
     if (!validated) {
       result.answer =
         "I couldn't find an answer to that in your wired sources. Try rephrasing, or wire a source that covers it.";
