@@ -139,6 +139,68 @@ function buildCitations(
   });
 }
 
+// Common words that carry no distinguishing signal — ignored when matching the
+// answer against chunks (so "the US creator" doesn't make every chunk "match").
+const STOPWORDS = new Set(
+  ('the and that this with from they them their what when where which while about'
+    + ' have has had will would could should been being your you our are was were'
+    + ' into over under than then there here also some such only just more most'
+    + ' because they cannot could into onto upon does did done very much many'
+    + ' said says according source sources').split(/\s+/)
+);
+
+/** Content words (>=4 chars, non-stopword) from a blob of text. */
+function contentWords(text: string): string[] {
+  const plain = text
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/&[a-z]+;/gi, ' ')
+    .replace(/\[\d+:\d{2}\]/g, ' ')
+    .toLowerCase();
+  const words = plain.match(/[a-z0-9]{4,}/g) ?? [];
+  return words.filter((w) => !STOPWORDS.has(w));
+}
+
+/**
+ * Keep only the chunks the ANSWER actually drew from. The model cites the
+ * source *name* ([test3]) generically, so multi-query retrieval hands back
+ * chunks the answer never used. We score each chunk by IDF-weighted overlap
+ * with the answer's distinctive words (rare words across the chunk set count
+ * more than common ones), then keep the chunks that genuinely support it.
+ * Falls back to the unfiltered set if scoring is degenerate (never shows zero).
+ */
+function filterToAnswer(citations: Citation[], answer: string): Citation[] {
+  if (citations.length <= 1) return citations;
+  const kws = [...new Set(contentWords(answer))];
+  if (kws.length === 0) return citations;
+
+  const N = citations.length;
+  const snipWords = citations.map((c) => new Set(contentWords(c.snippet ?? '')));
+  // document frequency of each answer-word across the chunk set
+  const df = new Map<string, number>();
+  for (const kw of kws) {
+    let d = 0;
+    for (const sw of snipWords) if (sw.has(kw)) d++;
+    df.set(kw, d);
+  }
+  const scoreOf = (i: number) => {
+    let s = 0;
+    for (const kw of kws) {
+      const d = df.get(kw) ?? 0;
+      if (d > 0 && snipWords[i].has(kw)) s += Math.log(1 + N / d); // IDF weight
+    }
+    return s;
+  };
+  const scored = citations
+    .map((c, i) => ({ c, s: scoreOf(i) }))
+    .sort((a, b) => b.s - a.s);
+  const max = scored[0].s;
+  if (max <= 0) return citations.slice(0, 4); // nothing distinctive → keep a few
+  // keep chunks within 30% of the best supporter (the genuine sources); the
+  // unused chunks score ~0 and fall away. Always keep at least the top one.
+  const kept = scored.filter((x) => x.s >= 0.3 * max).map((x) => x.c);
+  return kept.length ? kept : [scored[0].c];
+}
+
 /**
  * Ask the live RAG backend (Make.com Query scenario via /api/query).
  * The brain's wired connectivity arrives here as source_ids — the Board
@@ -183,7 +245,10 @@ export async function askBrain(
   const data = await res.json();
   const byId = new Map(items.map((m) => [m.id, m]));
 
-  const citations = buildCitations(data, byId);
+  // All retrieved+deduped chunks, then narrowed to the ones the answer
+  // actually used (multi-query retrieval over-fetches; the answer often rests
+  // on a single chunk — don't list 6 "sources" it never touched).
+  const citations = filterToAnswer(buildCitations(data, byId), data.answer ?? '');
 
   const suggestedQuestions: string[] = Array.isArray(data.suggestedQuestions)
     ? data.suggestedQuestions.filter(
