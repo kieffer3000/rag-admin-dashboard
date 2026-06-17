@@ -42,7 +42,11 @@ async function geminiTranscribe(url: string): Promise<string> {
         generationConfig: {
           temperature: 0,
           maxOutputTokens: 32768,
-          thinkingConfig: { thinkingBudget: 0 }
+          thinkingConfig: { thinkingBudget: 0 },
+          // Transcription needs the AUDIO, not HD frames — low resolution cuts
+          // the per-frame video tokens ~4x (258 → 66 tokens/frame) for the same
+          // transcript. Biggest cost lever here.
+          mediaResolution: 'MEDIA_RESOLUTION_LOW'
         }
       })
     }
