@@ -1235,40 +1235,60 @@ function BoardCanvasInner() {
             })
             .catch(() => updateMedia(id, { status: 'failed' }));
         }}
-        onNewDocument={(name, file) => {
-          // PDF/DOCX/TXT: optimistic chip; the route extracts text → chunk +
-          // index via the SAME text pipeline (embedding in Make).
-          const id = addMedia(
-            {
-              type: 'document',
-              name,
-              description: '',
-              date: new Date().toISOString().slice(0, 10),
-              content: name
-            },
-            { simulate: false }
-          );
-          pushNode({
-            id: nextBoardId('chip'),
-            type: 'chip',
-            position: centerPos(),
-            data: { mediaId: id }
+        onNewDocuments={(docs) => {
+          // Batch upload (PDF/DOCX/EPUB/TXT). Chips appear immediately; the
+          // uploads run THROTTLED (3 at a time) so a dozen files don't swamp the
+          // Make webhook + Pinecone. Each file → extract → chunk → text pipeline.
+          const jobs = docs.map(({ name, file }) => {
+            const id = addMedia(
+              {
+                type: 'document',
+                name,
+                description: '',
+                date: new Date().toISOString().slice(0, 10),
+                content: name
+              },
+              { simulate: false }
+            );
+            pushNode({
+              id: nextBoardId('chip'),
+              type: 'chip',
+              position: centerPos(),
+              data: { mediaId: id }
+            });
+            return { id, name, file };
           });
-          const fd = new FormData();
-          fd.append('file', file);
-          fd.append('name', name);
-          fd.append('source_id', id);
-          fetch('/api/index-doc', { method: 'POST', body: fd })
-            .then(async (r) => {
+
+          const upload = async ({ id, name, file }: (typeof jobs)[number]) => {
+            const fd = new FormData();
+            fd.append('file', file);
+            fd.append('name', name);
+            fd.append('source_id', id);
+            try {
+              const r = await fetch('/api/index-doc', { method: 'POST', body: fd });
               const j = await r.json().catch(() => ({}));
-              if (!r.ok || !j.ok) throw new Error(j?.error ?? j?.note ?? 'index failed');
+              if (!r.ok || !j.ok)
+                throw new Error(j?.error ?? j?.note ?? 'index failed');
               updateMedia(id, {
                 status: 'indexed',
                 chunks: j.chunks,
                 source: j.source_url
               });
-            })
-            .catch(() => updateMedia(id, { status: 'failed' }));
+            } catch {
+              updateMedia(id, { status: 'failed' });
+            }
+          };
+
+          // Concurrency-capped pool over the batch.
+          let next = 0;
+          const CONCURRENCY = 3;
+          const runners = Array.from(
+            { length: Math.min(CONCURRENCY, jobs.length) },
+            async () => {
+              while (next < jobs.length) await upload(jobs[next++]);
+            }
+          );
+          void Promise.all(runners);
         }}
         onAddBrain={() => {
           // Up to 5 brains per board — one per subject/angle in a project.

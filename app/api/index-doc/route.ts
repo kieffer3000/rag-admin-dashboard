@@ -29,6 +29,49 @@ async function extractDocx(buf: Buffer): Promise<string> {
   return value as string;
 }
 
+function stripXhtml(html: string): string {
+  return html
+    .replace(/<\s*(script|style)[\s\S]*?<\/\s*\1\s*>/gi, ' ')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/&amp;/gi, '&')
+    .replace(/&lt;/gi, '<')
+    .replace(/&gt;/gi, '>')
+    .replace(/&#(\d+);/g, (_, n) => String.fromCharCode(+n))
+    .replace(/&[a-z]+;/gi, ' ')
+    .replace(/[ \t]+/g, ' ')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
+
+/** EPUB = a ZIP of XHTML. Read the OPF spine for reading order, strip each
+ *  chapter's tags, concatenate. (A whole book → many chunks.) */
+async function extractEpub(buf: Buffer): Promise<string> {
+  const JSZip = (await import('jszip')).default;
+  const zip = await JSZip.loadAsync(buf);
+  const container = await zip.file('META-INF/container.xml')?.async('string');
+  const opfPath = container?.match(/full-path="([^"]+)"/)?.[1];
+  if (!opfPath) throw new Error('not a valid EPUB (no OPF)');
+  const opf = (await zip.file(opfPath)?.async('string')) ?? '';
+  const baseDir = opfPath.includes('/') ? opfPath.replace(/\/[^/]*$/, '/') : '';
+  const manifest: Record<string, string> = {};
+  for (const m of opf.matchAll(/<item\s+[^>]*id="([^"]+)"[^>]*href="([^"]+)"[^>]*>/gi))
+    manifest[m[1]] = m[2];
+  for (const m of opf.matchAll(/<item\s+[^>]*href="([^"]+)"[^>]*id="([^"]+)"[^>]*>/gi))
+    if (!manifest[m[2]]) manifest[m[2]] = m[1];
+  const spine = [...opf.matchAll(/<itemref\s+[^>]*idref="([^"]+)"/gi)].map((m) => m[1]);
+  const out: string[] = [];
+  for (const idref of spine) {
+    const href = manifest[idref];
+    if (!href) continue;
+    const f = zip.file(decodeURIComponent(baseDir + href));
+    if (!f) continue;
+    const t = stripXhtml(await f.async('string'));
+    if (t) out.push(t);
+  }
+  return out.join('\n\n');
+}
+
 export async function POST(req: Request) {
   const { userId } = await auth();
   if (!userId) return Response.json({ error: 'Unauthorized' }, { status: 401 });
@@ -60,10 +103,11 @@ export async function POST(req: Request) {
     mime ===
       'application/vnd.openxmlformats-officedocument.wordprocessingml.document' ||
     lowerName.endsWith('.docx');
+  const isEpub = mime === 'application/epub+zip' || lowerName.endsWith('.epub');
   const isTxt = mime.startsWith('text/') || lowerName.endsWith('.txt') || lowerName.endsWith('.md');
-  if (!isPdf && !isDocx && !isTxt) {
+  if (!isPdf && !isDocx && !isEpub && !isTxt) {
     return Response.json(
-      { error: `Unsupported document type ${mime || lowerName}. Use PDF, DOCX, TXT, or MD.` },
+      { error: `Unsupported document type ${mime || lowerName}. Use PDF, DOCX, EPUB, TXT, or MD.` },
       { status: 415 }
     );
   }
@@ -73,7 +117,7 @@ export async function POST(req: Request) {
   // 1) Store the original so the source can be opened later (optional, cheap).
   let sourceUrl: string | undefined;
   if (process.env.BLOB_READ_WRITE_TOKEN) {
-    const ext = isPdf ? 'pdf' : isDocx ? 'docx' : 'txt';
+    const ext = isPdf ? 'pdf' : isDocx ? 'docx' : isEpub ? 'epub' : 'txt';
     try {
       const blob = await put(`docs/${userId}/${sourceId}.${ext}`, buf, {
         access: 'public',
@@ -90,6 +134,7 @@ export async function POST(req: Request) {
   try {
     if (isPdf) text = await extractPdf(new Uint8Array(buf));
     else if (isDocx) text = await extractDocx(buf);
+    else if (isEpub) text = await extractEpub(buf);
     else text = buf.toString('utf-8');
   } catch (e: any) {
     return Response.json(

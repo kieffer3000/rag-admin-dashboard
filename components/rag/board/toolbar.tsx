@@ -53,7 +53,7 @@ export interface BoardToolbarProps {
   /** Upload an actual image file → Blob + multimodal index (Make Image scenario). */
   onNewImage: (name: string, file: File) => void;
   /** Upload a PDF/DOCX/TXT → extract text → chunk + index via the text pipeline. */
-  onNewDocument: (name: string, file: File) => void;
+  onNewDocuments: (docs: { name: string; file: File }[]) => void;
   onAddBrain: () => void;
   onAddText: () => void;
   onAddAnnotation: () => void;
@@ -101,8 +101,9 @@ export function BoardToolbar(p: BoardToolbarProps) {
   const [hubOpen, setHubOpen] = useState(false);
   const [name, setName] = useState('');
   const [url, setUrl] = useState('');
-  // Image uploads carry an actual file (not a URL/text string).
-  const [file, setFile] = useState<File | null>(null);
+  // File uploads (image = single; documents = one or many at once).
+  const [files, setFiles] = useState<File[]>([]);
+  const stripExt = (n: string) => n.replace(/\.[^.]+$/, '');
 
   // ---- voice recording ----
   const [recOpen, setRecOpen] = useState(false);
@@ -176,20 +177,28 @@ export function BoardToolbar(p: BoardToolbarProps) {
   const unplaced = projectMedia.filter((m) => !p.placedIds.has(m.id));
 
   function submitSource() {
-    if (!sourceType || !name.trim()) return;
+    if (!sourceType) return;
     if (sourceType === 'image') {
-      if (!file) return;
-      p.onNewImage(name.trim(), file);
+      if (!name.trim() || !files[0]) return;
+      p.onNewImage(name.trim(), files[0]);
     } else if (sourceType === 'document') {
-      if (!file) return;
-      p.onNewDocument(name.trim(), file);
+      if (!files.length) return;
+      // One file → use the Name field (or its filename); many → per-filename.
+      p.onNewDocuments(
+        files.map((f) => ({
+          name:
+            files.length === 1 && name.trim() ? name.trim() : stripExt(f.name),
+          file: f
+        }))
+      );
     } else {
+      if (!name.trim()) return;
       p.onNewSource(sourceType, name.trim(), url.trim());
     }
     setSourceType(null);
     setName('');
     setUrl('');
-    setFile(null);
+    setFiles([]);
   }
 
   function submitHub() {
@@ -415,7 +424,7 @@ export function BoardToolbar(p: BoardToolbarProps) {
         onOpenChange={(o) => {
           if (!o) {
             setSourceType(null);
-            setFile(null);
+            setFiles([]);
           }
         }}
       >
@@ -450,26 +459,33 @@ export function BoardToolbar(p: BoardToolbarProps) {
                   // Real file upload. Image → Blob + multimodal caption/embed;
                   // Document → extract text → chunk + index via the text pipeline.
                   <div className="space-y-1.5">
-                    <Label>{sourceType === 'image' ? 'Image file' : 'Document file'}</Label>
+                    <Label>{sourceType === 'image' ? 'Image file' : 'Document file(s)'}</Label>
                     <input
                       type="file"
+                      multiple={sourceType === 'document'}
                       accept={
                         sourceType === 'image'
                           ? 'image/png,image/jpeg'
-                          : '.pdf,.docx,.txt,.md,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain'
+                          : '.pdf,.docx,.epub,.txt,.md,application/pdf,application/epub+zip,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain'
                       }
-                      onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+                      onChange={(e) => setFiles(Array.from(e.target.files ?? []))}
                       className="block w-full cursor-pointer rounded-lg border border-input bg-card text-[13px] file:mr-3 file:cursor-pointer file:border-0 file:bg-accent/10 file:px-3 file:py-2 file:text-accent hover:border-accent/40"
                     />
-                    {file ? (
+                    {files.length === 1 ? (
                       <p className="text-[11.5px] text-muted-foreground/70">
-                        {file.name} · {(file.size / 1048576).toFixed(1)} MB
+                        {files[0].name} · {(files[0].size / 1048576).toFixed(1)} MB
+                      </p>
+                    ) : files.length > 1 ? (
+                      <p className="text-[11.5px] text-accent">
+                        {files.length} files ·{' '}
+                        {(files.reduce((s, f) => s + f.size, 0) / 1048576).toFixed(1)} MB
+                        total — each becomes its own indexed source.
                       </p>
                     ) : (
                       <p className="text-[11.5px] text-muted-foreground/55">
                         {sourceType === 'image'
                           ? 'PNG or JPEG · up to 12 MB. The image is embedded by its pixels and captioned, so it’s searchable by look and by words.'
-                          : 'PDF, DOCX, TXT, or MD · up to 25 MB. The text is extracted, chunked, and indexed. (Scanned/image-only PDFs need OCR — coming soon.)'}
+                          : 'PDF, DOCX, EPUB, TXT, or MD · up to 25 MB each · select several at once. Text is extracted, chunked, and indexed. (Scanned/image-only PDFs need OCR — coming soon.)'}
                       </p>
                     )}
                   </div>
@@ -497,14 +513,20 @@ export function BoardToolbar(p: BoardToolbarProps) {
                   variant="ghost"
                   onClick={() => {
                     setSourceType(null);
-                    setFile(null);
+                    setFiles([]);
                   }}
                 >
                   Cancel
                 </Button>
                 <Button
                   variant="accent"
-                  disabled={!name.trim() || (sourceType === 'image' && !file)}
+                  disabled={
+                    sourceType === 'document'
+                      ? files.length === 0
+                      : sourceType === 'image'
+                        ? !name.trim() || files.length !== 1
+                        : !name.trim()
+                  }
                   onClick={submitSource}
                 >
                   Index &amp; place
