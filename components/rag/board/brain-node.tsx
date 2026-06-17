@@ -135,8 +135,15 @@ function escapeHtml(s: string): string {
     .replace(/>/g, '&gt;');
 }
 
-let msgCounter = 9000;
-const nextMsgId = () => `bm${++msgCounter}`;
+// A unique per-page-load prefix so freshly-created message ids can NEVER
+// collide with ids restored from a previously persisted conversation. A
+// collision used to make updateBrainMessage patch BOTH the old and the new
+// message (it maps by id) → the same answer rendered twice ("duplicate
+// answer"). The board node/edge counter is bumped on load, but this message
+// counter wasn't, so a reloaded brain's next send reused bm9001/bm9002.
+const MSG_SESSION = Math.random().toString(36).slice(2, 8);
+let msgCounter = 0;
+const nextMsgId = () => `bm_${MSG_SESSION}_${++msgCounter}`;
 
 /**
  * The Brain — answersDoc's query node. Its knowledge basis is whatever is

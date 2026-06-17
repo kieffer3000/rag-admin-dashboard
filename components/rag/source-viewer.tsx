@@ -33,11 +33,11 @@ export function SourceViewer() {
     <Sheet open={!!viewerCitation} onOpenChange={(o) => !o && closeViewer()}>
       <SheetContent
         side="right"
-        className="relative w-full overflow-y-auto pb-24 sm:max-w-md"
+        className="flex w-full flex-col gap-0 sm:max-w-md"
       >
         {viewerCitation && (
           <>
-            <SheetHeader>
+            <SheetHeader className="shrink-0">
               <div className="flex items-center gap-3">
                 <MediaIcon type={viewerCitation.type} />
                 <div className="min-w-0">
@@ -62,7 +62,7 @@ export function SourceViewer() {
               </div>
             </SheetHeader>
 
-            <div className="mt-5 space-y-4">
+            <div className="mt-5 flex-1 space-y-4 overflow-y-auto">
               <div>
                 <div className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
                   Cited passage
@@ -89,7 +89,7 @@ export function SourceViewer() {
 
             {/* Bottom action: jump to the exact moment / open the original. */}
             {(jumpUrl || source?.source?.startsWith('http')) && (
-              <div className="absolute inset-x-0 bottom-0 border-t border-[rgb(var(--hairline)/0.16)] bg-background/95 p-4 backdrop-blur">
+              <div className="shrink-0 border-t border-[rgb(var(--hairline)/0.16)] pt-4">
                 <a
                   href={jumpUrl ?? source?.source ?? '#'}
                   target="_blank"
