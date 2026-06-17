@@ -172,6 +172,9 @@ interface BoardCtxState {
   nextBoardId: (prefix: string) => string;
   /** Project id whose saved board has finished loading (load-complete focus). */
   hydratedProject: string | null;
+  /** Brain currently in full-screen Research Mode (distraction-free), or null. */
+  researchBrainId: string | null;
+  setResearchBrainId: (id: string | null) => void;
   /** Persistence status for the save indicator. */
   saveStatus: 'saved' | 'saving' | 'local';
   /** Force an immediate save (the manual Save button). */
@@ -186,6 +189,8 @@ export function BoardProvider({ children }: { children: ReactNode }) {
   const [brainMessages, setBrainMessages] = useState<Record<string, ChatMessage[]>>({});
   /** Project id whose saved board has finished loading (for load-complete focus). */
   const [hydratedProject, setHydratedProject] = useState<string | null>(null);
+  /** Brain in full-screen Research Mode (distraction-free). */
+  const [researchBrainId, setResearchBrainId] = useState<string | null>(null);
   /** Projects whose saved state we've already loaded (don't reload/overwrite). */
   const hydrated = useRef<Set<string>>(new Set());
   /** Projects the user has edited this session — never let a late DB load
@@ -698,6 +703,8 @@ export function BoardProvider({ children }: { children: ReactNode }) {
     setBrainBusy,
     nextBoardId: nextId,
     hydratedProject,
+    researchBrainId,
+    setResearchBrainId,
     saveStatus,
     saveNow
   };

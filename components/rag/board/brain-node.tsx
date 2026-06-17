@@ -176,6 +176,7 @@ function BrainNodeInner({ id, data, selected }: NodeProps) {
     resizeBoardNode,
     setBrainBusy,
     stashBrain,
+    setResearchBrainId,
     nextBoardId
   } = useBoard();
   const { openViewer, addMedia, updateMedia } = useRag();
@@ -888,6 +889,15 @@ function BrainNodeInner({ id, data, selected }: NodeProps) {
               ))}
             </DropdownMenuContent>
           </DropdownMenu>
+
+          {/* Research Mode — sources are wired; go full-screen, distraction-free */}
+          <button
+            onClick={() => setResearchBrainId(id)}
+            title="Research mode — full-screen, distraction-free (sources stay wired)"
+            className="nodrag flex h-6 items-center justify-center gap-1 rounded-full bg-accent/10 px-2 text-accent ring-1 ring-accent/20 transition-all hover:bg-accent hover:text-white hover:shadow-[0_2px_8px_hsl(var(--accent)/0.4)]"
+          >
+            <span className="text-[12px] font-extrabold leading-none">R</span>
+          </button>
 
           {/* accessibility text size — cycles the answer column's zoom */}
           <button
