@@ -37,6 +37,12 @@ interface MakeResult {
   topScore: number | null;
   noMatch: boolean;
   suggestedQuestions: string[];
+  /** Verdict from a Make-side validator module (LLM in the Query scenario,
+   *  model + prompt editable in the Make UI). "positive" | "negative" | null.
+   *  When present it is AUTHORITATIVE — the route does NOT run its own LLM
+   *  validator (Make sees the FULL retrieved context; the route only sees a
+   *  truncated subset, which is why the in-code one was naive). */
+  validation: string | null;
 }
 
 function modeDirective(mode: 'cited' | 'hybrid'): string {
@@ -164,6 +170,13 @@ async function callMake(
     .filter((s: string) => typeof s === 'string' && s.trim())
     .slice(0, 6);
 
+  // Make-side validator verdict, if the Query scenario includes a validator
+  // module (positive/negative). Accept a few shapes the model might emit.
+  const rawValidation =
+    data.validation ?? data.valid ?? data.verdict ?? null;
+  const validation =
+    typeof rawValidation === 'string' ? rawValidation : null;
+
   return {
     answer: data.answer ?? '',
     citations,
@@ -171,7 +184,8 @@ async function callMake(
     raw_citations: data.raw_citations ?? null,
     topScore,
     noMatch: topScore === null || topScore < NOMATCH_THRESHOLD,
-    suggestedQuestions
+    suggestedQuestions,
+    validation
   };
 }
 
@@ -362,7 +376,16 @@ export async function POST(req: Request) {
     !result.noMatch &&
     result.citations.length > 0
   ) {
-    validated = await validateAnswer(userQuestion, result.answer);
+    if (result.validation) {
+      // AUTHORITATIVE: a Make-side validator module ran inside the Query
+      // scenario (model + prompt live in the Make UI, and it sees the FULL
+      // retrieved context). Just read its verdict — no extra LLM call here.
+      validated = !/negative|no\b|false/i.test(result.validation);
+    } else {
+      // Fallback only when Make returns no `validation` field (validator
+      // module not wired yet): the in-code answer-vs-question check.
+      validated = await validateAnswer(userQuestion, result.answer);
+    }
     if (!validated) {
       result.answer =
         "I couldn't find an answer to that in your wired sources. Try rephrasing, or wire a source that covers it.";
