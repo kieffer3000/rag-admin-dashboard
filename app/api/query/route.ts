@@ -73,13 +73,18 @@ async function callMake(
   sourceIds: string[],
   mode: 'cited' | 'hybrid',
   guides: string[],
-  model: string
+  model: string,
+  profile: string
 ): Promise<MakeResult> {
   const res = await fetch(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       question: promptedQuestion,
+      // Subject profile / context for the faceted query expander to bias
+      // terminology toward the subject's domain/profession (the wired context
+      // notes + guides). Maps to {{2.profile}} in the expander prompt.
+      profile,
       // raw question/query for the RETRIEVAL embedding + multi-query expander
       // (embedding the wrapped prompt would dilute the search vector with the
       // instruction boilerplate). Generation still uses `question`.
@@ -242,6 +247,13 @@ export async function POST(req: Request) {
       ]
     : contextTexts;
 
+  // Subject profile/context for the faceted expander — the wired context notes
+  // + guides bias query expansion toward the subject's domain/profession.
+  const profile = [...contextTexts, ...guides]
+    .filter(Boolean)
+    .join(' | ')
+    .slice(0, 1200);
+
   // First retrieval pass.
   let result: MakeResult;
   try {
@@ -252,7 +264,8 @@ export async function POST(req: Request) {
       sourceIds,
       mode,
       guides,
-      model
+      model,
+      profile
     );
   } catch (e) {
     return Response.json(
@@ -275,7 +288,8 @@ export async function POST(req: Request) {
           sourceIds,
           mode,
           guides,
-          model
+          model,
+          profile
         );
         retried = true;
         // prefer the pass that isn't a no-match; otherwise the higher score.
