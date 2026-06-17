@@ -170,6 +170,8 @@ interface BoardCtxState {
   busyBrains: Set<string>;
   setBrainBusy: (brainId: string, busy: boolean) => void;
   nextBoardId: (prefix: string) => string;
+  /** Project id whose saved board has finished loading (load-complete focus). */
+  hydratedProject: string | null;
   /** Persistence status for the save indicator. */
   saveStatus: 'saved' | 'saving' | 'local';
   /** Force an immediate save (the manual Save button). */
@@ -182,6 +184,8 @@ export function BoardProvider({ children }: { children: ReactNode }) {
   const { activeProjectId, projectMedia, media, hydrateMedia } = useRag();
   const [boards, setBoards] = useState<Record<string, BoardState>>({});
   const [brainMessages, setBrainMessages] = useState<Record<string, ChatMessage[]>>({});
+  /** Project id whose saved board has finished loading (for load-complete focus). */
+  const [hydratedProject, setHydratedProject] = useState<string | null>(null);
   /** Projects whose saved state we've already loaded (don't reload/overwrite). */
   const hydrated = useRef<Set<string>>(new Set());
   /** Projects the user has edited this session — never let a late DB load
@@ -275,7 +279,13 @@ export function BoardProvider({ children }: { children: ReactNode }) {
       } catch {
         /* offline / no DB → keep the seed */
       } finally {
-        if (!cancelled) hydrated.current.add(pid);
+        if (!cancelled) {
+          hydrated.current.add(pid);
+          // Signal (state, not just the ref) that this project's saved board
+          // has finished loading — lets the canvas focus the REAL board, not
+          // the transient seed/cached state shown before the load resolved.
+          setHydratedProject(pid);
+        }
       }
     })();
     return () => {
@@ -687,6 +697,7 @@ export function BoardProvider({ children }: { children: ReactNode }) {
     busyBrains,
     setBrainBusy,
     nextBoardId: nextId,
+    hydratedProject,
     saveStatus,
     saveNow
   };

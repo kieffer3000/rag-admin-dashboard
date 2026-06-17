@@ -94,7 +94,7 @@ function retile(nodes: BoardNode[], hubId: string): BoardNode[] {
 }
 
 function BoardCanvasInner() {
-  const { board, setBoard, setBoardSilent, nextBoardId, busyBrains, saveStatus, saveNow, removeBoardNode, brainMessages } =
+  const { board, setBoard, setBoardSilent, nextBoardId, busyBrains, saveStatus, saveNow, removeBoardNode, brainMessages, hydratedProject } =
     useBoard();
   const { media, projectMedia, addMedia, updateMedia, deleteMedia, activeProjectId } = useRag();
   // Garbage bin (bottom-left): drag a source chip onto it to delete the source
@@ -114,39 +114,41 @@ function BoardCanvasInner() {
   const wrapRef = useRef<HTMLDivElement>(null);
 
   // On load/refresh (and project switch) the viewport doesn't follow the saved
-  // board, so everything looks scattered. Once the board settles, focus the
-  // most-recently-used brain (latest message); if none, fit ALL modules in view.
+  // board, so a restored board looks scattered. We focus ONLY after the store
+  // signals this project's saved board has finished loading (`hydratedProject`)
+  // — focusing earlier would lock onto the transient seed/cached board that
+  // renders before the load resolves (the "stuck on the old brain" bug).
+  // Then: focus the most-recently-used brain (latest message), else fit ALL.
   const focusedProject = useRef<string | null>(null);
   useEffect(() => {
     focusedProject.current = null; // re-focus when the project changes
   }, [activeProjectId]);
   useEffect(() => {
+    if (hydratedProject !== activeProjectId) return; // wait for the real board
     if (focusedProject.current === activeProjectId) return;
-    if (board.nodes.length === 0) return;
-    // Debounced: every node change (seed → saved-board swap, measurement)
-    // resets the timer, so we focus only once the board has stopped changing.
+    focusedProject.current = activeProjectId;
+    const brains = board.nodes.filter((n) => n.type === 'brain');
+    let active: string | null = null;
+    let latest = -1;
+    for (const b of brains) {
+      const msgs = brainMessages[b.id] ?? [];
+      const last = msgs[msgs.length - 1];
+      const ts = last?.createdAt ? Date.parse(last.createdAt) : 0;
+      if (ts >= latest) {
+        latest = ts;
+        active = b.id;
+      }
+    }
+    // delay so React Flow has measured the freshly-loaded nodes before fitView
     const t = setTimeout(() => {
-      focusedProject.current = activeProjectId;
-      const brains = board.nodes.filter((n) => n.type === 'brain');
-      let active: string | null = null;
-      let latest = -1;
-      for (const b of brains) {
-        const msgs = brainMessages[b.id] ?? [];
-        const last = msgs[msgs.length - 1];
-        const ts = last?.createdAt ? Date.parse(last.createdAt) : 0;
-        if (ts >= latest) {
-          latest = ts;
-          active = b.id;
-        }
-      }
       if (active && latest > 0) {
-        fitView({ nodes: [{ id: active }], duration: 500, padding: 0.45, maxZoom: 1 });
+        fitView({ nodes: [{ id: active }], duration: 600, padding: 0.45, maxZoom: 1 });
       } else {
-        fitView({ duration: 500, padding: 0.18 });
+        fitView({ duration: 600, padding: 0.18 });
       }
-    }, 400);
+    }, 300);
     return () => clearTimeout(t);
-  }, [activeProjectId, board.nodes, brainMessages, fitView]);
+  }, [hydratedProject, activeProjectId, board.nodes, brainMessages, fitView]);
 
   const mediaTypeOf = useCallback(
     (chip: Node): MediaType | undefined =>
