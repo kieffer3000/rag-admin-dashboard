@@ -33,6 +33,7 @@ interface RawCitation {
 interface MakeResult {
   answer: string;
   citations: RawCitation[];
+  raw_citations: string | null;
   topScore: number | null;
   noMatch: boolean;
   suggestedQuestions: string[];
@@ -104,7 +105,36 @@ async function callMake(
   if (!res.ok) throw new Error(`Query webhook returned ${res.status}`);
 
   const data = await res.json();
-  const citations: RawCitation[] = (data.citations ?? []).filter(
+
+  // Prefer the full aggregator array (raw_citations: {{14.json}} from Make
+  // module 10 — ALL N retrieved chunks, not just the collapsed first item).
+  // Falls back to data.citations for backward compatibility.
+  let allRaw: RawCitation[] = [];
+  if (data.raw_citations) {
+    try {
+      const parsed =
+        typeof data.raw_citations === 'string'
+          ? JSON.parse(data.raw_citations)
+          : data.raw_citations;
+      if (Array.isArray(parsed)) {
+        allRaw = (parsed as Array<Record<string, unknown>>).map((item) => {
+          if (item.source_id) return item as unknown as RawCitation;
+          const meta = (item.metadata ?? {}) as Record<string, unknown>;
+          return {
+            score: item.score as number,
+            source_id: meta.source_id as string,
+            source_name: meta.source_name as string,
+            snippet: (meta.text ?? meta.snippet ?? '') as string,
+          } as RawCitation;
+        });
+      }
+    } catch { /* fall through */ }
+  }
+  if (allRaw.length === 0) {
+    allRaw = data.citations ?? [];
+  }
+
+  const citations: RawCitation[] = allRaw.filter(
     (c: RawCitation) => c && c.source_id
   );
   const scores = citations
@@ -125,6 +155,8 @@ async function callMake(
   return {
     answer: data.answer ?? '',
     citations,
+    // Pass the full aggregated array through so ask.ts can dedupe+rank all chunks.
+    raw_citations: data.raw_citations ?? null,
     topScore,
     noMatch: topScore === null || topScore < NOMATCH_THRESHOLD,
     suggestedQuestions

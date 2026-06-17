@@ -62,7 +62,9 @@ import {
   FileText,
   Type as TypeIcon,
   AlertTriangle,
-  CornerDownRight
+  CornerDownRight,
+  ExternalLink,
+  Clock
 } from 'lucide-react';
 import type { BrainData } from '@/lib/rag/board/types';
 
@@ -1423,30 +1425,77 @@ function BrainMessage({
         </div>
       )}
       {m.citations && m.citations.length > 0 && (
-        <div className="mt-2 flex flex-wrap gap-1.5">
-          {m.citations.map((c, i) => (
-            // a physical "data tag": a media-colored left edge ties it back to
-            // the exact source chip on the board; lifts on hover.
-            <button
-              key={i}
-              onClick={() => onCitation(c)}
-              onMouseEnter={() => onCiteHover(c.mediaId, true)}
-              onMouseLeave={() => onCiteHover(c.mediaId, false)}
-              className="relative flex items-center gap-1.5 overflow-hidden rounded-md bg-black/[0.03] py-1 pl-2.5 pr-2 text-[11.5px] font-medium transition-all hover:-translate-y-px hover:bg-black/[0.06] hover:shadow-sm dark:bg-white/[0.05] dark:hover:bg-white/[0.08]"
-            >
-              <span
-                className={cn(
-                  'absolute inset-y-0 left-0 w-[2.5px]',
-                  MEDIA_TYPES[c.type].solid
-                )}
-              />
-              <MediaIcon type={c.type} size="sm" className="h-3.5 w-3.5 rounded" />
-              <span className="max-w-[110px] truncate text-foreground/80">
-                {c.mediaName}
-              </span>
-              <span className="text-muted-foreground/55">{c.locator}</span>
-            </button>
-          ))}
+        <div className="mt-2.5 space-y-1">
+          <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/45">
+            Sources
+          </p>
+          <div className="flex flex-wrap gap-1.5">
+            {m.citations.map((c, i) => {
+              // For youtube/audio with a timestamp: clicking opens the URL at
+              // the right second. For everything else: opens the source viewer.
+              const isJump = !!(c.jumpUrl);
+              const handleClick = () => {
+                if (isJump && c.jumpUrl) {
+                  window.open(c.jumpUrl, '_blank', 'noopener,noreferrer');
+                } else {
+                  onCitation(c);
+                }
+              };
+              const scoreLabel = c.score !== undefined
+                ? `${Math.round(c.score * 100)}%`
+                : null;
+              // Trim [M:SS] markers from the snippet before showing as tooltip.
+              const cleanSnippet = (c.snippet ?? '')
+                .replace(/\[\d+:\d{2}\]/g, '')
+                .replace(/\s+/g, ' ')
+                .trim()
+                .slice(0, 140);
+              const isTimestamp = c.type === 'youtube' || c.type === 'audio';
+
+              return (
+                // data-tag: media-colored left edge + score badge + timestamp
+                <button
+                  key={i}
+                  title={cleanSnippet || c.mediaName}
+                  onClick={handleClick}
+                  onMouseEnter={() => onCiteHover(c.mediaId, true)}
+                  onMouseLeave={() => onCiteHover(c.mediaId, false)}
+                  className="group/cit relative flex items-center gap-1.5 overflow-hidden rounded-md bg-black/[0.03] py-1 pl-3 pr-2 text-[11.5px] font-medium transition-all hover:-translate-y-px hover:bg-black/[0.06] hover:shadow-sm active:translate-y-0 dark:bg-white/[0.05] dark:hover:bg-white/[0.08]"
+                >
+                  {/* media-type colored left edge — ties chip to the source color */}
+                  <span
+                    className={cn(
+                      'absolute inset-y-0 left-0 w-[2.5px]',
+                      MEDIA_TYPES[c.type].solid
+                    )}
+                  />
+                  <MediaIcon type={c.type} size="sm" className="h-3 w-3 shrink-0 rounded" />
+                  <span className="max-w-[100px] truncate text-foreground/80">
+                    {c.mediaName}
+                  </span>
+                  {/* locator: timestamp or page number */}
+                  {c.locator && (
+                    <span className="flex items-center gap-0.5 text-muted-foreground/60">
+                      {isTimestamp ? (
+                        <Clock className="h-2.5 w-2.5 shrink-0" />
+                      ) : null}
+                      {c.locator}
+                    </span>
+                  )}
+                  {/* score badge — shows confidence */}
+                  {scoreLabel && (
+                    <span className="rounded bg-accent/10 px-1 py-0.5 text-[10px] font-semibold text-accent">
+                      {scoreLabel}
+                    </span>
+                  )}
+                  {/* external-link icon for youtube jump */}
+                  {isJump && (
+                    <ExternalLink className="h-3 w-3 shrink-0 text-muted-foreground/40 transition-colors group-hover/cit:text-accent" />
+                  )}
+                </button>
+              );
+            })}
+          </div>
         </div>
       )}
       {m.suggestedQuestions && m.suggestedQuestions.length > 0 && onAsk && (

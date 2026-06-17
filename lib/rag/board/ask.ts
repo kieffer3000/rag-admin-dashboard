@@ -24,6 +24,122 @@ export interface AskResult {
 }
 
 /**
+ * Extract the FIRST [M:SS] timestamp marker embedded in a chunk snippet.
+ * YouTube captions interleave these every ~15s during chunking.
+ */
+function extractTimestamp(snippet: string): { locator: string; startSec: number } | null {
+  const m = snippet.match(/\[(\d+):(\d{2})\]/);
+  if (!m) return null;
+  const mins = parseInt(m[1], 10);
+  const secs = parseInt(m[2], 10);
+  return { locator: `${m[1]}:${m[2]}`, startSec: mins * 60 + secs };
+}
+
+/** Build a YouTube watch URL with a ?t= seek offset from the source URL. */
+function youtubeJumpUrl(
+  source: string | undefined,
+  startSec: number
+): string | undefined {
+  if (!source) return undefined;
+  const m = source.match(/(?:v=|youtu\.be\/|shorts\/)([a-zA-Z0-9_-]{11})/);
+  if (!m) return undefined;
+  return `https://www.youtube.com/watch?v=${m[1]}&t=${startSec}`;
+}
+
+/**
+ * Parse raw citations from Make and enrich them into typed Citation objects.
+ * Handles the two Make response shapes:
+ *   - raw_citations: the full JSON string from module 14 (TransformToJSON of
+ *     the aggregator array) — available once the user adds the field to
+ *     CreateJSON module 10. This is the preferred path.
+ *   - citations: the old scalar-collapsed single-item array (fallback).
+ *
+ * Applies: dedup by (source_id + snippet key) → sort desc by score → cap 8.
+ */
+function buildCitations(
+  data: {
+    citations?: RawCitation[];
+    raw_citations?: string | RawCitation[];
+  },
+  byId: Map<string, MediaItem>
+): Citation[] {
+  // Prefer the full aggregator array (all N retrieved chunks).
+  let raw: RawCitation[] = [];
+  if (data.raw_citations) {
+    try {
+      const parsed =
+        typeof data.raw_citations === 'string'
+          ? (JSON.parse(data.raw_citations) as unknown)
+          : data.raw_citations;
+      if (Array.isArray(parsed)) {
+        // TransformToJSON wraps each element as {score, metadata:{...}}.
+        // Map to a flat RawCitation if necessary.
+        raw = (parsed as Array<Record<string, unknown>>).map((item) => {
+          if (item.source_id) return item as unknown as RawCitation;
+          // Aggregator shape: {score, metadata:{source_id,source_name,text}}
+          const meta = (item.metadata ?? {}) as Record<string, unknown>;
+          return {
+            score: item.score as number,
+            source_id: meta.source_id as string,
+            source_name: meta.source_name as string,
+            snippet: (meta.text ?? meta.snippet ?? '') as string,
+          } as RawCitation;
+        });
+      }
+    } catch {
+      /* fall through to data.citations */
+    }
+  }
+  // Fallback: the collapsed single-item (or partial) list from CreateJSON.
+  if (raw.length === 0 && Array.isArray(data.citations)) {
+    raw = data.citations;
+  }
+
+  // Dedup: same chunk can surface from multiple query expansions.
+  const seen = new Set<string>();
+  const deduped = raw
+    .filter((c) => {
+      if (!c?.source_id) return false;
+      const key = `${c.source_id}::${(c.snippet ?? '').trim().slice(0, 80)}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    })
+    .sort((a, b) => (b.score ?? 0) - (a.score ?? 0))
+    .slice(0, 8);
+
+  return deduped.map((c) => {
+    const m = byId.get(c.source_id);
+    const ts = extractTimestamp(c.snippet ?? '');
+    const startSec = ts?.startSec;
+    const jumpUrl =
+      startSec !== undefined && m?.type === 'youtube'
+        ? youtubeJumpUrl(m.source, startSec)
+        : undefined;
+
+    const score = typeof c.score === 'number' ? c.score : undefined;
+    const locator = ts
+      ? ts.locator
+      : c.page
+        ? `p. ${c.page}`
+        : score !== undefined
+          ? `${Math.round(score * 100)}%`
+          : '';
+
+    return {
+      mediaId: c.source_id,
+      mediaName: c.source_name || m?.name || c.source_id,
+      type: m?.type ?? 'document',
+      locator,
+      snippet: c.snippet ?? '',
+      score,
+      startSec,
+      jumpUrl,
+    } satisfies Citation;
+  });
+}
+
+/**
  * Ask the live RAG backend (Make.com Query scenario via /api/query).
  * The brain's wired connectivity arrives here as source_ids — the Board
  * is a visual source_ids assembler, nothing more.
@@ -67,20 +183,7 @@ export async function askBrain(
   const data = await res.json();
   const byId = new Map(items.map((m) => [m.id, m]));
 
-  const citations: Citation[] = (data.citations as RawCitation[]).map((c) => {
-    const m = byId.get(c.source_id);
-    return {
-      mediaId: c.source_id,
-      mediaName: c.source_name || m?.name || c.source_id,
-      type: m?.type ?? 'document',
-      locator: c.page
-        ? `p. ${c.page}`
-        : c.timestamp
-          ? c.timestamp
-          : `${Math.round((c.score ?? 0) * 100)}% match`,
-      snippet: c.snippet ?? ''
-    };
-  });
+  const citations = buildCitations(data, byId);
 
   const suggestedQuestions: string[] = Array.isArray(data.suggestedQuestions)
     ? data.suggestedQuestions.filter(

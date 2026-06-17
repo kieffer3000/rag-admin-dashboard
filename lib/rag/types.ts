@@ -48,9 +48,15 @@ export interface Citation {
   mediaId: string;
   mediaName: string;
   type: MediaType;
-  /** e.g. "p. 42", "04:31", "§3" */
+  /** e.g. "p. 42", "4:31", "81%" */
   locator: string;
   snippet: string;
+  /** Similarity score 0-1 (from Pinecone cosine distance). */
+  score?: number;
+  /** Seconds from start — enables ?t= jump links for youtube, seek for audio. */
+  startSec?: number;
+  /** Fully-formed jump URL (youtube: ?t=..., others: undefined). */
+  jumpUrl?: string;
 }
 
 /** How an attachment participates: one-off discussion vs permanent indexing. */
