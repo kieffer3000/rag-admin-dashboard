@@ -1163,9 +1163,7 @@ function BoardCanvasInner() {
           })
         }
         onNewSource={(type, name, source) => {
-          // Optimistic chip now; real status when the Indexing webhook
-          // (Gemini embed → Pinecone upsert) answers. v1 embeds the given
-          // text/URL as-is — transcript/crawl extraction is Scenario A v2.
+          // Optimistic chip now; real status when indexing answers.
           const id = addMedia(
             {
               type,
@@ -1183,6 +1181,25 @@ function BoardCanvasInner() {
             position: centerPos(),
             data: { mediaId: id }
           });
+
+          // YouTube: fetch the full caption transcript (deterministic) → index
+          // via the text pipeline. Website/text still embed the given text/URL.
+          if (type === 'youtube') {
+            fetch('/api/index-youtube', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ source_id: id, name, url: source })
+            })
+              .then(async (r) => {
+                const j = await r.json().catch(() => ({}));
+                if (!r.ok || !j.ok)
+                  throw new Error(j?.error ?? j?.note ?? 'index failed');
+                updateMedia(id, { status: 'indexed', chunks: j.chunks });
+              })
+              .catch(() => updateMedia(id, { status: 'failed' }));
+            return;
+          }
+
           fetch('/api/index', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
