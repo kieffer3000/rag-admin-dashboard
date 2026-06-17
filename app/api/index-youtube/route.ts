@@ -96,6 +96,22 @@ function decodeEntities(s: string): string {
     .replace(/&gt;/g, '>');
 }
 
+// Route the caption fetch through a RESIDENTIAL proxy so it isn't blocked like
+// Vercel's datacenter IP. youtube-transcript accepts a custom fetch, so we bind
+// undici to a ProxyAgent per-call (no global dispatcher leakage). Returns
+// undefined when no proxy is set → the lib uses plain fetch (works locally,
+// blocked on Vercel).
+async function makeProxyFetch(): Promise<
+  ((input: any, init?: any) => Promise<any>) | undefined
+> {
+  const proxyUrl = process.env.RESIDENTIAL_PROXY_URL;
+  if (!proxyUrl) return undefined;
+  const { ProxyAgent, fetch: undiciFetch } = await import('undici');
+  const dispatcher = new ProxyAgent(proxyUrl);
+  return (input: any, init: any = {}) =>
+    undiciFetch(input, { ...init, dispatcher });
+}
+
 export async function POST(req: Request) {
   const { userId } = await auth();
   if (!userId) return Response.json({ error: 'Unauthorized' }, { status: 401 });
@@ -121,11 +137,13 @@ export async function POST(req: Request) {
   let method = 'captions';
   try {
     const { YoutubeTranscript } = await import('youtube-transcript');
+    const proxyFetch = await makeProxyFetch();
+    const cfg: any = proxyFetch ? { fetch: proxyFetch } : {};
     let segs;
     try {
-      segs = await YoutubeTranscript.fetchTranscript(videoId, { lang: 'en' });
+      segs = await YoutubeTranscript.fetchTranscript(videoId, { lang: 'en', ...cfg });
     } catch {
-      segs = await YoutubeTranscript.fetchTranscript(videoId);
+      segs = await YoutubeTranscript.fetchTranscript(videoId, cfg);
     }
     // Interleave a [M:SS] marker every ~15s so the indexed text carries time
     // anchors → answers can cite the moment (and deep-link to ?t=). Detect the
@@ -149,17 +167,28 @@ export async function POST(req: Request) {
     transcript = ''; // captions blocked/missing → fall through to Gemini
   }
 
-  // 2) Fallback: Gemini transcribes the video (no datacenter-IP block).
+  // 2) Optional fallback: Gemini transcribes the video (costs ~$0.06/17min).
+  //    OFF by default so the proxy path can't silently fall into a paid call —
+  //    enable with RAG_YT_GEMINI_FALLBACK=1.
   if (transcript.length < 20) {
-    method = 'gemini';
-    try {
-      transcript = await geminiTranscribe(url);
-    } catch (e: any) {
+    if (process.env.RAG_YT_GEMINI_FALLBACK === '1') {
+      method = 'gemini';
+      try {
+        transcript = await geminiTranscribe(url);
+      } catch (e: any) {
+        return Response.json({
+          ok: false,
+          indexed: false,
+          source_url: url,
+          note: `Couldn't get a transcript (proxy captions failed and Gemini fallback failed: ${e?.message ?? 'error'}).`
+        });
+      }
+    } else {
       return Response.json({
         ok: false,
         indexed: false,
         source_url: url,
-        note: `Couldn't get a transcript (captions blocked and Gemini transcription failed: ${e?.message ?? 'error'}).`
+        note: 'No captions via the residential proxy (proxy unset/blocked, or the video has no captions). Set RESIDENTIAL_PROXY_URL — or enable RAG_YT_GEMINI_FALLBACK=1 to transcribe with Gemini.'
       });
     }
   }
