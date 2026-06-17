@@ -34,10 +34,12 @@ export function splitGraphicBlocks(
   return out;
 }
 
-/** Looks like an HTML document fragment (Make can now return HTML answers). */
+/** Looks like an HTML answer (Make returns HTML; we also inject <sup> footnote
+ *  refs). Detect a block/inline tag ANYWHERE — answers often open with plain
+ *  text ("Yes, …") before the first <mark>/<p>, and footnote <sup> refs must
+ *  route here to render rather than show as literal text. */
 function looksLikeHtml(s: string): boolean {
-  const t = s.trimStart();
-  return t.startsWith('<') && /<\/?(p|div|h[1-6]|ul|ol|li|table|br|strong|em|a|span|section|article)\b/i.test(t);
+  return /<\/?(p|div|h[1-6]|ul|ol|li|table|br|strong|em|a|span|mark|section|article|sup)\b[^>]*>/i.test(s);
 }
 
 /** Minimal sanitizer for model-returned HTML: strips scripts/styles, event

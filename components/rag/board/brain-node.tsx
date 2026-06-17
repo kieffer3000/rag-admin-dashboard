@@ -1328,7 +1328,32 @@ function BrainMessage({
   return (
     <div className="group self-start">
       {m.content ? (
-        <div ref={bodyRef} className="nodrag select-text">
+        <div
+          ref={bodyRef}
+          className="nodrag select-text"
+          onClick={(e) => {
+            // inline footnote ref clicked → open that footnote's source panel
+            const ref = (e.target as HTMLElement).closest('.fn-ref');
+            if (!ref) return;
+            const n = parseInt(ref.getAttribute('data-fn') ?? '', 10);
+            const c = m.citations?.[n - 1];
+            if (c) onCitation(c);
+          }}
+          onMouseOver={(e) => {
+            const ref = (e.target as HTMLElement).closest('.fn-ref');
+            if (!ref) return;
+            const n = parseInt(ref.getAttribute('data-fn') ?? '', 10);
+            const c = m.citations?.[n - 1];
+            if (c) onCiteHover(c.mediaId, true);
+          }}
+          onMouseOut={(e) => {
+            const ref = (e.target as HTMLElement).closest('.fn-ref');
+            if (!ref) return;
+            const n = parseInt(ref.getAttribute('data-fn') ?? '', 10);
+            const c = m.citations?.[n - 1];
+            if (c) onCiteHover(c.mediaId, false);
+          }}
+        >
           <AnswerBody content={m.content} large={large} />
         </div>
       ) : (
@@ -1432,72 +1457,64 @@ function BrainMessage({
         </div>
       )}
       {m.citations && m.citations.length > 0 && (
-        <div className="mt-2.5 space-y-1">
+        // Footnotes — numbered like a book. The inline [N] refs in the answer
+        // map to these rows; click a row to read the cited passage, or use the
+        // jump link to open the source at its timestamp/page.
+        <div className="mt-3 space-y-1.5 border-t border-[rgb(var(--hairline)/0.12)] pt-2.5">
           <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/45">
-            Sources
+            Footnotes
           </p>
-          <div className="flex flex-wrap gap-1.5">
+          <ol className="space-y-1">
             {m.citations.map((c, i) => {
-              // Clicking ALWAYS opens the citation panel so you can READ the
-              // cited passage. For youtube/audio the panel also surfaces a
-              // jump-to-timestamp link (the ↗ icon hints it's available).
-              const isJump = !!(c.jumpUrl);
-              const handleClick = () => onCitation(c);
-              const scoreLabel = c.score !== undefined
-                ? `${Math.round(c.score * 100)}%`
-                : null;
-              // Trim [M:SS] markers from the snippet before showing as tooltip.
+              const n = i + 1;
+              const isJump = !!c.jumpUrl;
+              const scoreLabel =
+                c.score !== undefined ? `${Math.round(c.score * 100)}%` : null;
               const cleanSnippet = (c.snippet ?? '')
                 .replace(/\[\d+:\d{2}\]/g, '')
                 .replace(/\s+/g, ' ')
                 .trim()
-                .slice(0, 140);
+                .slice(0, 160);
               const isTimestamp = c.type === 'youtube' || c.type === 'audio';
-
               return (
-                // data-tag: media-colored left edge + score badge + timestamp
-                <button
-                  key={i}
-                  title={cleanSnippet || c.mediaName}
-                  onClick={handleClick}
-                  onMouseEnter={() => onCiteHover(c.mediaId, true)}
-                  onMouseLeave={() => onCiteHover(c.mediaId, false)}
-                  className="group/cit relative flex items-center gap-1.5 overflow-hidden rounded-md bg-black/[0.03] py-1 pl-3 pr-2 text-[11.5px] font-medium transition-all hover:-translate-y-px hover:bg-black/[0.06] hover:shadow-sm active:translate-y-0 dark:bg-white/[0.05] dark:hover:bg-white/[0.08]"
-                >
-                  {/* media-type colored left edge — ties chip to the source color */}
-                  <span
-                    className={cn(
-                      'absolute inset-y-0 left-0 w-[2.5px]',
-                      MEDIA_TYPES[c.type].solid
-                    )}
-                  />
-                  <MediaIcon type={c.type} size="sm" className="h-3 w-3 shrink-0 rounded" />
-                  <span className="max-w-[100px] truncate text-foreground/80">
-                    {c.mediaName}
+                <li key={i} className="flex items-start gap-2">
+                  <span className="mt-0.5 shrink-0 text-[11.5px] font-semibold tabular-nums text-accent">
+                    [{n}]
                   </span>
-                  {/* locator: timestamp or page number */}
-                  {c.locator && (
-                    <span className="flex items-center gap-0.5 text-muted-foreground/60">
-                      {isTimestamp ? (
-                        <Clock className="h-2.5 w-2.5 shrink-0" />
-                      ) : null}
-                      {c.locator}
-                    </span>
-                  )}
-                  {/* score badge — shows confidence */}
-                  {scoreLabel && (
-                    <span className="rounded bg-accent/10 px-1 py-0.5 text-[10px] font-semibold text-accent">
-                      {scoreLabel}
-                    </span>
-                  )}
-                  {/* external-link icon for youtube jump */}
-                  {isJump && (
-                    <ExternalLink className="h-3 w-3 shrink-0 text-muted-foreground/40 transition-colors group-hover/cit:text-accent" />
-                  )}
-                </button>
+                  <button
+                    title={cleanSnippet || c.mediaName}
+                    onClick={() => onCitation(c)}
+                    onMouseEnter={() => onCiteHover(c.mediaId, true)}
+                    onMouseLeave={() => onCiteHover(c.mediaId, false)}
+                    className="group/cit relative flex min-w-0 flex-1 items-center gap-1.5 overflow-hidden rounded-md bg-black/[0.03] py-1 pl-3 pr-2 text-left text-[11.5px] font-medium transition-all hover:bg-black/[0.06] hover:shadow-sm dark:bg-white/[0.05] dark:hover:bg-white/[0.08]"
+                  >
+                    <span
+                      className={cn(
+                        'absolute inset-y-0 left-0 w-[2.5px]',
+                        MEDIA_TYPES[c.type].solid
+                      )}
+                    />
+                    <MediaIcon type={c.type} size="sm" className="h-3 w-3 shrink-0 rounded" />
+                    <span className="truncate text-foreground/80">{c.mediaName}</span>
+                    {c.locator && (
+                      <span className="flex shrink-0 items-center gap-0.5 text-muted-foreground/60">
+                        {isTimestamp ? <Clock className="h-2.5 w-2.5 shrink-0" /> : null}
+                        {c.locator}
+                      </span>
+                    )}
+                    {scoreLabel && (
+                      <span className="shrink-0 rounded bg-accent/10 px-1 py-0.5 text-[10px] font-semibold text-accent">
+                        {scoreLabel}
+                      </span>
+                    )}
+                    {isJump && (
+                      <ExternalLink className="ml-auto h-3 w-3 shrink-0 text-muted-foreground/40 transition-colors group-hover/cit:text-accent" />
+                    )}
+                  </button>
+                </li>
               );
             })}
-          </div>
+          </ol>
         </div>
       )}
       {m.suggestedQuestions && m.suggestedQuestions.length > 0 && onAsk && (

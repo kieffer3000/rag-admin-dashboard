@@ -173,6 +173,66 @@ function buildCitationsFallback(
   return filterToAnswer(cits, answer);
 }
 
+const citeKey = (sourceId: string, snippet: string) =>
+  `${sourceId}::${(snippet ?? '').trim().slice(0, 80)}`;
+
+const looksHtml = (s: string) =>
+  /<\/?(p|div|h[1-6]|ul|ol|li|table|br|strong|em|a|span|mark|section)\b/i.test(s);
+
+/**
+ * Turn the answer's inline citation markers into numbered, clickable footnote
+ * references — "real book" style. The shown citations ARE the footnotes
+ * (numbered 1..K in display order). Markers are matched two ways:
+ *   - numeric chunk index, e.g. [4] or [4, 26]  → mapped via the ordered raw
+ *     array to the footnote of that chunk (used once answers cite by number);
+ *   - source-name, e.g. [test3]                 → mapped to that source's footnote.
+ * In an HTML answer each marker becomes <sup class="fn-ref" data-fn="N">N</sup>
+ * (the brain wires a click handler to open footnote N). In a plain answer it
+ * degrades to a bare [N] so formatting never breaks.
+ */
+function footnoteAnswer(
+  answer: string,
+  citations: Citation[],
+  ordered: RawCitation[]
+): string {
+  if (!answer || citations.length === 0) return answer;
+  const html = looksHtml(answer);
+
+  const fnByKey = new Map<string, number>();
+  const fnByName = new Map<string, number>();
+  citations.forEach((c, i) => {
+    fnByKey.set(citeKey(c.mediaId, c.snippet), i + 1);
+    if (!fnByName.has(c.mediaName)) fnByName.set(c.mediaName, i + 1);
+  });
+  // raw 1-based chunk index → footnote number (for numeric [n] citations)
+  const fnByRawIndex = new Map<number, number>();
+  ordered.forEach((r, idx) => {
+    const fn = fnByKey.get(citeKey(r.source_id, r.snippet ?? ''));
+    if (fn) fnByRawIndex.set(idx + 1, fn);
+  });
+
+  const ref = (n: number) =>
+    html ? `<sup class="fn-ref" data-fn="${n}">${n}</sup>` : `[${n}]`;
+
+  return answer.replace(/\[([^\]\n]{1,60})\]/g, (full, inner: string) => {
+    const text = inner.trim();
+    // numeric chunk index/indices: [4] or [4, 26]
+    if (/^[\d][\d,\s]*$/.test(text)) {
+      const fns = text
+        .split(/[,\s]+/)
+        .map((s) => parseInt(s, 10))
+        .filter((n) => Number.isFinite(n))
+        .map((n) => fnByRawIndex.get(n))
+        .filter((n): n is number => !!n);
+      const uniq = [...new Set(fns)];
+      return uniq.length ? uniq.map(ref).join('') : ''; // unused chunk → drop
+    }
+    // source-name marker, e.g. [test3]
+    const fn = fnByName.get(text);
+    return fn ? ref(fn) : full; // unknown marker → leave as-is
+  });
+}
+
 // Common words that carry no distinguishing signal — ignored when matching the
 // answer against chunks (so "the US creator" doesn't make every chunk "match").
 const STOPWORDS = new Set(
@@ -289,6 +349,10 @@ export async function askBrain(
     ? cited
     : buildCitationsFallback(ordered, data.answer ?? '', byId);
 
+  // Numbered footnotes: rewrite inline [test3]/[n] markers → clickable [N]
+  // refs that line up with the citation list below the answer.
+  const answer = footnoteAnswer(data.answer ?? '', citations, ordered);
+
   const suggestedQuestions: string[] = Array.isArray(data.suggestedQuestions)
     ? data.suggestedQuestions.filter(
         (s: unknown) => typeof s === 'string' && s.trim()
@@ -296,7 +360,7 @@ export async function askBrain(
     : [];
 
   return {
-    answer: data.answer,
+    answer,
     citations,
     live: true,
     noMatch: Boolean(data.noMatch),
