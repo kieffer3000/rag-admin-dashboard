@@ -47,23 +47,17 @@ function youtubeJumpUrl(
 }
 
 /**
- * Parse raw citations from Make and enrich them into typed Citation objects.
- * Handles the two Make response shapes:
- *   - raw_citations: the full JSON string from module 14 (TransformToJSON of
- *     the aggregator array) — available once the user adds the field to
- *     CreateJSON module 10. This is the preferred path.
+ * Parse the ORDERED raw citation array from Make — NOT deduped, original order
+ * preserved, because the self-citation indices the model returns (`used_sources`)
+ * are 1-based positions into THIS exact array (it's the same `{{14.json}}` the
+ * answer/attribution model saw). Handles both response shapes:
+ *   - raw_citations: full JSON string from module 14 (TransformToJSON). Preferred.
  *   - citations: the old scalar-collapsed single-item array (fallback).
- *
- * Applies: dedup by (source_id + snippet key) → sort desc by score → cap 8.
  */
-function buildCitations(
-  data: {
-    citations?: RawCitation[];
-    raw_citations?: string | RawCitation[];
-  },
-  byId: Map<string, MediaItem>
-): Citation[] {
-  // Prefer the full aggregator array (all N retrieved chunks).
+function parseRawCitations(data: {
+  citations?: RawCitation[];
+  raw_citations?: string | RawCitation[];
+}): RawCitation[] {
   let raw: RawCitation[] = [];
   if (data.raw_citations) {
     try {
@@ -72,8 +66,6 @@ function buildCitations(
           ? (JSON.parse(data.raw_citations) as unknown)
           : data.raw_citations;
       if (Array.isArray(parsed)) {
-        // TransformToJSON wraps each element as {score, metadata:{...}}.
-        // Map to a flat RawCitation if necessary.
         raw = (parsed as Array<Record<string, unknown>>).map((item) => {
           if (item.source_id) return item as unknown as RawCitation;
           // Aggregator shape: {score, metadata:{source_id,source_name,text}}
@@ -90,53 +82,95 @@ function buildCitations(
       /* fall through to data.citations */
     }
   }
-  // Fallback: the collapsed single-item (or partial) list from CreateJSON.
   if (raw.length === 0 && Array.isArray(data.citations)) {
     raw = data.citations;
   }
+  return raw.filter((c) => c && c.source_id);
+}
 
-  // Dedup: same chunk can surface from multiple query expansions.
+/** Dedup a raw list by (source_id + first 80 chars of snippet). */
+function dedupeRaw(raw: RawCitation[]): RawCitation[] {
   const seen = new Set<string>();
-  const deduped = raw
-    .filter((c) => {
-      if (!c?.source_id) return false;
-      const key = `${c.source_id}::${(c.snippet ?? '').trim().slice(0, 80)}`;
-      if (seen.has(key)) return false;
-      seen.add(key);
-      return true;
-    })
-    .sort((a, b) => (b.score ?? 0) - (a.score ?? 0))
-    .slice(0, 8);
-
-  return deduped.map((c) => {
-    const m = byId.get(c.source_id);
-    const ts = extractTimestamp(c.snippet ?? '');
-    const startSec = ts?.startSec;
-    const jumpUrl =
-      startSec !== undefined && m?.type === 'youtube'
-        ? youtubeJumpUrl(m.source, startSec)
-        : undefined;
-
-    const score = typeof c.score === 'number' ? c.score : undefined;
-    const locator = ts
-      ? ts.locator
-      : c.page
-        ? `p. ${c.page}`
-        : score !== undefined
-          ? `${Math.round(score * 100)}%`
-          : '';
-
-    return {
-      mediaId: c.source_id,
-      mediaName: c.source_name || m?.name || c.source_id,
-      type: m?.type ?? 'document',
-      locator,
-      snippet: c.snippet ?? '',
-      score,
-      startSec,
-      jumpUrl,
-    } satisfies Citation;
+  return raw.filter((c) => {
+    const key = `${c.source_id}::${(c.snippet ?? '').trim().slice(0, 80)}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
   });
+}
+
+/** Enrich one raw citation into the typed Citation (score, timestamp, jumpUrl). */
+function toCitation(c: RawCitation, byId: Map<string, MediaItem>): Citation {
+  const m = byId.get(c.source_id);
+  const ts = extractTimestamp(c.snippet ?? '');
+  const startSec = ts?.startSec;
+  const jumpUrl =
+    startSec !== undefined && m?.type === 'youtube'
+      ? youtubeJumpUrl(m.source, startSec)
+      : undefined;
+  const score = typeof c.score === 'number' ? c.score : undefined;
+  const locator = ts
+    ? ts.locator
+    : c.page
+      ? `p. ${c.page}`
+      : score !== undefined
+        ? `${Math.round(score * 100)}%`
+        : '';
+  return {
+    mediaId: c.source_id,
+    mediaName: c.source_name || m?.name || c.source_id,
+    type: m?.type ?? 'document',
+    locator,
+    snippet: c.snippet ?? '',
+    score,
+    startSec,
+    jumpUrl,
+  } satisfies Citation;
+}
+
+/**
+ * SELF-CITATION (preferred): the answer/attribution model returns the 1-based
+ * indices of the chunks it actually used (`used_sources`, e.g. "3" or "1,3").
+ * We pick exactly those chunks from the ordered raw array — no guessing.
+ * Returns [] if the field is absent/empty/unparseable so the caller can fall
+ * back to the lexical filter.
+ */
+function selectByUsedSources(
+  ordered: RawCitation[],
+  usedSources: unknown,
+  byId: Map<string, MediaItem>
+): Citation[] {
+  if (usedSources === undefined || usedSources === null) return [];
+  // Accept a native array of numbers, or a string like "1,3" / "[1, 3]".
+  let nums: number[] = [];
+  if (Array.isArray(usedSources)) {
+    nums = usedSources
+      .map((n) => parseInt(String(n), 10))
+      .filter((n) => Number.isFinite(n));
+  } else if (typeof usedSources === 'string') {
+    nums = (usedSources.match(/\d+/g) ?? []).map((s) => parseInt(s, 10));
+  }
+  if (nums.length === 0) return [];
+  const picked = nums
+    .map((i) => ordered[i - 1]) // 1-based → 0-based
+    .filter((c): c is RawCitation => !!c && !!c.source_id);
+  if (picked.length === 0) return [];
+  return dedupeRaw(picked)
+    .sort((a, b) => (b.score ?? 0) - (a.score ?? 0))
+    .map((c) => toCitation(c, byId));
+}
+
+/** Fallback path: dedup → sort by score → cap 8 → lexical narrowing. */
+function buildCitationsFallback(
+  ordered: RawCitation[],
+  answer: string,
+  byId: Map<string, MediaItem>
+): Citation[] {
+  const cits = dedupeRaw(ordered)
+    .sort((a, b) => (b.score ?? 0) - (a.score ?? 0))
+    .slice(0, 8)
+    .map((c) => toCitation(c, byId));
+  return filterToAnswer(cits, answer);
 }
 
 // Common words that carry no distinguishing signal — ignored when matching the
@@ -245,10 +279,15 @@ export async function askBrain(
   const data = await res.json();
   const byId = new Map(items.map((m) => [m.id, m]));
 
-  // All retrieved+deduped chunks, then narrowed to the ones the answer
-  // actually used (multi-query retrieval over-fetches; the answer often rests
-  // on a single chunk — don't list 6 "sources" it never touched).
-  const citations = filterToAnswer(buildCitations(data, byId), data.answer ?? '');
+  // Citations = the chunks the answer actually used. PREFERRED: the model's own
+  // self-citation (`used_sources` = 1-based chunk indices from the Make
+  // attribution step) — deterministic truth, robust to paraphrasing. FALLBACK
+  // (no `used_sources` field yet): the lexical IDF-overlap narrowing.
+  const ordered = parseRawCitations(data);
+  const cited = selectByUsedSources(ordered, data.used_sources, byId);
+  const citations = cited.length
+    ? cited
+    : buildCitationsFallback(ordered, data.answer ?? '', byId);
 
   const suggestedQuestions: string[] = Array.isArray(data.suggestedQuestions)
     ? data.suggestedQuestions.filter(

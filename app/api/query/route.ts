@@ -34,6 +34,7 @@ interface MakeResult {
   answer: string;
   citations: RawCitation[];
   raw_citations: string | null;
+  used_sources: string | number[] | null;
   topScore: number | null;
   noMatch: boolean;
   suggestedQuestions: string[];
@@ -182,6 +183,9 @@ async function callMake(
     citations,
     // Pass the full aggregated array through so ask.ts can dedupe+rank all chunks.
     raw_citations: data.raw_citations ?? null,
+    // Self-citation: 1-based indices of the chunks the answer actually used,
+    // from the Make attribution step. ask.ts maps these to the shown chips.
+    used_sources: data.used_sources ?? null,
     topScore,
     noMatch: topScore === null || topScore < NOMATCH_THRESHOLD,
     suggestedQuestions,
@@ -394,9 +398,17 @@ export async function POST(req: Request) {
     }
   }
 
+  // If the validator blanked the answer, also drop the self-citation indices
+  // (they'd point at chunks for an answer we're no longer showing).
+  const usedSources = result.noMatch ? null : result.used_sources;
+
   return Response.json({
     answer: result.answer,
     citations: result.citations,
+    // Full ordered aggregator array — the client maps used_sources indices into
+    // THIS (same order the attribution model saw), then renders the chips.
+    raw_citations: result.raw_citations,
+    used_sources: usedSources,
     topScore: result.topScore,
     noMatch: result.noMatch,
     suggestedQuestions: result.suggestedQuestions,
