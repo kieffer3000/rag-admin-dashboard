@@ -34,7 +34,7 @@ async function geminiTranscribe(url: string): Promise<string> {
             parts: [
               { fileData: { fileUri: url } },
               {
-                text: 'Transcribe the spoken content of this video as accurately and completely as possible, from start to finish. Output ONLY the transcript text — no timestamps, no speaker labels, no commentary.'
+                text: 'Transcribe the spoken content of this video from start to finish, as accurately and completely as possible. Begin each paragraph (roughly every 15–30 seconds of speech, or at each clear topic shift) with its start time in [M:SS] format — use [H:MM:SS] once past one hour. Output ONLY the timestamped transcript — no speaker labels, no extra commentary.'
               }
             ]
           }
@@ -78,6 +78,14 @@ function parseVideoId(input: string): string | null {
   return null;
 }
 
+function formatTs(totalSec: number): string {
+  const s = Math.floor(totalSec % 60);
+  const m = Math.floor((totalSec / 60) % 60);
+  const h = Math.floor(totalSec / 3600);
+  const ss = String(s).padStart(2, '0');
+  return h > 0 ? `${h}:${String(m).padStart(2, '0')}:${ss}` : `${m}:${ss}`;
+}
+
 function decodeEntities(s: string): string {
   return s
     .replace(/&amp;#39;|&#39;/g, "'")
@@ -119,11 +127,24 @@ export async function POST(req: Request) {
     } catch {
       segs = await YoutubeTranscript.fetchTranscript(videoId);
     }
-    transcript = decodeEntities(
-      segs.map((s: { text: string }) => s.text).join(' ')
-    )
-      .replace(/\s+/g, ' ')
-      .trim();
+    // Interleave a [M:SS] marker every ~15s so the indexed text carries time
+    // anchors → answers can cite the moment (and deep-link to ?t=). Detect the
+    // offset unit ONCE for the whole transcript (the lib uses ms; >10h in
+    // seconds is implausible, so a large max ⇒ milliseconds).
+    const list = segs as Array<{ text: string; offset: number }>;
+    const maxOff = list.reduce((m, s) => Math.max(m, s.offset), 0);
+    const isMs = maxOff > 36000;
+    const parts: string[] = [];
+    let lastMark = -999;
+    for (const seg of list) {
+      const sec = isMs ? seg.offset / 1000 : seg.offset;
+      if (sec - lastMark >= 15) {
+        parts.push(`[${formatTs(sec)}]`);
+        lastMark = sec;
+      }
+      parts.push(decodeEntities(seg.text));
+    }
+    transcript = parts.join(' ').replace(/[ \t]+/g, ' ').trim();
   } catch {
     transcript = ''; // captions blocked/missing → fall through to Gemini
   }
