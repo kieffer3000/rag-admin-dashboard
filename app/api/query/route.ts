@@ -134,9 +134,21 @@ async function callMake(
     allRaw = data.citations ?? [];
   }
 
-  const citations: RawCitation[] = allRaw.filter(
-    (c: RawCitation) => c && c.source_id
-  );
+  // Dedup server-side (same chunk from multiple query expansions) and sort
+  // by score. The client caps at 8 with its own dedup, but this prevents
+  // stale/cached clients from rendering 60+ chips.
+  const seen = new Set<string>();
+  const citations: RawCitation[] = allRaw
+    .filter((c: RawCitation) => {
+      if (!c || !c.source_id) return false;
+      const key = `${c.source_id}::${(c.snippet ?? '').trim().slice(0, 80)}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    })
+    .sort((a, b) => (b.score ?? 0) - (a.score ?? 0))
+    .slice(0, 10);
+
   const scores = citations
     .map((c) => (typeof c.score === 'number' ? c.score : 0))
     .filter((s) => Number.isFinite(s));
