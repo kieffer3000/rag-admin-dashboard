@@ -142,10 +142,14 @@ function BoardCanvasInner() {
     }
     // delay so React Flow has measured the freshly-loaded nodes before fitView
     const t = setTimeout(() => {
-      if (active && latest > 0) {
-        fitView({ nodes: [{ id: active }], duration: 600, padding: 0.45, maxZoom: 1 });
-      } else {
-        fitView({ duration: 600, padding: 0.18 });
+      try {
+        if (active && latest > 0) {
+          fitView({ nodes: [{ id: active }], duration: 600, padding: 0.45, maxZoom: 1 });
+        } else {
+          fitView({ duration: 600, padding: 0.18 });
+        }
+      } catch (e) {
+        console.error('focus-on-load fitView', e);
       }
     }, 300);
     return () => clearTimeout(t);
@@ -158,33 +162,48 @@ function BoardCanvasInner() {
   boardRef.current = board;
   const preResearch = useRef<{ id: string; width: number; height: number } | null>(null);
   useEffect(() => {
-    if (researchBrainId) {
-      const node = boardRef.current.nodes.find((n) => n.id === researchBrainId);
-      if (!node) return;
-      preResearch.current = {
-        id: researchBrainId,
-        width: (node.width as number) || (node.data?.width as number) || 400,
-        height: (node.height as number) || (node.data?.height as number) || 480
-      };
-      const vw = typeof window !== 'undefined' ? window.innerWidth : 1280;
-      const vh = typeof window !== 'undefined' ? window.innerHeight : 800;
-      resizeBoardNode(researchBrainId, Math.min(1040, vw - 80), Math.min(760, vh - 96));
-      const t = setTimeout(
-        () => fitView({ nodes: [{ id: researchBrainId }], duration: 400, padding: 0.03, maxZoom: 1 }),
-        70
-      );
-      return () => clearTimeout(t);
+    let t: ReturnType<typeof setTimeout> | undefined;
+    // fitView can throw if React Flow isn't fully ready; never let it crash the
+    // whole board (the dashboard error boundary would mask it).
+    const safeFit = (opts: Parameters<typeof fitView>[0]) => {
+      try {
+        fitView(opts);
+      } catch (e) {
+        console.error('research fitView', e);
+      }
+    };
+    try {
+      if (researchBrainId) {
+        const node = boardRef.current.nodes.find((n) => n.id === researchBrainId);
+        if (node) {
+          preResearch.current = {
+            id: researchBrainId,
+            width: (node.width as number) || (node.data?.width as number) || 400,
+            height: (node.height as number) || (node.data?.height as number) || 480
+          };
+          const vw = typeof window !== 'undefined' ? window.innerWidth : 1280;
+          const vh = typeof window !== 'undefined' ? window.innerHeight : 800;
+          resizeBoardNode(researchBrainId, Math.min(1040, vw - 80), Math.min(760, vh - 96));
+          t = setTimeout(
+            () => safeFit({ nodes: [{ id: researchBrainId }], duration: 400, padding: 0.03, maxZoom: 1 }),
+            70
+          );
+        }
+      } else if (preResearch.current) {
+        const { id, width, height } = preResearch.current;
+        preResearch.current = null;
+        resizeBoardNode(id, width, height);
+        t = setTimeout(
+          () => safeFit({ nodes: [{ id }], duration: 400, padding: 0.4, maxZoom: 1 }),
+          70
+        );
+      }
+    } catch (e) {
+      console.error('research mode', e);
     }
-    if (preResearch.current) {
-      const { id, width, height } = preResearch.current;
-      preResearch.current = null;
-      resizeBoardNode(id, width, height);
-      const t = setTimeout(
-        () => fitView({ nodes: [{ id }], duration: 400, padding: 0.4, maxZoom: 1 }),
-        70
-      );
-      return () => clearTimeout(t);
-    }
+    return () => {
+      if (t) clearTimeout(t);
+    };
   }, [researchBrainId, resizeBoardNode, fitView]);
 
   const mediaTypeOf = useCallback(
