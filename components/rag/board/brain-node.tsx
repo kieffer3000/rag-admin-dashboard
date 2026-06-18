@@ -176,9 +176,11 @@ function BrainNodeInner({ id, data, selected }: NodeProps) {
     resizeBoardNode,
     setBrainBusy,
     stashBrain,
+    researchBrainId,
     setResearchBrainId,
     nextBoardId
   } = useBoard();
+  const inResearch = researchBrainId === id;
   const { openViewer, addMedia, updateMedia } = useRag();
   const { getViewport, fitView } = useReactFlow();
   const [question, setQuestion] = useState('');
@@ -799,7 +801,8 @@ function BrainNodeInner({ id, data, selected }: NodeProps) {
           selected && 'ring-2 ring-accent/60 dark:ring-accent/60'
         )}
       >
-        {/* header */}
+        {/* header — hidden in Research Mode for a bare chat (messages + composer) */}
+        {!inResearch && (
         <div
           className={cn(
             'flex shrink-0 items-center gap-2.5 bg-gradient-to-r px-3.5 py-2.5',
@@ -997,6 +1000,7 @@ function BrainNodeInner({ id, data, selected }: NodeProps) {
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
+        )}
 
       {/* messages */}
       <div
