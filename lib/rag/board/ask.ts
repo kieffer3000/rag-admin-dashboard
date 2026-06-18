@@ -160,6 +160,43 @@ function selectByUsedSources(
     .map((c) => toCitation(c, byId));
 }
 
+/**
+ * SELF-CITATION, per-claim (preferred when the answer cites chunk NUMBERS):
+ * footnotes = exactly the chunks the answer referenced inline ([n] / [n,m]),
+ * in order of first appearance, deduped. Each footnote is therefore a DISTINCT
+ * chunk that some specific claim cited — so footnote [1] and [2] highlight
+ * different passages (the bug the user hit was the model citing source NAMES,
+ * which all collapsed to footnote 1). Returns [] when the answer has no numeric
+ * citations (then we fall back to used_sources / lexical).
+ */
+function footnotesFromInlineCitations(
+  answer: string,
+  ordered: RawCitation[],
+  byId: Map<string, MediaItem>
+): Citation[] {
+  if (!answer) return [];
+  // collect cited 1-based raw indices in order of appearance
+  const idx: number[] = [];
+  for (const m of answer.matchAll(/\[(\d+(?:\s*,\s*\d+)*)\]/g)) {
+    for (const s of m[1].split(/[,\s]+/)) {
+      const n = parseInt(s, 10);
+      if (Number.isFinite(n)) idx.push(n);
+    }
+  }
+  if (idx.length === 0) return [];
+  const seen = new Set<string>();
+  const picked: RawCitation[] = [];
+  for (const i of idx) {
+    const c = ordered[i - 1];
+    if (!c || !c.source_id) continue;
+    const key = `${c.source_id}::${(c.snippet ?? '').trim().slice(0, 80)}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    picked.push(c);
+  }
+  return picked.map((c) => toCitation(c, byId));
+}
+
 /** Fallback path: dedup → sort by score → cap 8 → lexical narrowing. */
 function buildCitationsFallback(
   ordered: RawCitation[],
@@ -344,12 +381,18 @@ export async function askBrain(
   // attribution step) — deterministic truth, robust to paraphrasing. FALLBACK
   // (no `used_sources` field yet): the lexical IDF-overlap narrowing.
   const ordered = parseRawCitations(data);
-  const cited = selectByUsedSources(ordered, data.used_sources, byId);
-  const citations = cited.length
-    ? cited
+  // PREFERRED: footnotes = exactly the chunks the answer cited inline by number
+  // (per-claim accuracy). Falls back to the attribution set (used_sources), then
+  // the lexical narrowing, when the answer doesn't cite by number.
+  const inline = footnotesFromInlineCitations(data.answer ?? '', ordered, byId);
+  const used = inline.length
+    ? inline
+    : selectByUsedSources(ordered, data.used_sources, byId);
+  const citations = used.length
+    ? used
     : buildCitationsFallback(ordered, data.answer ?? '', byId);
 
-  // Numbered footnotes: rewrite inline [test3]/[n] markers → clickable [N]
+  // Numbered footnotes: rewrite inline [name]/[n] markers → clickable [N]
   // refs that line up with the citation list below the answer.
   const answer = footnoteAnswer(data.answer ?? '', citations, ordered);
 
