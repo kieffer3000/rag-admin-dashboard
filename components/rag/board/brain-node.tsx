@@ -144,7 +144,7 @@ function escapeHtml(s: string): string {
 // counter wasn't, so a reloaded brain's next send reused bm9001/bm9002.
 const MSG_SESSION = Math.random().toString(36).slice(2, 8);
 let msgCounter = 0;
-const nextMsgId = () => `bm_${MSG_SESSION}_${++msgCounter}`;
+export const nextMsgId = () => `bm_${MSG_SESSION}_${++msgCounter}`;
 
 /**
  * The Brain — answersDoc's query node. Its knowledge basis is whatever is
@@ -176,11 +176,9 @@ function BrainNodeInner({ id, data, selected }: NodeProps) {
     resizeBoardNode,
     setBrainBusy,
     stashBrain,
-    researchBrainId,
     setResearchBrainId,
     nextBoardId
   } = useBoard();
-  const inResearch = researchBrainId === id;
   const { openViewer, addMedia, updateMedia } = useRag();
   const { getViewport, fitView } = useReactFlow();
   const [question, setQuestion] = useState('');
@@ -801,8 +799,7 @@ function BrainNodeInner({ id, data, selected }: NodeProps) {
           selected && 'ring-2 ring-accent/60 dark:ring-accent/60'
         )}
       >
-        {/* header — hidden in Research Mode for a bare chat (messages + composer) */}
-        {!inResearch && (
+        {/* header */}
         <div
           className={cn(
             'flex shrink-0 items-center gap-2.5 bg-gradient-to-r px-3.5 py-2.5',
@@ -1000,7 +997,6 @@ function BrainNodeInner({ id, data, selected }: NodeProps) {
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
-        )}
 
       {/* messages */}
       <div
@@ -1277,7 +1273,7 @@ function BrainNodeInner({ id, data, selected }: NodeProps) {
   );
 }
 
-function BrainMessage({
+export function BrainMessage({
   m,
   large = false,
   onCitation,

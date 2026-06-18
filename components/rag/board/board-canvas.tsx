@@ -24,9 +24,9 @@ import {
   ArrowDownToLine,
   Copy,
   Unplug,
-  Trash2,
-  Minimize2
+  Trash2
 } from 'lucide-react';
+import { ResearchOverlay } from '@/components/rag/board/research-overlay';
 
 import { useRag } from '@/lib/rag/store';
 import { useBoard } from '@/lib/rag/board/store';
@@ -95,7 +95,7 @@ function retile(nodes: BoardNode[], hubId: string): BoardNode[] {
 }
 
 function BoardCanvasInner() {
-  const { board, setBoard, setBoardSilent, nextBoardId, busyBrains, saveStatus, saveNow, removeBoardNode, brainMessages, hydratedProject, researchBrainId, setResearchBrainId, resizeBoardNode } =
+  const { board, setBoard, setBoardSilent, nextBoardId, busyBrains, saveStatus, saveNow, removeBoardNode, brainMessages, hydratedProject, researchBrainId, setResearchBrainId } =
     useBoard();
   const { media, projectMedia, addMedia, updateMedia, deleteMedia, activeProjectId } = useRag();
   // Garbage bin (bottom-left): drag a source chip onto it to delete the source
@@ -155,62 +155,8 @@ function BoardCanvasInner() {
     return () => clearTimeout(t);
   }, [hydratedProject, activeProjectId, board.nodes, brainMessages, fitView]);
 
-  // RESEARCH MODE: enter → enlarge the chosen brain + fit it; exit → restore its
-  // size. Reads the board via a ref so this fires only on enter/exit, never on
-  // every streaming tick. (The chrome-hiding + full-screen wrapper is in JSX.)
-  const boardRef = useRef(board);
-  boardRef.current = board;
-  // CRITICAL: read these through refs, NOT effect deps. resizeBoardNode's
-  // identity changes on EVERY board change (its dep chain is unstable), so
-  // depending on it while ALSO calling it (→ board change) is an infinite
-  // render loop (React #185). Refs keep the effect's only trigger = researchBrainId.
-  const resizeRef = useRef(resizeBoardNode);
-  resizeRef.current = resizeBoardNode;
-  const fitViewRef = useRef(fitView);
-  fitViewRef.current = fitView;
-  const preResearch = useRef<{ id: string; width: number; height: number } | null>(null);
-  useEffect(() => {
-    let t: ReturnType<typeof setTimeout> | undefined;
-    const safeFit = (opts: Parameters<typeof fitView>[0]) => {
-      try {
-        fitViewRef.current(opts);
-      } catch (e) {
-        console.error('research fitView', e);
-      }
-    };
-    try {
-      if (researchBrainId) {
-        const node = boardRef.current.nodes.find((n) => n.id === researchBrainId);
-        if (node) {
-          preResearch.current = {
-            id: researchBrainId,
-            width: (node.width as number) || (node.data?.width as number) || 400,
-            height: (node.height as number) || (node.data?.height as number) || 480
-          };
-          const vw = typeof window !== 'undefined' ? window.innerWidth : 1280;
-          const vh = typeof window !== 'undefined' ? window.innerHeight : 800;
-          resizeRef.current(researchBrainId, Math.min(1040, vw - 80), Math.min(760, vh - 96));
-          t = setTimeout(
-            () => safeFit({ nodes: [{ id: researchBrainId }], duration: 400, padding: 0.03, maxZoom: 1 }),
-            70
-          );
-        }
-      } else if (preResearch.current) {
-        const { id, width, height } = preResearch.current;
-        preResearch.current = null;
-        resizeRef.current(id, width, height);
-        t = setTimeout(
-          () => safeFit({ nodes: [{ id }], duration: 400, padding: 0.4, maxZoom: 1 }),
-          70
-        );
-      }
-    } catch (e) {
-      console.error('research mode', e);
-    }
-    return () => {
-      if (t) clearTimeout(t);
-    };
-  }, [researchBrainId]);
+  // RESEARCH MODE is a dedicated full-screen overlay (ResearchOverlay), rendered
+  // below — it covers the whole canvas, so nothing here needs to change.
 
   const mediaTypeOf = useCallback(
     (chip: Node): MediaType | undefined =>
@@ -1162,11 +1108,7 @@ function BoardCanvasInner() {
   return (
     <div
       ref={wrapRef}
-      className={
-        researchBrainId
-          ? 'fixed inset-0 z-40 h-screen w-screen bg-background'
-          : 'relative h-full w-full'
-      }
+      className="relative h-full w-full"
       onPointerMove={onSpotMove}
       onDragOver={onCanvasDragOver}
       onDrop={onCanvasDrop}
@@ -1202,15 +1144,10 @@ function BoardCanvasInner() {
           setSelectedNodeId(nodes.length === 1 ? nodes[0].id : null)
         }
         zoomOnDoubleClick={false}
-        // Research Mode locks the canvas: no pan/zoom/drag — just the brain.
-        nodesDraggable={!researchBrainId}
-        nodesConnectable={!researchBrainId}
-        zoomOnScroll={!researchBrainId}
-        panOnScroll={false}
         // Gesture contract: plain drag on a node MOVES it; plain drag on the
         // canvas PANS; the rubber-band multi-select box appears ONLY while
         // holding Shift. Dragging never auto-selects (no surprise group box).
-        panOnDrag={!researchBrainId}
+        panOnDrag
         selectionOnDrag={false}
         selectionKeyCode="Shift"
         multiSelectionKeyCode="Shift"
@@ -1245,38 +1182,28 @@ function BoardCanvasInner() {
         // toolbar (which sit at z-20+ as siblings above this isolated block).
         className="isolate bg-transparent"
       >
-        {!researchBrainId && (
-          <Background
-            variant={BackgroundVariant.Dots}
-            gap={22}
-            size={1.4}
-            color="rgb(var(--hairline) / 0.16)"
-          />
-        )}
-        {!researchBrainId && (
-          <Controls
-            position="bottom-right"
-            showInteractive={false}
-            className="!rounded-[14px] !border-none !bg-card !shadow-[0_2px_8px_rgb(0_0_0/0.08)]"
-          />
-        )}
+        <Background
+          variant={BackgroundVariant.Dots}
+          gap={22}
+          size={1.4}
+          color="rgb(var(--hairline) / 0.16)"
+        />
+        <Controls
+          position="bottom-right"
+          showInteractive={false}
+          className="!rounded-[14px] !border-none !bg-card !shadow-[0_2px_8px_rgb(0_0_0/0.08)]"
+        />
       </ReactFlow>
 
-      {/* Research Mode — exit pill (sources stay wired; just leaving the
-          distraction-free view). Sits above the canvas, below the citation
-          sheet (z-50) so citations still float over research mode. */}
+      {/* RESEARCH MODE — a clean full-screen chat overlay for one brain. It sits
+          at z-40 (below the citation sheet at z-50, so citations still float). */}
       {researchBrainId && (
-        <button
-          onClick={() => setResearchBrainId(null)}
-          title="Exit research mode"
-          className="fixed right-5 top-5 z-[45] flex items-center gap-1.5 rounded-full bg-card px-4 py-2 text-[13px] font-semibold text-foreground shadow-[0_4px_20px_rgb(0_0_0/0.18)] ring-1 ring-black/[0.06] transition-all hover:-translate-y-px hover:shadow-[0_6px_24px_rgb(0_0_0/0.24)] dark:ring-white/10"
-        >
-          <Minimize2 className="h-4 w-4 text-accent" />
-          Exit Research
-        </button>
+        <ResearchOverlay
+          brainId={researchBrainId}
+          onExit={() => setResearchBrainId(null)}
+        />
       )}
 
-      {!researchBrainId && (
       <BoardToolbar
         placedIds={placedIds}
         onCleanDesk={cleanDesk}
@@ -1543,11 +1470,9 @@ function BoardCanvasInner() {
             .catch(() => updateMedia(id, { status: 'failed' }));
         }}
       />
-      )}
 
       {/* the CHEST — bottom dock of all produced media + prompts, drag onto
-          the canvas as puzzle pieces (hidden in Research Mode) */}
-      {!researchBrainId && (
+          the canvas as puzzle pieces */}
       <BoardChest
         placedIds={placedIds}
         saveStatus={saveStatus}
@@ -1577,10 +1502,9 @@ function BoardCanvasInner() {
           })
         }
       />
-      )}
 
       {/* Right-click context menu — Make-style per-node actions. */}
-      {!researchBrainId && ctxMenu && ctxNode && (
+      {ctxMenu && ctxNode && (
         <>
           {/* click / right-click anywhere away closes it */}
           <div
