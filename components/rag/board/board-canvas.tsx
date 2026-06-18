@@ -160,14 +160,20 @@ function BoardCanvasInner() {
   // every streaming tick. (The chrome-hiding + full-screen wrapper is in JSX.)
   const boardRef = useRef(board);
   boardRef.current = board;
+  // CRITICAL: read these through refs, NOT effect deps. resizeBoardNode's
+  // identity changes on EVERY board change (its dep chain is unstable), so
+  // depending on it while ALSO calling it (→ board change) is an infinite
+  // render loop (React #185). Refs keep the effect's only trigger = researchBrainId.
+  const resizeRef = useRef(resizeBoardNode);
+  resizeRef.current = resizeBoardNode;
+  const fitViewRef = useRef(fitView);
+  fitViewRef.current = fitView;
   const preResearch = useRef<{ id: string; width: number; height: number } | null>(null);
   useEffect(() => {
     let t: ReturnType<typeof setTimeout> | undefined;
-    // fitView can throw if React Flow isn't fully ready; never let it crash the
-    // whole board (the dashboard error boundary would mask it).
     const safeFit = (opts: Parameters<typeof fitView>[0]) => {
       try {
-        fitView(opts);
+        fitViewRef.current(opts);
       } catch (e) {
         console.error('research fitView', e);
       }
@@ -183,7 +189,7 @@ function BoardCanvasInner() {
           };
           const vw = typeof window !== 'undefined' ? window.innerWidth : 1280;
           const vh = typeof window !== 'undefined' ? window.innerHeight : 800;
-          resizeBoardNode(researchBrainId, Math.min(1040, vw - 80), Math.min(760, vh - 96));
+          resizeRef.current(researchBrainId, Math.min(1040, vw - 80), Math.min(760, vh - 96));
           t = setTimeout(
             () => safeFit({ nodes: [{ id: researchBrainId }], duration: 400, padding: 0.03, maxZoom: 1 }),
             70
@@ -192,7 +198,7 @@ function BoardCanvasInner() {
       } else if (preResearch.current) {
         const { id, width, height } = preResearch.current;
         preResearch.current = null;
-        resizeBoardNode(id, width, height);
+        resizeRef.current(id, width, height);
         t = setTimeout(
           () => safeFit({ nodes: [{ id }], duration: 400, padding: 0.4, maxZoom: 1 }),
           70
@@ -204,7 +210,7 @@ function BoardCanvasInner() {
     return () => {
       if (t) clearTimeout(t);
     };
-  }, [researchBrainId, resizeBoardNode, fitView]);
+  }, [researchBrainId]);
 
   const mediaTypeOf = useCallback(
     (chip: Node): MediaType | undefined =>
