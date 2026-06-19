@@ -16,7 +16,8 @@ import {
   Check,
   Loader2,
   CloudOff,
-  Brain
+  Brain,
+  Bot
 } from 'lucide-react';
 import type { RefObject } from 'react';
 
@@ -44,6 +45,7 @@ export function BoardChest({
   placedIds,
   onPlaceMedia,
   onPlacePrompt,
+  onPlaceAgent,
   onRecallMedia,
   saveStatus,
   onSave,
@@ -55,6 +57,7 @@ export function BoardChest({
   placedIds: Set<string>;
   onPlaceMedia: (mediaId: string) => void;
   onPlacePrompt: (text: string) => void;
+  onPlaceAgent: (agent: { agentId: string; name: string; icon?: string; text: string }) => void;
   onRecallMedia: (mediaId: string) => void;
   saveStatus: 'saved' | 'saving' | 'local';
   onSave: () => void;
@@ -64,7 +67,7 @@ export function BoardChest({
   /** Canvas reads the dock's screen bounds to push dropped nodes off it. */
   dockRef?: RefObject<HTMLDivElement | null>;
 }) {
-  const { projectMedia, deleteMedia } = useRag();
+  const { projectMedia, deleteMedia, agents } = useRag();
   const { board, unstashBrain } = useBoard();
   const stashedBrains = board.stashedBrains ?? [];
   const [open, setOpen] = useState<string | null>(null);
@@ -106,6 +109,8 @@ export function BoardChest({
   const panelItems =
     open === 'prompt'
       ? PROMPT_PRESETS.filter((p) => p.toLowerCase().includes(query))
+      : open === 'agent'
+      ? agents.filter((a) => a.name.toLowerCase().includes(query))
       : open === 'brains'
       ? stashedBrains.filter((s) =>
           String(s.node.data?.name ?? 'Brain').toLowerCase().includes(query)
@@ -128,6 +133,8 @@ export function BoardChest({
             <span className="text-[12px] font-semibold tracking-tight">
               {open === 'prompt'
                 ? 'Prompt pieces'
+                : open === 'agent'
+                ? 'Agents'
                 : open === 'brains'
                 ? 'Parked brains'
                 : MEDIA_TYPES[open as MediaType].plural}
@@ -135,6 +142,8 @@ export function BoardChest({
             <span className="text-[11px] text-muted-foreground/60">
               {open === 'prompt'
                 ? 'drag a guide onto the board'
+                : open === 'agent'
+                ? 'drag a persona onto the board'
                 : open === 'brains'
                 ? 'click to bring one back to the canvas'
                 : `${byType.get(open as MediaType)?.length ?? 0} produced · drag onto board`}
@@ -191,6 +200,49 @@ export function BoardChest({
                   </div>
                 );
               })
+            ) : open === 'agent' ? (
+              (panelItems as typeof agents).map((a) => (
+                <div
+                  key={a.id}
+                  draggable
+                  onDragStart={(e) => {
+                    e.dataTransfer.setData(
+                      CHEST_MIME,
+                      JSON.stringify({
+                        kind: 'agent',
+                        agentId: a.id,
+                        name: a.name,
+                        icon: a.icon,
+                        text: a.systemPrompt
+                      })
+                    );
+                    e.dataTransfer.effectAllowed = 'copy';
+                  }}
+                  onClick={() =>
+                    onPlaceAgent({
+                      agentId: a.id,
+                      name: a.name,
+                      icon: a.icon,
+                      text: a.systemPrompt
+                    })
+                  }
+                  className="group flex cursor-grab items-center gap-2.5 rounded-[10px] px-2 py-1.5 transition-colors hover:bg-[rgb(var(--hairline)/0.05)] active:cursor-grabbing"
+                >
+                  {a.icon ? (
+                    <span className="shrink-0 text-[16px] leading-none">{a.icon}</span>
+                  ) : (
+                    <Bot className="h-4 w-4 shrink-0 text-emerald-500" />
+                  )}
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-[12.5px] font-medium">
+                      {a.name}
+                    </span>
+                    <span className="block truncate text-[10.5px] text-muted-foreground/65">
+                      {a.systemPrompt}
+                    </span>
+                  </span>
+                </div>
+              ))
             ) : open === 'prompt' ? (
               (panelItems as string[]).map((preset) => (
                 <div
@@ -324,6 +376,24 @@ export function BoardChest({
           )}
         >
           <MessageSquareQuote className="h-[18px] w-[18px] text-indigo-500" strokeWidth={2.25} />
+        </button>
+
+        {/* Agents — saved answering personas; drag one onto the board and wire
+            it into a brain to steer how it answers. */}
+        <button
+          onClick={() => toggle('agent')}
+          title="Agents — answering personas"
+          className={cn(
+            'relative flex h-10 w-10 items-center justify-center rounded-full bg-emerald-50 transition-all dark:bg-emerald-500/[0.12]',
+            open === 'agent' ? 'ring-2 ring-accent' : 'hover:brightness-95'
+          )}
+        >
+          <Bot className="h-[18px] w-[18px] text-emerald-500" strokeWidth={2.25} />
+          {agents.length > 0 && (
+            <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-foreground px-1 text-[9px] font-bold text-background">
+              {agents.length}
+            </span>
+          )}
         </button>
 
         {/* Parked brains — appears once a brain is sent here, to declutter the

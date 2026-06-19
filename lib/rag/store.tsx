@@ -11,6 +11,7 @@ import {
 import {
   MediaItem,
   Prompt,
+  Agent,
   ChatMessage,
   QueryScope,
   MediaType,
@@ -19,12 +20,19 @@ import {
   Note,
   Citation
 } from './types';
-import { MOCK_MEDIA, MOCK_PROMPTS, MOCK_PROJECTS, MOCK_NOTES } from './mock-data';
+import {
+  MOCK_MEDIA,
+  MOCK_PROMPTS,
+  MOCK_AGENTS,
+  MOCK_PROJECTS,
+  MOCK_NOTES
+} from './mock-data';
 import { DEFAULT_MODEL_ID } from './models';
 
 interface RagState {
   media: MediaItem[];
   prompts: Prompt[];
+  agents: Agent[];
   projects: Project[];
   activeProjectId: string;
   conversations: Conversation[];
@@ -84,6 +92,11 @@ interface RagState {
   updatePrompt: (id: string, patch: Partial<Prompt>) => void;
   deletePrompt: (id: string) => void;
 
+  // agents
+  addAgent: (a: Omit<Agent, 'id'>) => void;
+  updateAgent: (id: string, patch: Partial<Agent>) => void;
+  deleteAgent: (id: string) => void;
+
   // viewer
   openViewer: (c: Citation, highlight?: string) => void;
   closeViewer: () => void;
@@ -106,6 +119,7 @@ const now = () => new Date().toISOString();
 export function RagProvider({ children }: { children: ReactNode }) {
   const [media, setMedia] = useState<MediaItem[]>(MOCK_MEDIA);
   const [prompts, setPrompts] = useState<Prompt[]>(MOCK_PROMPTS);
+  const [agents, setAgents] = useState<Agent[]>(MOCK_AGENTS);
   const [projects, setProjects] = useState<Project[]>(MOCK_PROJECTS);
   const [activeProjectId, setActiveProjectId] = useState<string>(MOCK_PROJECTS[0].id);
   const [conversations, setConversations] = useState<Conversation[]>([]);
@@ -410,6 +424,19 @@ export function RagProvider({ children }: { children: ReactNode }) {
     setActivePromptId((cur) => (cur === id ? null : cur));
   }, []);
 
+  // ---- agents ----
+  const addAgent = useCallback((a: Omit<Agent, 'id'>) => {
+    setAgents((prev) => [{ ...a, id: nextId('a') }, ...prev]);
+  }, []);
+
+  const updateAgent = useCallback((id: string, patch: Partial<Agent>) => {
+    setAgents((prev) => prev.map((a) => (a.id === id ? { ...a, ...patch } : a)));
+  }, []);
+
+  const deleteAgent = useCallback((id: string) => {
+    setAgents((prev) => prev.filter((a) => a.id !== id));
+  }, []);
+
   // ---- viewer ----
   const openViewer = useCallback((c: Citation, highlight?: string) => {
     setViewerCitation(c);
@@ -458,6 +485,7 @@ export function RagProvider({ children }: { children: ReactNode }) {
   const value: RagState = {
     media,
     prompts,
+    agents,
     projects,
     activeProjectId,
     conversations,
@@ -497,6 +525,9 @@ export function RagProvider({ children }: { children: ReactNode }) {
     addPrompt,
     updatePrompt,
     deletePrompt,
+    addAgent,
+    updateAgent,
+    deleteAgent,
     openViewer,
     closeViewer,
     activeProject,

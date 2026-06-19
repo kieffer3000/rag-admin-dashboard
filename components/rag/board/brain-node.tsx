@@ -65,7 +65,9 @@ import {
   CornerDownRight,
   ExternalLink,
   Clock,
-  Archive
+  Archive,
+  Zap,
+  Search
 } from 'lucide-react';
 import type { BrainData } from '@/lib/rag/board/types';
 
@@ -152,7 +154,10 @@ export const nextMsgId = () => `bm_${MSG_SESSION}_${++msgCounter}`;
  * ephemeral prompt context. This is the visual face of the Query webhook.
  */
 /** Last-N verbatim window; older turns get folded into the rolling summary. */
-const HISTORY_WINDOW = 30;
+// Keep the last 10 turns (≈5 Q + 5 A) verbatim; fold everything older into the
+// rolling summary. Matches the server's HISTORY_MAX_MESSAGES so the verbatim
+// window and the summary boundary line up exactly (no gap, no overlap).
+const HISTORY_WINDOW = 10;
 /** Answers are HTML (charts/tables); the rewriter + summarizer only need words. */
 function toPlainText(s: string): string {
   return s
@@ -163,7 +168,11 @@ function toPlainText(s: string): string {
 }
 
 function BrainNodeInner({ id, data, selected }: NodeProps) {
-  const d = data as BrainData & { color?: string; answerMode?: 'cited' | 'hybrid' };
+  const d = data as BrainData & {
+    color?: string;
+    answerMode?: 'cited' | 'hybrid';
+    speed?: 'fast' | 'detailed';
+  };
   const {
     board,
     setBoard,
@@ -185,6 +194,9 @@ function BrainNodeInner({ id, data, selected }: NodeProps) {
   const [busy, setBusy] = useState(false);
   const [renaming, setRenaming] = useState(false);
   const answerMode: 'cited' | 'hybrid' = d.answerMode ?? 'cited';
+  // ⚡ Fast (lightning, fewer round-trips) vs 🔍 Detailed (full pipeline).
+  // Defaults to Fast and persists with the brain (stays on across sessions).
+  const speed: 'fast' | 'detailed' = d.speed ?? 'fast';
   const headerColor = BRAIN_COLORS[d.color ?? 'indigo'] ?? BRAIN_COLORS.indigo;
   const [listening, setListening] = useState(false);
   const [transcribing, setTranscribing] = useState(false);
@@ -553,7 +565,7 @@ function BrainNodeInner({ id, data, selected }: NodeProps) {
       // charts) to plain text, truncate, cap at the last 30 messages.
       const history = messages
         .filter((mm) => mm.content && mm.content.trim())
-        .slice(-30)
+        .slice(-HISTORY_WINDOW)
         .map((mm) => ({
           role: mm.role,
           content: mm.content
@@ -561,7 +573,6 @@ function BrainNodeInner({ id, data, selected }: NodeProps) {
             .replace(/&[a-z]+;/gi, ' ')
             .replace(/\s+/g, ' ')
             .trim()
-            .slice(0, 500)
         }));
       const r = await askBrain(
         q,
@@ -571,7 +582,8 @@ function BrainNodeInner({ id, data, selected }: NodeProps) {
         answerMode,
         scope.guides,
         history,
-        (d.summary as string) ?? ''
+        (d.summary as string) ?? '',
+        speed
       );
       content = r.answer;
       citations = r.citations;
@@ -1175,6 +1187,39 @@ function BrainNodeInner({ id, data, selected }: NodeProps) {
               </DropdownMenuContent>
             </DropdownMenu>
 
+            {/* ⚡/🔍 speed: Fast = lightning (fewer round-trips, no extra LLM
+                passes); Detailed = full pipeline. Persists with the brain, so
+                it stays set across sessions. */}
+            <div
+              role="group"
+              aria-label="Answer speed"
+              className="nodrag flex items-center rounded-full bg-black/[0.05] p-0.5 dark:bg-white/[0.06]"
+            >
+              <button
+                onClick={() => updateBoardNodeData(id, { speed: 'fast' })}
+                title="Fast — a quick, lightning answer (fewer steps, no per-claim citations or extra checks)."
+                className={cn(
+                  'flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide transition-colors',
+                  speed === 'fast'
+                    ? 'bg-amber-400 text-white shadow-[0_1px_3px_rgb(0_0_0/0.18)]'
+                    : 'text-muted-foreground/70 hover:text-foreground'
+                )}
+              >
+                <Zap className="h-2.5 w-2.5" /> Fast
+              </button>
+              <button
+                onClick={() => updateBoardNodeData(id, { speed: 'detailed' })}
+                title="Detailed — the full pipeline: query expansion, validation, and per-claim citations. Slower, more thorough."
+                className={cn(
+                  'flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide transition-colors',
+                  speed === 'detailed'
+                    ? 'bg-accent text-white shadow-[0_1px_3px_rgb(0_0_0/0.18)]'
+                    : 'text-muted-foreground/70 hover:text-foreground'
+                )}
+              >
+                <Search className="h-2.5 w-2.5" /> Detailed
+              </button>
+            </div>
           </div>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>

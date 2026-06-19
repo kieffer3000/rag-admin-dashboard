@@ -108,7 +108,7 @@ function PromptNodeInner({ id, data, selected, parentId }: NodeProps) {
           <div className="text-[9px] font-bold uppercase tracking-wide text-indigo-500/80">
             Prompt
           </div>
-          <div className="line-clamp-1 text-[11.5px] font-medium text-indigo-900/85 dark:text-indigo-100/85">
+          <div className="line-clamp-2 text-[11.5px] font-medium leading-[1.18] text-indigo-900/85 dark:text-indigo-100/85">
             {text.trim() || 'click ✎ to write an instruction'}
           </div>
         </div>

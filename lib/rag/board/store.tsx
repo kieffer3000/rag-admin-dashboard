@@ -493,7 +493,10 @@ export function BoardProvider({ children }: { children: ReactNode }) {
         if (parentId) {
           let i = 0;
           nodes = nodes.map((n) =>
-            (n.type === 'chip' || n.type === 'textNode' || n.type === 'prompt') &&
+            (n.type === 'chip' ||
+              n.type === 'textNode' ||
+              n.type === 'prompt' ||
+              n.type === 'agent') &&
             n.parentId === parentId
               ? { ...n, position: hubSlot(i++) }
               : n
@@ -646,9 +649,13 @@ export function BoardProvider({ children }: { children: ReactNode }) {
                 const t = (n.data.text as string)?.trim();
                 if (t) contextTexts.push(t);
               });
-            // Prompt pieces docked in the box guide HOW it answers.
+            // Prompt + agent pieces docked in the box guide HOW it answers.
             nodes
-              .filter((n) => n.type === 'prompt' && n.parentId === src.id)
+              .filter(
+                (n) =>
+                  (n.type === 'prompt' || n.type === 'agent') &&
+                  n.parentId === src.id
+              )
               .forEach((n) => {
                 const t = (n.data.text as string)?.trim();
                 if (t) guides.push(t);
@@ -657,7 +664,9 @@ export function BoardProvider({ children }: { children: ReactNode }) {
         } else if (src.type === 'textNode') {
           const t = (src.data.text as string)?.trim();
           if (t) contextTexts.push(t);
-        } else if (src.type === 'prompt') {
+        } else if (src.type === 'prompt' || src.type === 'agent') {
+          // An agent piece is a persona — its system prompt rides into the
+          // answer as guidance, exactly like a prompt piece.
           const t = (src.data.text as string)?.trim();
           if (t) guides.push(t);
         }

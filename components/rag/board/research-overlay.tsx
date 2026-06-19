@@ -42,6 +42,8 @@ export function ResearchOverlay({
   const answerMode: 'cited' | 'hybrid' =
     data.answerMode === 'hybrid' ? 'hybrid' : 'cited';
   const summary = (data.summary as string) ?? '';
+  const speed: 'fast' | 'detailed' =
+    data.speed === 'detailed' ? 'detailed' : 'fast';
   const messages = brainMessages[brainId] ?? [];
   const scopeCount = resolveBrainScope(brainId).items.length;
 
@@ -105,9 +107,11 @@ export function ResearchOverlay({
     let noMatch = false;
     let suggestedQuestions: string[] = [];
     try {
+      // Last 10 turns (≈5 Q + 5 A) verbatim, in full; older turns ride in via
+      // the brain's rolling summary.
       const history = messages
         .filter((mm) => mm.content && mm.content.trim())
-        .slice(-30)
+        .slice(-10)
         .map((mm) => ({
           role: mm.role,
           content: mm.content
@@ -115,7 +119,6 @@ export function ResearchOverlay({
             .replace(/&[a-z]+;/gi, ' ')
             .replace(/\s+/g, ' ')
             .trim()
-            .slice(0, 500)
         }));
       const r = await askBrain(
         q,
@@ -125,7 +128,8 @@ export function ResearchOverlay({
         answerMode,
         scope.guides,
         history,
-        summary
+        summary,
+        speed
       );
       content = r.answer;
       citations = r.citations;

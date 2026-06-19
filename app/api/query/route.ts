@@ -23,7 +23,9 @@ const NOMATCH_THRESHOLD = Number(process.env.RAG_NOMATCH_THRESHOLD ?? 0.45);
 const RETRY_ENABLED = process.env.RAG_CORRECTIVE_RETRY !== 'off';
 const VALIDATOR_ENABLED = process.env.RAG_VALIDATOR !== 'off';
 const MEMORY_ENABLED = process.env.RAG_MEMORY !== 'off';
-const HISTORY_MAX_MESSAGES = 30;
+// Last 10 turns (≈5 Q + 5 A) sent verbatim, in FULL (no per-message truncation);
+// everything older is folded into the rolling summary.
+const HISTORY_MAX_MESSAGES = 10;
 
 interface RawCitation {
   source_id?: string | null;
@@ -82,7 +84,8 @@ async function callMake(
   mode: 'cited' | 'hybrid',
   guides: string[],
   model: string,
-  profile: string
+  profile: string,
+  speed: 'fast' | 'detailed'
 ): Promise<MakeResult> {
   const res = await fetch(url, {
     method: 'POST',
@@ -106,7 +109,11 @@ async function callMake(
       answer_mode: mode,
       guides,
       namespace: process.env.PINECONE_NAMESPACE ?? 'user_kieffer',
-      model
+      model,
+      // Forwarded so the Make scenario can branch its own pipeline (e.g. skip
+      // the multi-query expander) in fast mode. Server-side stages are already
+      // skipped above regardless.
+      speed
     })
   });
   if (!res.ok) throw new Error(`Query webhook returned ${res.status}`);
@@ -286,6 +293,11 @@ export async function POST(req: Request) {
     body.answer_mode === 'hybrid' ? 'hybrid' : 'cited';
   const model = body.model ?? 'gemini-2.5-flash';
   const userQuestion: string = body.question;
+  // ⚡ Fast = a lightning answer: skip the extra LLM round-trips (history
+  // rewrite, corrective retry, answer-validator) and just retrieve → answer.
+  // Long-term memory is kept (cheap embed+lookup). 🔍 Detailed (default) runs
+  // the full pipeline.
+  const fast = body.speed === 'fast';
 
   // Conversation history (capped, plain text) → resolve follow-up references
   // into a standalone query for retrieval AND generation. No history = no-op.
@@ -299,13 +311,17 @@ export async function POST(req: Request) {
     .slice(-HISTORY_MAX_MESSAGES)
     .map((h: { role: string; content: string }) => ({
       role: h.role === 'assistant' ? 'assistant' : 'user',
-      content: h.content.slice(0, 500)
+      content: h.content
     }));
   const summary = typeof body.summary === 'string' ? body.summary : '';
-  const rawQuestion = await contextualize(userQuestion, history, summary);
+  const rawQuestion = fast
+    ? userQuestion
+    : await contextualize(userQuestion, history, summary);
 
   // Long-term memory: pull relevant past-conversation summaries and feed them in
-  // as context so the brain "remembers" across sessions.
+  // as context so the brain "remembers" across sessions. Kept ON even in fast
+  // mode — it's a single embed+vector lookup (no LLM generation), and recall is
+  // worth the small cost.
   const memories = MEMORY_ENABLED ? await retrieveMemories(rawQuestion) : [];
   const ctx = memories.length
     ? [
@@ -332,7 +348,8 @@ export async function POST(req: Request) {
       mode,
       guides,
       model,
-      profile
+      profile,
+      fast ? 'fast' : 'detailed'
     );
   } catch (e) {
     return Response.json(
@@ -344,7 +361,7 @@ export async function POST(req: Request) {
   // Corrective retry: weak/empty retrieval → reformulate once and try again,
   // keep whichever pass retrieved better.
   let retried = false;
-  if (RETRY_ENABLED && result.noMatch) {
+  if (RETRY_ENABLED && !fast && result.noMatch) {
     const newQuery = await reformulate(rawQuestion, result.answer);
     if (newQuery) {
       try {
@@ -356,7 +373,8 @@ export async function POST(req: Request) {
           mode,
           guides,
           model,
-          profile
+          profile,
+          fast ? 'fast' : 'detailed'
         );
         retried = true;
         // prefer the pass that isn't a no-match; otherwise the higher score.
@@ -376,6 +394,7 @@ export async function POST(req: Request) {
   let validated = true;
   if (
     VALIDATOR_ENABLED &&
+    !fast &&
     mode === 'cited' &&
     !result.noMatch &&
     result.citations.length > 0

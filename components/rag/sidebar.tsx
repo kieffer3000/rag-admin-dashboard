@@ -6,7 +6,7 @@ import { usePathname } from 'next/navigation';
 import {
   MessagesSquare,
   Library,
-  Sparkles,
+  Bot,
   Boxes,
   StickyNote,
   Activity,
@@ -51,7 +51,7 @@ export const NAV = [
   { href: '/board', label: 'Board', icon: Workflow },
   { href: '/', label: 'Chat', icon: MessagesSquare },
   { href: '/library', label: 'Library', icon: Library },
-  { href: '/prompts', label: 'Prompts', icon: Sparkles },
+  { href: '/agents', label: 'Agents', icon: Bot },
   { href: '/notes', label: 'Notes', icon: StickyNote },
   { href: '/health', label: 'Health', icon: Activity, adminOnly: true },
   { href: '/members', label: 'Team', icon: Users },

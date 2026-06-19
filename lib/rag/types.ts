@@ -42,6 +42,23 @@ export interface Prompt {
   builtIn?: boolean;
 }
 
+/**
+ * A reusable ANSWERING PERSONA — a name + a robot/emoji icon + a system
+ * prompt. Dragged onto the board as a node and wired into a brain, its
+ * system prompt rides into that brain's answer as guidance (functionally a
+ * re-skin of a Prompt piece). Never a source, never indexed.
+ */
+export interface Agent {
+  id: string;
+  name: string;
+  /** Optional emoji/icon shown on the agent card and node (defaults to 🤖). */
+  icon?: string;
+  /** The persona's system prompt — steers HOW a wired brain answers. */
+  systemPrompt: string;
+  /** True for the built-in starter agents. */
+  builtIn?: boolean;
+}
+
 export type QueryScope = 'selected' | 'everything';
 
 export interface Citation {

@@ -351,7 +351,10 @@ export async function askBrain(
    *  rewrite a follow-up ("his street") into a standalone retrieval query. */
   history: { role: 'user' | 'assistant'; content: string }[] = [],
   /** Rolling summary of turns older than the verbatim window (long convos). */
-  summary = ''
+  summary = '',
+  /** 'detailed' = full pipeline (expander/validator/attribution/memory);
+   *  'fast' = lightning path that skips the extra LLM round-trips for speed. */
+  speed: 'fast' | 'detailed' = 'detailed'
 ): Promise<AskResult> {
   const res = await fetch('/api/query', {
     method: 'POST',
@@ -364,7 +367,8 @@ export async function askBrain(
       model: modelId,
       answer_mode: mode,
       history,
-      summary
+      summary,
+      speed
     })
   });
 

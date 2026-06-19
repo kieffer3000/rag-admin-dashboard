@@ -49,6 +49,7 @@ import { HubNode } from './hub-node';
 import { BrainNode } from './brain-node';
 import { TextNode } from './text-node';
 import { PromptNode } from './prompt-node';
+import { AgentNode } from './agent-node';
 import { AnnotationNode } from './annotation-node';
 import { MindmapNode } from './mindmap-node';
 import { ScopeEdge } from './scope-edge';
@@ -61,33 +62,38 @@ const nodeTypes = {
   brain: BrainNode,
   textNode: TextNode,
   prompt: PromptNode,
+  agent: AgentNode,
   annotation: AnnotationNode,
   mindmap: MindmapNode
 };
 
 const edgeTypes = { scope: ScopeEdge };
 
-const SOURCE_TYPES = new Set(['chip', 'hub', 'textNode', 'prompt']);
+const SOURCE_TYPES = new Set(['chip', 'hub', 'textNode', 'prompt', 'agent']);
 /** Node types the right-click menu can duplicate (content artifacts — chips
  *  are one-per-source, hubs/brains aren't sensibly cloned). */
-const DUPLICABLE = new Set(['textNode', 'prompt', 'annotation', 'mindmap']);
+const DUPLICABLE = new Set(['textNode', 'prompt', 'agent', 'annotation', 'mindmap']);
 /** New-id prefix per duplicable node type. */
 const DUP_PREFIX: Record<string, string> = {
   textNode: 'text',
   prompt: 'prompt',
+  agent: 'agent',
   annotation: 'ann',
   mindmap: 'mm'
 };
 /** Node types that dock into cluster boxes as compact tiles (non-source
- *  context: notes + prompt guides). */
-const DOCKABLE_CONTEXT = new Set(['textNode', 'prompt']);
+ *  context: notes + prompt/agent guides). */
+const DOCKABLE_CONTEXT = new Set(['textNode', 'prompt', 'agent']);
 
 /** Re-tile a hub's docked tiles (chips + context notes + prompts) into the
  *  2-col grid. */
 function retile(nodes: BoardNode[], hubId: string): BoardNode[] {
   let i = 0;
   return nodes.map((n) =>
-    (n.type === 'chip' || n.type === 'textNode' || n.type === 'prompt') &&
+    (n.type === 'chip' ||
+      n.type === 'textNode' ||
+      n.type === 'prompt' ||
+      n.type === 'agent') &&
     n.parentId === hubId
       ? { ...n, position: hubSlot(i++) }
       : n
@@ -491,7 +497,7 @@ function BoardCanvasInner() {
               : node.position;
             const oldHub = tn.parentId;
             const restore =
-              tn.type === 'prompt'
+              tn.type === 'prompt' || tn.type === 'agent'
                 ? { width: CHIP_W, height: CHIP_H + CHIP_TAB }
                 : { width: 234, height: 132 };
             nodes = nodes.map((n) =>
@@ -749,7 +755,14 @@ function BoardCanvasInner() {
       const raw = e.dataTransfer.getData(CHEST_MIME);
       if (!raw) return;
       e.preventDefault();
-      let payload: { kind: string; id?: string; text?: string };
+      let payload: {
+        kind: string;
+        id?: string;
+        text?: string;
+        agentId?: string;
+        name?: string;
+        icon?: string;
+      };
       try {
         payload = JSON.parse(raw);
       } catch {
@@ -779,6 +792,23 @@ function BoardCanvasInner() {
           width: CHIP_W,
           height: CHIP_H + CHIP_TAB,
           data: { text: payload.text ?? '' }
+        });
+      } else if (payload.kind === 'agent') {
+        pushNode({
+          id: nextBoardId('agent'),
+          type: 'agent',
+          position: {
+            x: pos.x - CHIP_W / 2,
+            y: pos.y - (CHIP_H + CHIP_TAB) / 2
+          },
+          width: CHIP_W,
+          height: CHIP_H + CHIP_TAB,
+          data: {
+            agentId: payload.agentId ?? '',
+            name: payload.name ?? 'Agent',
+            icon: payload.icon ?? '',
+            text: payload.text ?? ''
+          }
         });
       }
     },
@@ -1499,6 +1529,21 @@ function BoardCanvasInner() {
             width: CHIP_W,
             height: CHIP_H + CHIP_TAB,
             data: { text }
+          })
+        }
+        onPlaceAgent={(agent) =>
+          pushNode({
+            id: nextBoardId('agent'),
+            type: 'agent',
+            position: centerPos(),
+            width: CHIP_W,
+            height: CHIP_H + CHIP_TAB,
+            data: {
+              agentId: agent.agentId,
+              name: agent.name,
+              icon: agent.icon ?? '',
+              text: agent.text
+            }
           })
         }
       />

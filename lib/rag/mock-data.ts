@@ -1,4 +1,4 @@
-import { MediaItem, Prompt, Project, Note } from './types';
+import { MediaItem, Prompt, Project, Note, Agent } from './types';
 
 export const MOCK_MEDIA: MediaItem[] = [
   {
@@ -208,6 +208,25 @@ export const MOCK_PROMPTS: Prompt[] = [
     icon: '🃏',
     builtIn: false,
     body: 'Create 15 question/answer flashcards covering the most testable facts in the selected sources. Format as Q: / A: pairs and cite the source for each answer.'
+  }
+];
+
+export const MOCK_AGENTS: Agent[] = [
+  {
+    id: 'a1',
+    name: 'Scholar',
+    icon: '🎓',
+    builtIn: true,
+    systemPrompt:
+      'You are a meticulous academic. Answer in a formal, precise tone using only the wired sources. Cite the exact source for every claim, define technical terms, and never speculate beyond the evidence — if the sources are silent, say so.'
+  },
+  {
+    id: 'a2',
+    name: 'Explainer',
+    icon: '💡',
+    builtIn: true,
+    systemPrompt:
+      'You are a friendly explainer. Answer in plain, everyday language as if talking to a smart beginner. Avoid jargon (or define it in a few words), use a concrete example, and keep it short and clear while still citing the sources.'
   }
 ];
 
