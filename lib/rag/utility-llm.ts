@@ -1,74 +1,45 @@
 // Single gateway for the small RAG "utility" LLM calls (query contextualize,
-// corrective reformulate, rolling summarize). It PREFERS a Make.com webhook
-// ("rag-llm-utility": { prompt } → { result }) so the model version is managed
-// in the Make UI and never silently drifts. If the webhook isn't configured it
-// falls back to a direct Gemini call (RAG_UTILITY_MODEL — a single env var, the
-// only model reference left in code, used only as a pre-wiring safety net).
+// corrective reformulate, rolling + document/cluster summarize). EVERY model
+// call goes through the Make.com "rag-llm-utility" scenario ({ prompt } →
+// { result }) so the model version is managed in ONE place (the Make UI) and
+// the app never calls an LLM directly. If the webhook isn't configured the
+// caller gets null and degrades gracefully (no summary / query unchanged) —
+// there is intentionally NO internal/direct model fallback.
 
 export async function runUtilityLLM(
   prompt: string,
-  opts?: { maxOutputTokens?: number; temperature?: number }
+  // Kept for signature compatibility; output length etc. is configured on the
+  // Make scenario's model module, not here (the webhook only receives `prompt`).
+  _opts?: { maxOutputTokens?: number; temperature?: number }
 ): Promise<string | null> {
   const webhook = process.env.MAKE_UTILITY_WEBHOOK_URL;
-  if (webhook) {
+  if (!webhook) return null;
+
+  try {
+    const r = await fetch(webhook, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ prompt })
+    });
+    if (!r.ok) return null;
+    const raw = (await r.text()).trim();
+    // 'Accepted' = Make queued the call (scenario busy/off) — not a result.
+    if (!raw || raw === 'Accepted') return null;
+    // Accept raw text, or unwrap a single-string JSON value if the model
+    // returned JSON (e.g. {"result":…} / {"query":…} / {"text":…}).
     try {
-      const r = await fetch(webhook, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt })
-      });
-      if (r.ok) {
-        const raw = (await r.text()).trim();
-        // 'Accepted' = Make queued the call (scenario busy/off) — not a result.
-        if (raw && raw !== 'Accepted') {
-          // Accept raw text, or unwrap a single-string JSON value if the model
-          // returned JSON (e.g. {"result":…} / {"query":…} / {"text":…}).
-          try {
-            const j = JSON.parse(raw);
-            if (j && typeof j === 'object') {
-              const v =
-                j.result ?? j.query ?? j.text ?? j.answer ?? j.output;
-              if (typeof v === 'string' && v.trim()) return v.trim();
-              const vals = Object.values(j);
-              if (vals.length === 1 && typeof vals[0] === 'string' && vals[0].trim())
-                return (vals[0] as string).trim();
-            }
-          } catch {
-            /* not JSON — use the raw text */
-          }
-          return raw;
-        }
+      const j = JSON.parse(raw);
+      if (j && typeof j === 'object') {
+        const v = j.result ?? j.query ?? j.text ?? j.answer ?? j.output;
+        if (typeof v === 'string' && v.trim()) return v.trim();
+        const vals = Object.values(j);
+        if (vals.length === 1 && typeof vals[0] === 'string' && vals[0].trim())
+          return (vals[0] as string).trim();
       }
     } catch {
-      /* fall through to the direct fallback */
+      /* not JSON — use the raw text */
     }
-  }
-
-  const key = process.env.GEMINI_API_KEY;
-  if (!key) return null;
-  const model = process.env.RAG_UTILITY_MODEL ?? 'gemini-2.5-flash';
-  try {
-    const r = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: prompt }] }],
-          generationConfig: {
-            temperature: opts?.temperature ?? 0.3,
-            maxOutputTokens: opts?.maxOutputTokens ?? 300
-          }
-        })
-      }
-    );
-    if (!r.ok) return null;
-    const j = await r.json();
-    const text: string =
-      j?.candidates?.[0]?.content?.parts
-        ?.map((p: { text?: string }) => p?.text ?? '')
-        .join('') ?? '';
-    return text.trim() || null;
+    return raw;
   } catch {
     return null;
   }
