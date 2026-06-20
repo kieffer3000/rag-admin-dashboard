@@ -132,11 +132,12 @@ function BoardCanvasInner() {
   }, [activeProjectId]);
 
   // Summary tree, once per project: backfill Level-1 summaries for any sources
-  // indexed before the summary tree existed, then roll the project up (Level 3).
-  // Both endpoints are idempotent (skip what's already summarized), so this is
-  // safe to fire on load. New sources get their summary at ingest, so this only
-  // catches pre-existing ones.
+  // indexed before the summary tree existed. Idempotent (skips ones already
+  // summarized). New sources get their summary at ingest, so this only catches
+  // pre-existing ones. On completion, bump a tick so the cluster rollups below
+  // re-run with the now-complete set of source summaries.
   const summaryBackfilled = useRef<string | null>(null);
+  const [backfillTick, setBackfillTick] = useState(0);
   useEffect(() => {
     if (hydratedProject !== activeProjectId) return;
     if (summaryBackfilled.current === activeProjectId) return;
@@ -150,19 +151,74 @@ function BoardCanvasInner() {
         sources: indexed.map((m) => ({ id: m.id, name: m.name }))
       })
     })
-      .then(() =>
+      .then(() => setBackfillTick((t) => t + 1))
+      .catch(() => {});
+  }, [hydratedProject, activeProjectId, projectMedia]);
+
+  // Cluster rollups (Level 2 boxes + Level 3 project), debounced. Re-rolls any
+  // cluster whose member-set CHANGED — which is also the delete-cleanup path: a
+  // deleted source shrinks its box + the project, so both refresh. Rollups are
+  // "summaries of summaries", so each is one cheap call and never re-reads text.
+  const clusterSigs = useRef<Map<string, string>>(new Map());
+  const clusterTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    if (hydratedProject !== activeProjectId) return;
+    if (clusterTimer.current) clearTimeout(clusterTimer.current);
+    clusterTimer.current = setTimeout(() => {
+      const indexedId = (mid: unknown) =>
+        media.find((m) => m.id === mid && m.status === 'indexed')?.id;
+      const clusters: { id: string; name: string; ids: string[] }[] = [];
+      // each box (hub) → its docked, indexed members
+      const hubs = new Map<string, { name: string; ids: string[] }>();
+      for (const n of board.nodes)
+        if (n.type === 'hub')
+          hubs.set(n.id, { name: (n.data?.name as string) ?? 'Box', ids: [] });
+      for (const n of board.nodes) {
+        if (n.type !== 'chip' || !n.parentId) continue;
+        const h = hubs.get(n.parentId);
+        const mid = indexedId(n.data?.mediaId);
+        if (h && mid) h.ids.push(mid);
+      }
+      for (const [id, h] of hubs)
+        if (h.ids.length >= 2) clusters.push({ id, name: h.name, ids: h.ids });
+      // the whole project
+      const projIds = projectMedia
+        .filter((m) => m.status === 'indexed')
+        .map((m) => m.id);
+      if (projIds.length >= 2)
+        clusters.push({
+          id: activeProjectId,
+          name: activeProject?.name ?? 'Project',
+          ids: projIds
+        });
+      // re-roll only the clusters whose membership actually changed
+      for (const c of clusters) {
+        const sig = c.ids.slice().sort().join(',');
+        if (clusterSigs.current.get(c.id) === sig) continue;
+        clusterSigs.current.set(c.id, sig);
         fetch('/api/summarize-cluster', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            cluster_id: activeProjectId,
-            name: activeProject?.name ?? 'Project',
-            source_ids: indexed.map((m) => m.id)
+            cluster_id: c.id,
+            name: c.name,
+            source_ids: c.ids
           })
-        })
-      )
-      .catch(() => {});
-  }, [hydratedProject, activeProjectId, projectMedia, activeProject]);
+        }).catch(() => {});
+      }
+    }, 4000);
+    return () => {
+      if (clusterTimer.current) clearTimeout(clusterTimer.current);
+    };
+  }, [
+    board.nodes,
+    media,
+    projectMedia,
+    hydratedProject,
+    activeProjectId,
+    activeProject,
+    backfillTick
+  ]);
   useEffect(() => {
     if (hydratedProject !== activeProjectId) return; // wait for the real board
     if (focusedProject.current === activeProjectId) return;
