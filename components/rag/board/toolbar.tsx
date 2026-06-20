@@ -521,8 +521,13 @@ export function BoardToolbar(p: BoardToolbarProps) {
                       ) : (
                         <Loader2 className="h-4 w-4 shrink-0 animate-spin text-accent" />
                       )}
-                      <span className="min-w-0 flex-1 truncate text-[12.5px] font-medium">
-                        {m?.name?.trim() || url}
+                      <span
+                        className="min-w-0 flex-1 truncate text-[12.5px] font-medium"
+                        title={url}
+                      >
+                        {/* Failed rows show the real link (the title never loaded)
+                            so you can see exactly which video didn't make it. */}
+                        {st === 'failed' ? url : m?.name?.trim() || url}
                       </span>
                       {st === 'failed' ? (
                         <div className="flex shrink-0 items-center gap-1">
@@ -556,18 +561,34 @@ export function BoardToolbar(p: BoardToolbarProps) {
                     (it) => media.find((x) => x.id === it.id)?.status === 'failed'
                   );
                   return failed.length > 0 ? (
-                    <Button
-                      variant="outline"
-                      className="mr-auto gap-1.5"
-                      onClick={() =>
-                        failed.forEach((it) =>
-                          p.onRetrySource(sourceType, it.id, it.url)
-                        )
-                      }
-                    >
-                      <RotateCcw className="h-3.5 w-3.5" />
-                      Retry {failed.length} failed
-                    </Button>
+                    <div className="mr-auto flex items-center gap-2">
+                      <Button
+                        variant="outline"
+                        className="gap-1.5"
+                        onClick={() =>
+                          failed.forEach((it) =>
+                            p.onRetrySource(sourceType, it.id, it.url)
+                          )
+                        }
+                      >
+                        <RotateCcw className="h-3.5 w-3.5" />
+                        Retry {failed.length} failed
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        className="gap-1.5 text-[12px]"
+                        title="Copy the failed links to your clipboard"
+                        onClick={() => {
+                          const text = failed.map((it) => it.url).join('\n');
+                          navigator.clipboard?.writeText(text).then(
+                            () => window.alert(`Copied ${failed.length} failed link${failed.length === 1 ? '' : 's'} to your clipboard.`),
+                            () => window.alert(text)
+                          );
+                        }}
+                      >
+                        Copy URLs
+                      </Button>
+                    </div>
                   ) : null;
                 })()}
                 <Button variant="ghost" onClick={() => setImporting([])}>
