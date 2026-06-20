@@ -729,12 +729,21 @@ function BoardCanvasInner() {
       ? { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 }
       : { x: 500, y: 300 };
     const pos = screenToFlowPosition(pt);
-    // Slight scatter so repeated adds don't stack exactly.
+    // Lay new pieces out in a tidy grid around the viewport centre instead of a
+    // small random scatter — the cards are tall now, so a ±30px jitter made them
+    // overlap and hide each other's name bar. Step by a full card + gap so every
+    // piece (and its puzzle connector) stays fully visible.
+    const i = board.nodes.filter(
+      (n) => n.type === 'chip' || n.type === 'hub'
+    ).length;
+    const COLS = 4;
+    const col = i % COLS;
+    const row = Math.floor(i / COLS) % 3;
     return {
-      x: pos.x - CHIP_W / 2 + (Math.random() - 0.5) * 60,
-      y: pos.y - CHIP_H / 2 + (Math.random() - 0.5) * 60
+      x: pos.x - (CHIP_W + 18) * (COLS / 2 - 0.5) + col * (CHIP_W + 18),
+      y: pos.y - (CHIP_H + 18) + row * (CHIP_H + 18)
     };
-  }, [screenToFlowPosition]);
+  }, [screenToFlowPosition, board.nodes]);
 
   const pushNode = useCallback(
     (node: BoardNode) =>
