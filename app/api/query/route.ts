@@ -1,6 +1,7 @@
 import { auth } from '@clerk/nextjs/server';
 import { runUtilityLLM } from '@/lib/rag/utility-llm';
 import { retrieveMemories } from '@/lib/rag/memory';
+import { fetchSummaries, wantsSummary } from '@/lib/rag/summary-core';
 
 // Proxies the Board's brain queries to the Make.com Query scenario.
 // The webhook contract is FROZEN (see BOARD_SPEC.md):
@@ -298,6 +299,46 @@ export async function POST(req: Request) {
   // Long-term memory is kept (cheap embed+lookup). 🔍 Detailed (default) runs
   // the full pipeline.
   const fast = body.speed === 'fast';
+
+  // ── Summary fast-path (the summary tree) ─────────────────────────────────
+  // "Summarize this / what is this about" is a GLOBAL question: top-k retrieval
+  // under-covers it and the no-match gate can even refuse it. Instead answer
+  // from the PRE-MADE per-source summaries (fetched by id, built once at ingest).
+  // Falls through to normal retrieval if no summaries exist yet.
+  if (wantsSummary(userQuestion)) {
+    const summaries = await fetchSummaries(sourceIds);
+    if (summaries.length) {
+      const ctx = summaries
+        .map((s, i) => `[${i + 1}] ${s.name}\n${s.text}`)
+        .join('\n\n');
+      const ans = await runUtilityLLM(
+        `${modeDirective(mode)}\n\nThe SUMMARIES below are pre-made overviews of the user's wired sources. Answer the QUESTION from them; if several are given, synthesize across them. Write in clean HTML (<p>, <strong>, <ul>/<li>). After a claim, cite the 1-based source number(s) like [1] or [2] where useful.\n\nSUMMARIES:\n${ctx}\n\nQUESTION: ${userQuestion}`,
+        { maxOutputTokens: 1400, temperature: 0.3 }
+      );
+      if (ans && ans.trim()) {
+        return Response.json({
+          answer: ans,
+          citations: [],
+          // Aggregator-shaped so the client's footnote pipeline links [n] → source.
+          raw_citations: JSON.stringify(
+            summaries.map((s) => ({
+              score: 1,
+              metadata: {
+                source_id: s.source_id,
+                source_name: s.name,
+                text: s.text
+              }
+            }))
+          ),
+          used_sources: null,
+          topScore: 1,
+          noMatch: false,
+          suggestedQuestions: []
+        });
+      }
+    }
+    // else: no summary indexed yet → fall through to normal retrieval.
+  }
 
   // Conversation history (capped, plain text) → resolve follow-up references
   // into a standalone query for retrieval AND generation. No history = no-op.

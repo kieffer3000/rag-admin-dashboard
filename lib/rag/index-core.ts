@@ -1,4 +1,5 @@
 import { deleteSourceVectors } from '@/lib/rag/pinecone-delete';
+import { summarizeText, upsertSummary } from '@/lib/rag/summary-core';
 
 // Shared text-indexing core: chunk → delete-before-reindex → upsert each chunk
 // via the Make Indexing webhook. Used by /api/index (raw text) AND
@@ -116,6 +117,17 @@ export async function indexText(opts: {
 
   if (failures.length === chunks.length)
     throw new Error(`Indexing webhook failed for all ${chunks.length} chunks`);
+
+  // Level 1 of the summary tree: one pre-made summary of the WHOLE source, kept
+  // as a reserved `${sourceId}#summary` vector. Best-effort — a summary hiccup
+  // never fails the indexing. The prior summary was already removed by the
+  // delete-before-reindex above (same source prefix), so this stays idempotent.
+  try {
+    const summary = await summarizeText(String(opts.text), name);
+    if (summary) await upsertSummary({ sourceId, name, summary, namespace });
+  } catch {
+    /* summary is best-effort */
+  }
 
   return {
     ok: true,
