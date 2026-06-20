@@ -722,6 +722,12 @@ function BoardCanvasInner() {
   );
 
   // ---- toolbar actions ----
+  // Monotonic placement counter: a whole batch of imports fires synchronously
+  // (one onNewSource per link) BEFORE React commits, so reading board.nodes each
+  // time returns the same stale count → everything piles in one slot. This ref
+  // increments per placement so a batch fans across the grid; it's reconciled up
+  // to the real node count so it never falls behind after deletes/loads.
+  const placeCounter = useRef(0);
   const centerPos = useCallback(() => {
     const el = wrapRef.current;
     const rect = el?.getBoundingClientRect();
@@ -729,19 +735,23 @@ function BoardCanvasInner() {
       ? { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 }
       : { x: 500, y: 300 };
     const pos = screenToFlowPosition(pt);
-    // Lay new pieces out in a tidy grid around the viewport centre instead of a
-    // small random scatter — the cards are tall now, so a ±30px jitter made them
-    // overlap and hide each other's name bar. Step by a full card + gap so every
-    // piece (and its puzzle connector) stays fully visible.
-    const i = board.nodes.filter(
+    // Lay new pieces out in a tidy grid around the viewport centre — the cards
+    // are tall now, so a small jitter overlapped them and hid the name bar. A
+    // 4×6 window (24 slots) lets a 20-link batch spread without overlap before
+    // it wraps; step by a full card + gap so every connector stays visible.
+    const actual = board.nodes.filter(
       (n) => n.type === 'chip' || n.type === 'hub'
     ).length;
+    placeCounter.current = Math.max(placeCounter.current, actual);
+    const i = placeCounter.current++;
     const COLS = 4;
-    const col = i % COLS;
-    const row = Math.floor(i / COLS) % 3;
+    const ROWS = 6;
+    const slot = i % (COLS * ROWS);
+    const col = slot % COLS;
+    const row = Math.floor(slot / COLS);
     return {
       x: pos.x - (CHIP_W + 18) * (COLS / 2 - 0.5) + col * (CHIP_W + 18),
-      y: pos.y - (CHIP_H + 18) + row * (CHIP_H + 18)
+      y: pos.y - (CHIP_H + 18) * 1.5 + row * (CHIP_H + 18)
     };
   }, [screenToFlowPosition, board.nodes]);
 
