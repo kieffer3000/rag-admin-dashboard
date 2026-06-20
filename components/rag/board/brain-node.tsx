@@ -188,7 +188,7 @@ function BrainNodeInner({ id, data, selected }: NodeProps) {
     setResearchBrainId,
     nextBoardId
   } = useBoard();
-  const { openViewer, addMedia, updateMedia, activeProjectId } = useRag();
+  const { openViewer, activeProjectId } = useRag();
   const { getViewport, fitView } = useReactFlow();
   const [question, setQuestion] = useState('');
   const [busy, setBusy] = useState(false);
@@ -208,10 +208,11 @@ function BrainNodeInner({ id, data, selected }: NodeProps) {
   const wavRef = useRef<WavRecorder | null>(null);
   /** Message id currently being voiced (spinner on its 🔈 button). */
   const [voicingId, setVoicingId] = useState<string | null>(null);
-  /** Session-only audio URLs keyed by the produced audio media id. Never
-   *  persisted — WAV bytes would blow the localStorage quota; the artifact's
-   *  text is re-indexable so audio is always regenerable on demand. */
-  const audioCache = useRef<Map<string, string>>(new Map());
+  /** True when the chat content overflows its viewport. Drives the `nowheel`
+   *  class so a plain wheel scrolls the conversation instead of zooming the
+   *  canvas — React Flow's native wheel-zoom skips any element under `nowheel`,
+   *  which `stopPropagation` on the React event cannot reliably do. */
+  const [chatOverflows, setChatOverflows] = useState(false);
   /** Composer text at the moment dictation started — interim results append to it. */
   const dictBaseRef = useRef('');
 
@@ -283,11 +284,11 @@ function BrainNodeInner({ id, data, selected }: NodeProps) {
   const model = LLM_MODELS.find((m) => m.id === modelId) ?? LLM_MODELS[3];
 
   /**
-   * Create Voiceover: synthesize the answer via Gemini native TTS (→ /api/voiceover),
-   * then drop the result onto the canvas as a re-indexable AUDIO chip — the answer
-   * text is the embedded content, the audio is the playable artifact. Mirrors the
-   * voice-memo flow (addMedia → chip → /api/index). Audio plays immediately and is
-   * cached for the session.
+   * Create Voiceover: synthesize the answer via Gemini native TTS (→ /api/voiceover)
+   * and play it. Deliberately ephemeral — it does NOT drop a chip on the canvas or
+   * re-index the audio as a source. A voiceover is just the spoken form of an answer
+   * that already lives in the conversation, so it's regenerable on demand (click 🔈
+   * again) and shouldn't clutter the board or the corpus.
    */
   const handleVoiceover = useCallback(
     async (msg: ChatMessage) => {
@@ -304,68 +305,11 @@ function BrainNodeInner({ id, data, selected }: NodeProps) {
         const playUrl: string = j.url ?? j.dataUrl;
         if (!playUrl) throw new Error('no audio returned');
 
-        const brainName = (d.name as string) || 'Brain';
-        const preview = msg.content.replace(/\s+/g, ' ').trim().slice(0, 40);
-        const name = `Voiceover — ${brainName} · ${preview}…`;
-        const durationLabel = j.seconds
-          ? `${Math.floor(j.seconds / 60)}:${String(j.seconds % 60).padStart(2, '0')}`
-          : undefined;
-
-        // re-indexable audio artifact: content = the answer text
-        const mediaId = addMedia(
-          {
-            type: 'audio',
-            name,
-            description: `Voiceover (Gemini TTS · ${j.voice ?? 'Leda'})`,
-            date: new Date().toISOString().slice(0, 10),
-            content: msg.content,
-            source: j.durable ? j.url : undefined,
-            durationLabel
-          },
-          { simulate: false }
-        );
-        audioCache.current.set(mediaId, playUrl);
-
-        // spawn a chip just to the right of this brain
-        const self = board.nodes.find((n) => n.id === id);
-        const pos = self
-          ? { x: self.position.x + (self.width ?? 380) + 40, y: self.position.y }
-          : { x: 0, y: 0 };
-        setBoard((prev) => ({
-          ...prev,
-          nodes: [
-            ...prev.nodes,
-            {
-              id: nextBoardId('chip'),
-              type: 'chip',
-              position: pos,
-              data: { mediaId }
-            }
-          ]
-        }));
-
-        // embed the answer text so the audio piece is retrievable
-        fetch('/api/index', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            source_id: mediaId,
-            name,
-            type: 'audio',
-            text: msg.content
-          })
-        })
-          .then((r) => {
-            if (!r.ok) throw new Error();
-            updateMedia(mediaId, { status: 'indexed' });
-          })
-          .catch(() => updateMedia(mediaId, { status: 'failed' }));
-
-        // play it now
+        // play it now (regenerable, so nothing is persisted)
         try {
           await new Audio(playUrl).play();
         } catch {
-          /* autoplay may be blocked; the chip can still play it */
+          /* autoplay may be blocked; clicking 🔈 again re-synthesizes and plays */
         }
       } catch {
         /* surfaced via the button returning to idle; artifact text is regenerable */
@@ -373,7 +317,7 @@ function BrainNodeInner({ id, data, selected }: NodeProps) {
         setVoicingId(null);
       }
     },
-    [voicingId, d.name, board, id, addMedia, updateMedia, setBoard, nextBoardId]
+    [voicingId]
   );
 
   /**
@@ -486,8 +430,23 @@ function BrainNodeInner({ id, data, selected }: NodeProps) {
   }
 
   useEffect(() => {
-    scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight });
+    const el = scrollRef.current;
+    if (!el) return;
+    el.scrollTo({ top: el.scrollHeight });
+    setChatOverflows(el.scrollHeight > el.clientHeight + 1);
   }, [messages]);
+
+  // Re-measure overflow when the brain itself is resized (size mode, window) —
+  // content growth is covered by the [messages] effect above.
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(() =>
+      setChatOverflows(el.scrollHeight > el.clientHeight + 1)
+    );
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
 
   // Rolling summary: once the conversation exceeds the verbatim window, fold the
   // messages that scrolled out into a running summary (via /api/summarize → Make)
@@ -1039,6 +998,9 @@ function BrainNodeInner({ id, data, selected }: NodeProps) {
           // bubbles below opt back out (nodrag + select-text) so reading and
           // selecting still work; buttons click fine (a click isn't a drag).
           'scroll-brain flex min-h-0 flex-1 flex-col gap-2.5 overflow-y-auto py-3',
+          // When the conversation overflows, `nowheel` lets a plain wheel scroll
+          // it instead of zooming the canvas (pinch/ctrl-wheel still zooms).
+          chatOverflows && 'nowheel',
           // Reading mode: a comfortable ~70ch centered measure (not full-bleed)
           // plus larger type — a premium reading column, not a stretched page.
           sizeMode === 'full'
