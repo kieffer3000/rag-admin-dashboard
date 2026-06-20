@@ -103,7 +103,7 @@ function retile(nodes: BoardNode[], hubId: string): BoardNode[] {
 function BoardCanvasInner() {
   const { board, setBoard, setBoardSilent, nextBoardId, busyBrains, saveStatus, saveNow, removeBoardNode, brainMessages, hydratedProject, researchBrainId, setResearchBrainId } =
     useBoard();
-  const { media, projectMedia, addMedia, updateMedia, deleteMedia, activeProjectId } = useRag();
+  const { media, projectMedia, addMedia, updateMedia, deleteMedia, activeProjectId, activeProject } = useRag();
   // Garbage bin (bottom-left): drag a source chip onto it to delete the source
   // and its Pinecone vectors. `binHot` highlights it while a chip hovers over.
   const binRef = useRef<HTMLButtonElement>(null);
@@ -130,6 +130,39 @@ function BoardCanvasInner() {
   useEffect(() => {
     focusedProject.current = null; // re-focus when the project changes
   }, [activeProjectId]);
+
+  // Summary tree, once per project: backfill Level-1 summaries for any sources
+  // indexed before the summary tree existed, then roll the project up (Level 3).
+  // Both endpoints are idempotent (skip what's already summarized), so this is
+  // safe to fire on load. New sources get their summary at ingest, so this only
+  // catches pre-existing ones.
+  const summaryBackfilled = useRef<string | null>(null);
+  useEffect(() => {
+    if (hydratedProject !== activeProjectId) return;
+    if (summaryBackfilled.current === activeProjectId) return;
+    const indexed = projectMedia.filter((m) => m.status === 'indexed');
+    if (indexed.length === 0) return;
+    summaryBackfilled.current = activeProjectId;
+    fetch('/api/backfill-summaries', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        sources: indexed.map((m) => ({ id: m.id, name: m.name }))
+      })
+    })
+      .then(() =>
+        fetch('/api/summarize-cluster', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            cluster_id: activeProjectId,
+            name: activeProject?.name ?? 'Project',
+            source_ids: indexed.map((m) => m.id)
+          })
+        })
+      )
+      .catch(() => {});
+  }, [hydratedProject, activeProjectId, projectMedia, activeProject]);
   useEffect(() => {
     if (hydratedProject !== activeProjectId) return; // wait for the real board
     if (focusedProject.current === activeProjectId) return;
