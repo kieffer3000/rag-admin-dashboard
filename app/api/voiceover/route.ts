@@ -16,7 +16,6 @@ import { auth } from '@clerk/nextjs/server';
 
 export const runtime = 'nodejs';
 
-const TTS_MODEL = process.env.GEMINI_TTS_MODEL ?? 'gemini-2.5-flash-preview-tts';
 const DEFAULT_VOICE = process.env.GEMINI_TTS_VOICE ?? 'Leda';
 const SAMPLE_RATE = 24000; // Gemini TTS PCM output rate
 const MAX_CHARS = 4500; // per-call chunk budget (kept well under model limits)
@@ -70,41 +69,39 @@ function chunkText(text: string, max: number): string[] {
   return chunks;
 }
 
-async function synth(text: string, voice: string, key: string): Promise<Buffer> {
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${TTS_MODEL}:generateContent?key=${key}`;
-  const r = await fetch(url, {
+// TTS via Make (MAKE_TTS_WEBHOOK_URL) — the app never calls a model directly.
+// Posts { text, voice }; the Make scenario returns base64 RAW PCM (24kHz, 16-bit
+// mono) in an `audio`/`data`/`result` field (we wrap it in a WAV header below).
+async function synth(text: string, voice: string): Promise<Buffer> {
+  const webhook = process.env.MAKE_TTS_WEBHOOK_URL!;
+  const r = await fetch(webhook, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      contents: [{ parts: [{ text }] }],
-      generationConfig: {
-        responseModalities: ['AUDIO'],
-        speechConfig: {
-          voiceConfig: { prebuiltVoiceConfig: { voiceName: voice } }
-        }
-      }
-    })
+    body: JSON.stringify({ text, voice })
   });
   if (!r.ok) {
     const t = await r.text();
     throw new Error(`TTS ${r.status}: ${t.slice(0, 300)}`);
   }
-  const j = await r.json();
-  const data = j?.candidates?.[0]?.content?.parts?.find(
-    (p: { inlineData?: { data?: string } }) => p?.inlineData?.data
-  )?.inlineData?.data;
-  if (!data) throw new Error('TTS returned no audio');
-  return Buffer.from(data, 'base64');
+  const raw = (await r.text()).trim();
+  let b64 = raw;
+  try {
+    const j = JSON.parse(raw);
+    b64 = j?.audio ?? j?.data ?? j?.result ?? j?.output ?? '';
+  } catch {
+    /* webhook returned the base64 string directly */
+  }
+  if (!b64) throw new Error('TTS returned no audio');
+  return Buffer.from(b64, 'base64');
 }
 
 export async function POST(req: Request) {
   const { userId } = await auth();
   if (!userId) return Response.json({ error: 'Unauthorized' }, { status: 401 });
 
-  const key = process.env.GEMINI_API_KEY;
-  if (!key) {
+  if (!process.env.MAKE_TTS_WEBHOOK_URL) {
     return Response.json(
-      { error: 'Voiceover not configured — set GEMINI_API_KEY.' },
+      { error: 'Voiceover not configured — set MAKE_TTS_WEBHOOK_URL.' },
       { status: 503 }
     );
   }
@@ -124,7 +121,7 @@ export async function POST(req: Request) {
     const chunks = chunkText(text, MAX_CHARS);
     const pcms: Buffer[] = [];
     // sequential keeps utterance order and avoids burst rate-limits
-    for (const c of chunks) pcms.push(await synth(c, voice, key));
+    for (const c of chunks) pcms.push(await synth(c, voice));
     const pcm = Buffer.concat(pcms);
     const wav = pcmToWav(pcm);
     const seconds = Math.round(pcm.length / (SAMPLE_RATE * 2));

@@ -14,51 +14,32 @@ import { indexText } from '@/lib/rag/index-core';
 export const runtime = 'nodejs';
 export const maxDuration = 300;
 
-// Fallback transcription: Gemini ingests the YouTube URL directly (Google
-// fetches the video server-side, so it sidesteps YouTube's datacenter-IP block
-// that defeats caption scraping from Vercel). Model id is an env var so it can
-// be bumped without a code change. Thinking disabled so the whole output budget
-// goes to the transcript. Very long videos may still hit the output-token cap.
-async function geminiTranscribe(url: string): Promise<string> {
-  const key = process.env.GEMINI_API_KEY;
-  if (!key) throw new Error('GEMINI_API_KEY is not configured');
-  const model = process.env.RAG_YT_TRANSCRIBE_MODEL ?? 'gemini-2.5-flash';
-  const res = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
-    {
+// Fallback transcription via Make (MAKE_TRANSCRIBE_WEBHOOK_URL) — the app never
+// calls a model directly. Posts the video URL; the Make scenario (Gemini reading
+// the URL server-side, model managed in Make) returns the transcript. Returns ''
+// when the webhook isn't configured → the caller's "no transcript" path.
+async function transcribeViaMake(url: string): Promise<string> {
+  const webhook = process.env.MAKE_TRANSCRIBE_WEBHOOK_URL;
+  if (!webhook) return '';
+  try {
+    const r = await fetch(webhook, {
       method: 'POST',
-      headers: { 'x-goog-api-key': key, 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        contents: [
-          {
-            parts: [
-              { fileData: { fileUri: url } },
-              {
-                text: 'Transcribe the spoken content of this video from start to finish, as accurately and completely as possible. Begin each paragraph (roughly every 15–30 seconds of speech, or at each clear topic shift) with its start time in [M:SS] format — use [H:MM:SS] once past one hour. Output ONLY the timestamped transcript — no speaker labels, no extra commentary.'
-              }
-            ]
-          }
-        ],
-        generationConfig: {
-          temperature: 0,
-          maxOutputTokens: 32768,
-          thinkingConfig: { thinkingBudget: 0 },
-          // Transcription needs the AUDIO, not HD frames — low resolution cuts
-          // the per-frame video tokens ~4x (258 → 66 tokens/frame) for the same
-          // transcript. Biggest cost lever here.
-          mediaResolution: 'MEDIA_RESOLUTION_LOW'
-        }
-      })
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url })
+    });
+    if (!r.ok) return '';
+    const raw = (await r.text()).trim();
+    if (!raw || raw === 'Accepted') return '';
+    try {
+      const j = JSON.parse(raw);
+      const t = j?.transcript ?? j?.text ?? j?.result ?? '';
+      return typeof t === 'string' ? t.trim() : '';
+    } catch {
+      return raw; // plain-text transcript
     }
-  );
-  const j = await res.json().catch(() => ({}));
-  if (!res.ok)
-    throw new Error(j?.error?.message ?? `Gemini returned ${res.status}`);
-  const text: string = (j?.candidates?.[0]?.content?.parts ?? [])
-    .map((p: { text?: string }) => p.text ?? '')
-    .join('')
-    .trim();
-  return text;
+  } catch {
+    return '';
+  }
 }
 
 function parseVideoId(input: string): string | null {
@@ -200,10 +181,10 @@ export async function POST(req: Request) {
   //    OFF by default so the proxy path can't silently fall into a paid call —
   //    enable with RAG_YT_GEMINI_FALLBACK=1.
   if (transcript.length < 20) {
-    if (process.env.RAG_YT_GEMINI_FALLBACK === '1') {
-      method = 'gemini';
+    if (process.env.MAKE_TRANSCRIBE_WEBHOOK_URL) {
+      method = 'make-transcribe';
       try {
-        transcript = await geminiTranscribe(url);
+        transcript = await transcribeViaMake(url);
       } catch (e: any) {
         return Response.json({
           ok: false,

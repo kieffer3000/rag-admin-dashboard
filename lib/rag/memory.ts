@@ -3,13 +3,12 @@
 // ones and feed them in as context — so a brain "remembers" earlier conversations
 // across sessions, beyond the in-conversation history/rolling-summary.
 //
-// Self-contained on purpose: store AND retrieve both embed with the SAME model
-// here (gemini-embedding-001, 768d — matches the index dims), so the vectors are
-// always in the same space. Summarization runs through the Make utility LLM
-// (model managed in Make); only the embedding lives in code, and embedding models
-// rarely change. Everything is Pinecone-direct (no Make round-trip on the hot path).
+// Embeddings go through a Make webhook (MAKE_EMBED_WEBHOOK_URL) so the model
+// lives in the Make UI — the app never calls a model directly. Store AND
+// retrieve use the same scenario, so the vectors stay in one space. If the
+// webhook isn't configured, long-term memory simply turns off (no direct call).
+// Pinecone is still hit directly (it's a vector DB, not a model).
 
-const EMBED_MODEL = process.env.RAG_MEMORY_EMBED_MODEL ?? 'gemini-embedding-001';
 const TOP_K = Number(process.env.RAG_MEMORY_TOPK ?? 3);
 const MIN_SCORE = Number(process.env.RAG_MEMORY_MIN_SCORE ?? 0.55);
 
@@ -22,23 +21,18 @@ function pineconeHost(): string | null {
 }
 
 async function embedText(text: string): Promise<number[] | null> {
-  const key = process.env.GEMINI_API_KEY;
-  if (!key || !text.trim()) return null;
+  const webhook = process.env.MAKE_EMBED_WEBHOOK_URL;
+  if (!webhook || !text.trim()) return null;
   try {
-    const r = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/${EMBED_MODEL}:embedContent?key=${key}`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          content: { parts: [{ text: text.slice(0, 8000) }] },
-          outputDimensionality: 768
-        })
-      }
-    );
+    const r = await fetch(webhook, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text: text.slice(0, 8000) })
+    });
     if (!r.ok) return null;
     const j = await r.json();
-    const v = j?.embedding?.values;
+    // Accept {embedding:{values}} | {values} | {embedding:[…]} | [...] .
+    const v = j?.embedding?.values ?? j?.values ?? j?.embedding ?? j;
     return Array.isArray(v) ? v : null;
   } catch {
     return null;
