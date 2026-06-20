@@ -33,6 +33,8 @@ export interface MediaItem {
   userNote?: string;
   /** For YouTube: duration label like "12:04". For audio: same. */
   durationLabel?: string;
+  /** Why indexing failed (shown on the failed chip/row); cleared on retry. */
+  error?: string;
 }
 
 export interface Prompt {

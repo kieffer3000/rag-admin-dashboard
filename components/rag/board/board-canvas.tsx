@@ -1087,7 +1087,7 @@ function BoardCanvasInner() {
    *  so retry never creates a duplicate. Routed through the throttle queue. */
   const retrySource = useCallback(
     (type: MediaType, id: string, url: string) => {
-      updateMedia(id, { status: 'processing' });
+      updateMedia(id, { status: 'processing', error: undefined });
       const cleanName = url
         ? url.replace(/^https?:\/\//, '').replace(/\/.*$/, '')
         : 'Source';
@@ -1108,7 +1108,12 @@ function BoardCanvasInner() {
                 ...(j.thumbnail ? { thumbnail: j.thumbnail } : {})
               });
             })
-            .catch(() => updateMedia(id, { status: 'failed' }))
+            .catch((e: unknown) =>
+              updateMedia(id, {
+                status: 'failed',
+                error: e instanceof Error && e.message ? e.message : 'Indexing failed'
+              })
+            )
         );
       } else if (type === 'website') {
         enqueueIndex(() =>
@@ -1126,7 +1131,12 @@ function BoardCanvasInner() {
                 ...(j.title ? { name: j.title } : {})
               });
             })
-            .catch(() => updateMedia(id, { status: 'failed' }))
+            .catch((e: unknown) =>
+              updateMedia(id, {
+                status: 'failed',
+                error: e instanceof Error && e.message ? e.message : 'Indexing failed'
+              })
+            )
         );
       } else {
         enqueueIndex(() =>
@@ -1141,10 +1151,15 @@ function BoardCanvasInner() {
             })
           })
             .then((r) => {
-              if (!r.ok) throw new Error();
+              if (!r.ok) throw new Error(`Indexing failed (HTTP ${r.status})`);
               updateMedia(id, { status: 'indexed' });
             })
-            .catch(() => updateMedia(id, { status: 'failed' }))
+            .catch((e: unknown) =>
+              updateMedia(id, {
+                status: 'failed',
+                error: e instanceof Error && e.message ? e.message : 'Indexing failed'
+              })
+            )
         );
       }
     },
@@ -1674,7 +1689,12 @@ function BoardCanvasInner() {
                     ...(j.thumbnail ? { thumbnail: j.thumbnail } : {})
                   });
                 })
-                .catch(() => updateMedia(id, { status: 'failed' }))
+                .catch((e: unknown) =>
+              updateMedia(id, {
+                status: 'failed',
+                error: e instanceof Error && e.message ? e.message : 'Indexing failed'
+              })
+            )
             );
             return id;
           }
@@ -1701,7 +1721,12 @@ function BoardCanvasInner() {
                     ...(j.title ? { name: j.title } : {})
                   });
                 })
-                .catch(() => updateMedia(id, { status: 'failed' }))
+                .catch((e: unknown) =>
+              updateMedia(id, {
+                status: 'failed',
+                error: e instanceof Error && e.message ? e.message : 'Indexing failed'
+              })
+            )
             );
             return id;
           }
@@ -1721,7 +1746,12 @@ function BoardCanvasInner() {
                 if (!r.ok) throw new Error();
                 updateMedia(id, { status: 'indexed' });
               })
-              .catch(() => updateMedia(id, { status: 'failed' }))
+              .catch((e: unknown) =>
+              updateMedia(id, {
+                status: 'failed',
+                error: e instanceof Error && e.message ? e.message : 'Indexing failed'
+              })
+            )
           );
           return id;
         }}
@@ -1760,7 +1790,12 @@ function BoardCanvasInner() {
                 });
                 if (!j.indexed && j.note) console.warn('[image-index]', j.note);
               })
-              .catch(() => updateMedia(id, { status: 'failed' }))
+              .catch((e: unknown) =>
+              updateMedia(id, {
+                status: 'failed',
+                error: e instanceof Error && e.message ? e.message : 'Indexing failed'
+              })
+            )
           );
           return id;
         }}
@@ -1968,10 +2003,15 @@ function BoardCanvasInner() {
             })
           })
             .then((r) => {
-              if (!r.ok) throw new Error();
+              if (!r.ok) throw new Error(`Indexing failed (HTTP ${r.status})`);
               updateMedia(id, { status: 'indexed' });
             })
-            .catch(() => updateMedia(id, { status: 'failed' }));
+            .catch((e: unknown) =>
+              updateMedia(id, {
+                status: 'failed',
+                error: e instanceof Error && e.message ? e.message : 'Indexing failed'
+              })
+            );
         }}
       />
 

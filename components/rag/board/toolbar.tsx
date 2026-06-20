@@ -549,12 +549,20 @@ export function BoardToolbar(p: BoardToolbarProps) {
                         <Loader2 className="h-4 w-4 shrink-0 animate-spin text-accent" />
                       )}
                       <span
-                        className="min-w-0 flex-1 truncate text-[12.5px] font-medium"
-                        title={url}
+                        className="min-w-0 flex-1 leading-tight"
+                        title={m?.error ? `${url}\n\nWhy it failed: ${m.error}` : url}
                       >
                         {/* Failed rows show the real link (the title never loaded)
-                            so you can see exactly which video didn't make it. */}
-                        {st === 'failed' ? url : m?.name?.trim() || url}
+                            so you can see exactly which video didn't make it —
+                            plus WHY it failed underneath. */}
+                        <span className="block truncate text-[12.5px] font-medium">
+                          {st === 'failed' ? url : m?.name?.trim() || url}
+                        </span>
+                        {st === 'failed' && m?.error && (
+                          <span className="block truncate text-[10.5px] text-red-500/80">
+                            {m.error}
+                          </span>
+                        )}
                       </span>
                       {st === 'failed' ? (
                         <div className="flex shrink-0 items-center gap-1">
