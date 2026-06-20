@@ -128,6 +128,9 @@ export interface BrainScope {
   guides: string[];
   /** True if an Everything hub is wired in. */
   everything: boolean;
+  /** Wired box (hub) ids — so "summarize this box" can use the precomputed
+   *  `${boxId}#summary` rollup instead of re-synthesizing every member. */
+  clusterIds: string[];
 }
 
 interface BoardCtxState {
@@ -620,6 +623,7 @@ export function BoardProvider({ children }: { children: ReactNode }) {
       const ids: string[] = [];
       const contextTexts: string[] = [];
       const guides: string[] = [];
+      const clusterIds: string[] = [];
       let everything = false;
 
       const typeOf = (n: BoardNode) =>
@@ -639,6 +643,7 @@ export function BoardProvider({ children }: { children: ReactNode }) {
             everything = true;
             projectMedia.forEach((m) => ids.push(m.id));
           } else {
+            clusterIds.push(src.id); // a wired box → its precomputed rollup
             nodes
               .filter((n) => n.type === 'chip' && n.parentId === src.id)
               .forEach((n) => ids.push(n.data.mediaId as string));
@@ -686,7 +691,8 @@ export function BoardProvider({ children }: { children: ReactNode }) {
         items,
         contextTexts: [...new Set(contextTexts)],
         guides: [...new Set(guides)],
-        everything
+        everything,
+        clusterIds: [...new Set(clusterIds)]
       };
     },
     [board, media, projectMedia]

@@ -306,7 +306,18 @@ export async function POST(req: Request) {
   // from the PRE-MADE per-source summaries (fetched by id, built once at ingest).
   // Falls through to normal retrieval if no summaries exist yet.
   if (wantsSummary(userQuestion)) {
-    const summaries = await fetchSummaries(sourceIds);
+    // Prefer a PRECOMPUTED rollup when a box/everything-hub is wired (one fetch
+    // instead of re-synthesizing every member); fall back to the wired sources'
+    // own L1 summaries when no rollup exists yet.
+    const clusterIds: string[] = Array.isArray(body.cluster_ids)
+      ? body.cluster_ids.filter((s: unknown) => typeof s === 'string' && s)
+      : [];
+    const rollupIds =
+      body.everything === true && typeof body.project_id === 'string'
+        ? [body.project_id]
+        : clusterIds;
+    let summaries = rollupIds.length ? await fetchSummaries(rollupIds) : [];
+    if (!summaries.length) summaries = await fetchSummaries(sourceIds);
     if (summaries.length) {
       const ctx = summaries
         .map((s, i) => `[${i + 1}] ${s.name}\n${s.text}`)

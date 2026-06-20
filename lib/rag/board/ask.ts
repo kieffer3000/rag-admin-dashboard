@@ -366,7 +366,12 @@ export async function askBrain(
   summary = '',
   /** 'detailed' = full pipeline (expander/validator/attribution/memory);
    *  'fast' = lightning path that skips the extra LLM round-trips for speed. */
-  speed: 'fast' | 'detailed' = 'detailed'
+  speed: 'fast' | 'detailed' = 'detailed',
+  /** Wired box ids / everything-hub / project id — lets a "summarize" question
+   *  use the precomputed box or project rollup instead of re-synthesizing. */
+  clusterIds: string[] = [],
+  everything = false,
+  projectId?: string
 ): Promise<AskResult> {
   const res = await fetch('/api/query', {
     method: 'POST',
@@ -380,7 +385,10 @@ export async function askBrain(
       answer_mode: mode,
       history,
       summary,
-      speed
+      speed,
+      cluster_ids: clusterIds,
+      everything,
+      project_id: projectId
     })
   });
 

@@ -188,7 +188,7 @@ function BrainNodeInner({ id, data, selected }: NodeProps) {
     setResearchBrainId,
     nextBoardId
   } = useBoard();
-  const { openViewer, addMedia, updateMedia } = useRag();
+  const { openViewer, addMedia, updateMedia, activeProjectId } = useRag();
   const { getViewport, fitView } = useReactFlow();
   const [question, setQuestion] = useState('');
   const [busy, setBusy] = useState(false);
@@ -587,7 +587,10 @@ function BrainNodeInner({ id, data, selected }: NodeProps) {
         scope.guides,
         history,
         (d.summary as string) ?? '',
-        speed
+        speed,
+        scope.clusterIds,
+        scope.everything,
+        activeProjectId
       );
       content = r.answer;
       citations = r.citations;

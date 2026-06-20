@@ -33,7 +33,7 @@ export function ResearchOverlay({
     updateBrainMessage,
     setBrainBusy
   } = useBoard();
-  const { openViewer } = useRag();
+  const { openViewer, activeProjectId } = useRag();
 
   const node = board.nodes.find((n) => n.id === brainId);
   const data = (node?.data ?? {}) as Record<string, unknown>;
@@ -132,7 +132,10 @@ export function ResearchOverlay({
         scope.guides,
         history,
         summary,
-        speed
+        speed,
+        scope.clusterIds,
+        scope.everything,
+        activeProjectId
       );
       content = r.answer;
       citations = r.citations;
