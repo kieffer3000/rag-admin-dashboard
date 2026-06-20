@@ -1445,7 +1445,7 @@ function BoardCanvasInner() {
           });
 
           // YouTube: fetch the full caption transcript (deterministic) → index
-          // via the text pipeline. Website/text still embed the given text/URL.
+          // via the text pipeline. Website scrapes the page; text embeds as-is.
           if (type === 'youtube') {
             fetch('/api/index-youtube', {
               method: 'POST',
@@ -1462,6 +1462,31 @@ function BoardCanvasInner() {
                   chunks: j.chunks,
                   ...(j.title ? { name: j.title } : {}),
                   ...(j.thumbnail ? { thumbnail: j.thumbnail } : {})
+                });
+              })
+              .catch(() => updateMedia(id, { status: 'failed' }));
+            return id;
+          }
+
+          // Website: fetch + read the page (robots-respecting, public-only).
+          // Soft failures (paywalled / private / illegible / robots-blocked)
+          // come back as { ok:false, note } → tell the user plainly why.
+          if (type === 'website') {
+            fetch('/api/index-website', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ source_id: id, name: cleanName, url: source })
+            })
+              .then(async (r) => {
+                const j = await r.json().catch(() => ({}));
+                if (!r.ok || !j.ok) {
+                  if (j?.note) window.alert(`Couldn’t read that website.\n\n${j.note}`);
+                  throw new Error(j?.note ?? j?.error ?? 'index failed');
+                }
+                updateMedia(id, {
+                  status: 'indexed',
+                  chunks: j.chunks,
+                  ...(j.title ? { name: j.title } : {})
                 });
               })
               .catch(() => updateMedia(id, { status: 'failed' }));
