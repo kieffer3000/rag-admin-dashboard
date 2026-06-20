@@ -53,10 +53,13 @@ export interface BoardToolbarProps {
   onPlaceMedia: (mediaId: string) => void;
   /** Returns the created media id (so the importer can track its progress). */
   onNewSource: (type: MediaType, name: string, source: string) => string;
-  /** Upload an actual image file → Blob + multimodal index (Make Image scenario). */
-  onNewImage: (name: string, file: File) => void;
-  /** Upload a PDF/DOCX/TXT → extract text → chunk + index via the text pipeline. */
-  onNewDocuments: (docs: { name: string; file: File }[]) => void;
+  /** Upload an actual image file → Blob + multimodal index (Make Image scenario).
+   *  Returns the created media id. */
+  onNewImage: (name: string, file: File) => string;
+  /** Upload PDF/DOCX/TXT/… → extract text → chunk + index. Returns media ids. */
+  onNewDocuments: (docs: { name: string; file: File }[]) => string[];
+  /** Gather freshly-imported media into ONE new named box instead of free chips. */
+  onCollectIntoBox: (boxName: string, mediaIds: string[]) => void;
   onAddBrain: () => void;
   onAddText: () => void;
   onAddAnnotation: () => void;
@@ -98,8 +101,11 @@ export function BoardToolbar(p: BoardToolbarProps) {
   // Pieces created by the current import, tracked so the dialog can show
   // per-link progress and stay open until everything is indexed.
   const [importing, setImporting] = useState<{ id: string; url: string }[]>([]);
-  // File uploads (image = single; documents = one or many at once).
+  // File uploads — any number, any supported type, routed per file.
   const [files, setFiles] = useState<File[]>([]);
+  // "Add to a box": dock everything from this import into one named cluster.
+  const [addToBox, setAddToBox] = useState(false);
+  const [boxName, setBoxName] = useState('');
   const stripExt = (n: string) => n.replace(/\.[^.]+$/, '');
 
   // ---- voice recording ----
@@ -180,23 +186,44 @@ export function BoardToolbar(p: BoardToolbarProps) {
     setUrls('');
     setFiles([]);
     setImporting([]);
+    setAddToBox(false);
+    setBoxName('');
+  }
+
+  /** If "Add to a box" is on (and named), gather this import into one box. */
+  function maybeBox(ids: string[]) {
+    if (addToBox && boxName.trim() && ids.length) {
+      p.onCollectIntoBox(boxName.trim(), ids);
+    }
   }
 
   function submitSource() {
     if (!sourceType) return;
-    if (sourceType === 'image') {
-      if (!name.trim() || !files[0]) return;
-      p.onNewImage(name.trim(), files[0]);
-    } else if (sourceType === 'document') {
+    if (sourceType === 'image' || sourceType === 'document') {
+      // Bulk, mixed file types: route each file to the right pipeline.
       if (!files.length) return;
-      // One file → use the Name field (or its filename); many → per-filename.
-      p.onNewDocuments(
-        files.map((f) => ({
-          name:
+      const imgs = files.filter((f) => f.type.startsWith('image/'));
+      const docs = files.filter((f) => !f.type.startsWith('image/'));
+      const ids = [
+        ...imgs.map((f) =>
+          p.onNewImage(
             files.length === 1 && name.trim() ? name.trim() : stripExt(f.name),
-          file: f
-        }))
-      );
+            f
+          )
+        ),
+        ...(docs.length
+          ? p.onNewDocuments(
+              docs.map((f) => ({
+                name:
+                  files.length === 1 && name.trim()
+                    ? name.trim()
+                    : stripExt(f.name),
+                file: f
+              }))
+            )
+          : [])
+      ];
+      maybeBox(ids);
     } else if (URL_TYPES.includes(sourceType)) {
       // One or many links, one per line — each auto-titles itself. Keep the
       // dialog OPEN and show per-link progress so a piece is never "lost".
@@ -213,12 +240,13 @@ export function BoardToolbar(p: BoardToolbarProps) {
         id: p.onNewSource(sourceType, '', u),
         url: u
       }));
+      maybeBox(created.map((c) => c.id));
       setImporting(created);
       setUrls('');
       return; // stay open — progress view takes over
     } else {
       if (!name.trim()) return;
-      p.onNewSource(sourceType, name.trim(), url.trim());
+      maybeBox([p.onNewSource(sourceType, name.trim(), url.trim())]);
     }
     closeSource();
   }
@@ -495,18 +523,15 @@ export function BoardToolbar(p: BoardToolbarProps) {
                   </div>
                 )}
                 {sourceType === 'image' || sourceType === 'document' ? (
-                  // Real file upload. Image → Blob + multimodal caption/embed;
-                  // Document → extract text → chunk + index via the text pipeline.
+                  // Bulk upload, ANY supported type — images go to Blob + caption/
+                  // pixel-embed; PDF/DOCX/EPUB/TXT/MD extract → chunk → index. Mixed
+                  // selections are routed per file automatically.
                   <div className="space-y-1.5">
-                    <Label>{sourceType === 'image' ? 'Image file' : 'Document file(s)'}</Label>
+                    <Label>Files</Label>
                     <input
                       type="file"
-                      multiple={sourceType === 'document'}
-                      accept={
-                        sourceType === 'image'
-                          ? 'image/png,image/jpeg'
-                          : '.pdf,.docx,.epub,.txt,.md,application/pdf,application/epub+zip,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain'
-                      }
+                      multiple
+                      accept="image/png,image/jpeg,image/webp,image/gif,.pdf,.docx,.epub,.txt,.md,application/pdf,application/epub+zip,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain"
                       onChange={(e) => setFiles(Array.from(e.target.files ?? []))}
                       className="block w-full cursor-pointer rounded-lg border border-input bg-card text-[13px] file:mr-3 file:cursor-pointer file:border-0 file:bg-accent/10 file:px-3 file:py-2 file:text-accent hover:border-accent/40"
                     />
@@ -522,9 +547,10 @@ export function BoardToolbar(p: BoardToolbarProps) {
                       </p>
                     ) : (
                       <p className="text-[11.5px] text-muted-foreground/55">
-                        {sourceType === 'image'
-                          ? 'PNG or JPEG · up to 12 MB. The image is embedded by its pixels and captioned, so it’s searchable by look and by words.'
-                          : 'PDF, DOCX, EPUB, TXT, or MD · up to 25 MB each · select several at once. Text is extracted, chunked, and indexed. (Scanned/image-only PDFs need OCR — coming soon.)'}
+                        Images (PNG/JPEG/WebP/GIF) and documents (PDF, DOCX, EPUB,
+                        TXT, MD) — select as many as you like, any mix. Each is
+                        indexed on its own. (Scanned/image-only PDFs need OCR —
+                        coming soon.)
                       </p>
                     )}
                   </div>
@@ -561,6 +587,32 @@ export function BoardToolbar(p: BoardToolbarProps) {
                     />
                   </div>
                 )}
+
+                {/* Add to a box — dock this whole import into one named cluster */}
+                <div className="space-y-2 rounded-lg border border-dashed border-[rgb(var(--hairline)/0.25)] p-2.5">
+                  <label className="flex cursor-pointer items-center gap-2 text-[13px] font-medium">
+                    <input
+                      type="checkbox"
+                      checked={addToBox}
+                      onChange={(e) => setAddToBox(e.target.checked)}
+                      className="h-4 w-4 accent-[hsl(var(--accent))]"
+                    />
+                    Add all to a box
+                  </label>
+                  {addToBox && (
+                    <>
+                      <Input
+                        value={boxName}
+                        onChange={(e) => setBoxName(e.target.value)}
+                        placeholder="Box name — e.g. SEO Videos"
+                      />
+                      <p className="text-[11px] text-muted-foreground/60">
+                        Everything from this import drops into one named box
+                        instead of scattering across the canvas.
+                      </p>
+                    </>
+                  )}
+                </div>
               </div>
               <div className="flex justify-end gap-2 pt-1">
                 <Button variant="ghost" onClick={closeSource}>
@@ -569,13 +621,12 @@ export function BoardToolbar(p: BoardToolbarProps) {
                 <Button
                   variant="accent"
                   disabled={
-                    sourceType === 'document'
+                    (addToBox && !boxName.trim()) ||
+                    (sourceType === 'image' || sourceType === 'document'
                       ? files.length === 0
-                      : sourceType === 'image'
-                        ? !name.trim() || files.length !== 1
-                        : URL_TYPES.includes(sourceType)
-                          ? urls.trim().length === 0
-                          : !name.trim()
+                      : URL_TYPES.includes(sourceType)
+                        ? urls.trim().length === 0
+                        : !name.trim())
                   }
                   onClick={submitSource}
                 >

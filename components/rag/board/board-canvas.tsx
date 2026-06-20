@@ -1652,6 +1652,7 @@ function BoardCanvasInner() {
               if (!j.indexed && j.note) console.warn('[image-index]', j.note);
             })
             .catch(() => updateMedia(id, { status: 'failed' }));
+          return id;
         }}
         onNewDocuments={(docs) => {
           // Batch upload (PDF/DOCX/EPUB/TXT). Chips appear immediately; the
@@ -1707,6 +1708,43 @@ function BoardCanvasInner() {
             }
           );
           void Promise.all(runners);
+          return jobs.map((j) => j.id);
+        }}
+        onCollectIntoBox={(boxName, mediaIds) => {
+          // Gather freshly-imported pieces INTO a new named box (cluster) instead
+          // of scattering them on the canvas. The free chips just placed for these
+          // media are removed and re-created docked in the box's grid.
+          if (!mediaIds.length) return;
+          setBoard((prev) => {
+            const hubId = nextBoardId('hub');
+            const nodes = prev.nodes.filter(
+              (n) =>
+                !(
+                  n.type === 'chip' &&
+                  !n.parentId &&
+                  mediaIds.includes(n.data.mediaId as string)
+                )
+            );
+            const size = hubSize(mediaIds.length);
+            const pos = freePosition(nodes, centerPos(), size.width, size.height);
+            nodes.push({
+              id: hubId,
+              type: 'hub',
+              position: pos,
+              data: { name: boxName, mediaType: 'cluster' },
+              ...size
+            });
+            mediaIds.forEach((mid, i) =>
+              nodes.push({
+                id: nextBoardId('chip'),
+                type: 'chip',
+                parentId: hubId,
+                position: hubSlot(i),
+                data: { mediaId: mid }
+              })
+            );
+            return { ...prev, nodes };
+          });
         }}
         onAddBrain={() => {
           // Up to 5 brains per board — one per subject/angle in a project.
