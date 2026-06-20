@@ -1267,14 +1267,21 @@ function BoardCanvasInner() {
           const thumb = ytId
             ? `https://i.ytimg.com/vi/${ytId}/hqdefault.jpg`
             : undefined;
+          // No name typed (URL imports auto-title): fall back to the URL host so
+          // the chip is never blank. YouTube gets its real oEmbed title on index.
+          const cleanName =
+            name.trim() ||
+            (source
+              ? source.replace(/^https?:\/\//, '').replace(/\/.*$/, '')
+              : 'Source');
           // Optimistic chip now; real status when indexing answers.
           const id = addMedia(
             {
               type,
-              name,
+              name: cleanName,
               description: '',
               date: new Date().toISOString().slice(0, 10),
-              content: source || name,
+              content: source || cleanName,
               source: source || undefined,
               thumbnail: thumb
             },
@@ -1293,7 +1300,7 @@ function BoardCanvasInner() {
             fetch('/api/index-youtube', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ source_id: id, name, url: source })
+              body: JSON.stringify({ source_id: id, name: cleanName, url: source })
             })
               .then(async (r) => {
                 const j = await r.json().catch(() => ({}));
@@ -1308,7 +1315,7 @@ function BoardCanvasInner() {
                 });
               })
               .catch(() => updateMedia(id, { status: 'failed' }));
-            return;
+            return id;
           }
 
           fetch('/api/index', {
@@ -1316,9 +1323,9 @@ function BoardCanvasInner() {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
               source_id: id,
-              name,
+              name: cleanName,
               type,
-              text: source ? `${name}\n${source}` : name
+              text: source ? `${cleanName}\n${source}` : cleanName
             })
           })
             .then((r) => {
@@ -1326,6 +1333,7 @@ function BoardCanvasInner() {
               updateMedia(id, { status: 'indexed' });
             })
             .catch(() => updateMedia(id, { status: 'failed' }));
+          return id;
         }}
         onNewImage={(name, file) => {
           // Real image upload: optimistic chip now; the route hosts the bytes on

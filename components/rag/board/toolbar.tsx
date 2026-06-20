@@ -24,7 +24,9 @@ import {
   Wand2,
   Volume2,
   VolumeX,
-  MessageSquareQuote
+  MessageSquareQuote,
+  Check,
+  AlertCircle
 } from 'lucide-react';
 import {
   Dialog,
@@ -45,11 +47,13 @@ import {
 } from '@/components/ui/tooltip';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 
 export interface BoardToolbarProps {
   onPlaceMedia: (mediaId: string) => void;
-  onNewSource: (type: MediaType, name: string, source: string) => void;
+  /** Returns the created media id (so the importer can track its progress). */
+  onNewSource: (type: MediaType, name: string, source: string) => string;
   /** Upload an actual image file → Blob + multimodal index (Make Image scenario). */
   onNewImage: (name: string, file: File) => void;
   /** Upload a PDF/DOCX/TXT → extract text → chunk + index via the text pipeline. */
@@ -92,7 +96,7 @@ const PROMPT_PRESETS = [
  * transcribes it via MAI-Transcribe, and indexes the transcript.
  */
 export function BoardToolbar(p: BoardToolbarProps) {
-  const { projectMedia } = useRag();
+  const { projectMedia, media } = useRag();
   const [collapsed, setCollapsed] = useState(false);
   // Sound starts unknown on the server; sync from localStorage after mount.
   const [sound, setSound] = useState(true);
@@ -101,6 +105,11 @@ export function BoardToolbar(p: BoardToolbarProps) {
   const [hubOpen, setHubOpen] = useState(false);
   const [name, setName] = useState('');
   const [url, setUrl] = useState('');
+  // Multi-URL import (YouTube/website): one link per line, auto-titled.
+  const [urls, setUrls] = useState('');
+  // Pieces created by the current import, tracked so the dialog can show
+  // per-link progress and stay open until everything is indexed.
+  const [importing, setImporting] = useState<{ id: string; url: string }[]>([]);
   // File uploads (image = single; documents = one or many at once).
   const [files, setFiles] = useState<File[]>([]);
   const stripExt = (n: string) => n.replace(/\.[^.]+$/, '');
@@ -176,6 +185,15 @@ export function BoardToolbar(p: BoardToolbarProps) {
 
   const unplaced = projectMedia.filter((m) => !p.placedIds.has(m.id));
 
+  function closeSource() {
+    setSourceType(null);
+    setName('');
+    setUrl('');
+    setUrls('');
+    setFiles([]);
+    setImporting([]);
+  }
+
   function submitSource() {
     if (!sourceType) return;
     if (sourceType === 'image') {
@@ -191,14 +209,30 @@ export function BoardToolbar(p: BoardToolbarProps) {
           file: f
         }))
       );
+    } else if (URL_TYPES.includes(sourceType)) {
+      // One or many links, one per line — each auto-titles itself. Keep the
+      // dialog OPEN and show per-link progress so a piece is never "lost".
+      const list = Array.from(
+        new Set(
+          urls
+            .split('\n')
+            .map((s) => s.trim())
+            .filter(Boolean)
+        )
+      );
+      if (!list.length) return;
+      const created = list.map((u) => ({
+        id: p.onNewSource(sourceType, '', u),
+        url: u
+      }));
+      setImporting(created);
+      setUrls('');
+      return; // stay open — progress view takes over
     } else {
       if (!name.trim()) return;
       p.onNewSource(sourceType, name.trim(), url.trim());
     }
-    setSourceType(null);
-    setName('');
-    setUrl('');
-    setFiles([]);
+    closeSource();
   }
 
   function submitHub() {
@@ -419,17 +453,68 @@ export function BoardToolbar(p: BoardToolbarProps) {
       )}
 
       {/* new-source dialog */}
-      <Dialog
-        open={!!sourceType}
-        onOpenChange={(o) => {
-          if (!o) {
-            setSourceType(null);
-            setFiles([]);
-          }
-        }}
-      >
+      <Dialog open={!!sourceType} onOpenChange={(o) => !o && closeSource()}>
         <DialogContent className="sm:max-w-md">
-          {sourceType && (
+          {sourceType && importing.length > 0 ? (
+            // ---- progress view: stays open until every link finishes ----
+            <>
+              <DialogHeader>
+                <DialogTitle className="flex items-center gap-2">
+                  <MediaIcon type={sourceType} size="sm" />
+                  Importing {importing.length}{' '}
+                  {importing.length === 1 ? 'link' : 'links'}
+                </DialogTitle>
+                <DialogDescription>
+                  The pieces are already on your board — this stays open so you
+                  can watch them finish and never lose one.
+                </DialogDescription>
+              </DialogHeader>
+              <div className="max-h-72 space-y-1.5 overflow-y-auto py-1">
+                {importing.map(({ id, url }) => {
+                  const m = media.find((x) => x.id === id);
+                  const st = m?.status ?? 'processing';
+                  return (
+                    <div
+                      key={id}
+                      className="flex items-center gap-2.5 rounded-lg border border-input px-2.5 py-2"
+                    >
+                      {st === 'indexed' ? (
+                        <Check className="h-4 w-4 shrink-0 text-emerald-500" />
+                      ) : st === 'failed' ? (
+                        <AlertCircle className="h-4 w-4 shrink-0 text-red-500" />
+                      ) : (
+                        <Loader2 className="h-4 w-4 shrink-0 animate-spin text-accent" />
+                      )}
+                      <span className="min-w-0 flex-1 truncate text-[12.5px] font-medium">
+                        {m?.name?.trim() || url}
+                      </span>
+                      <span className="shrink-0 text-[10.5px] text-muted-foreground/70">
+                        {st === 'indexed'
+                          ? 'Indexed'
+                          : st === 'failed'
+                            ? 'Failed'
+                            : 'Indexing…'}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+              <div className="flex justify-end gap-2 pt-1">
+                <Button variant="ghost" onClick={() => setImporting([])}>
+                  Import more
+                </Button>
+                <Button variant="accent" onClick={closeSource}>
+                  {importing.every((it) => {
+                    const st = media.find((x) => x.id === it.id)?.status;
+                    return st === 'indexed' || st === 'failed';
+                  })
+                    ? 'Done'
+                    : 'Close'}
+                </Button>
+              </div>
+            </>
+          ) : (
+            sourceType && (
             <>
               <DialogHeader>
                 <DialogTitle className="flex items-center gap-2">
@@ -442,19 +527,18 @@ export function BoardToolbar(p: BoardToolbarProps) {
                 </DialogDescription>
               </DialogHeader>
               <div className="space-y-4">
-                <div className="space-y-1.5">
-                  <Label>Name</Label>
-                  <Input
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
-                    placeholder={
-                      sourceType === 'youtube'
-                        ? 'e.g. Huberman — Habit Formation'
-                        : 'Source name'
-                    }
-                    autoFocus
-                  />
-                </div>
+                {/* URL imports auto-title themselves — no Name field needed. */}
+                {!URL_TYPES.includes(sourceType) && (
+                  <div className="space-y-1.5">
+                    <Label>Name</Label>
+                    <Input
+                      value={name}
+                      onChange={(e) => setName(e.target.value)}
+                      placeholder="Source name"
+                      autoFocus
+                    />
+                  </div>
+                )}
                 {sourceType === 'image' || sourceType === 'document' ? (
                   // Real file upload. Image → Blob + multimodal caption/embed;
                   // Document → extract text → chunk + index via the text pipeline.
@@ -489,33 +573,42 @@ export function BoardToolbar(p: BoardToolbarProps) {
                       </p>
                     )}
                   </div>
-                ) : (
+                ) : URL_TYPES.includes(sourceType) ? (
                   <div className="space-y-1.5">
                     <Label>
-                      {URL_TYPES.includes(sourceType) ? 'URL' : 'File / content'}
+                      {sourceType === 'youtube' ? 'YouTube links' : 'Website URLs'}
                     </Label>
+                    <Textarea
+                      value={urls}
+                      onChange={(e) => setUrls(e.target.value)}
+                      autoFocus
+                      rows={5}
+                      placeholder={
+                        sourceType === 'youtube'
+                          ? 'https://youtube.com/watch?v=…\nPaste one link per line — import 1 or 20 at once'
+                          : 'https://…\nOne URL per line'
+                      }
+                      className="min-h-[120px] font-mono text-[12.5px]"
+                    />
+                    <p className="text-[11.5px] text-muted-foreground/60">
+                      One link per line. Each piece names itself from the{' '}
+                      {sourceType === 'youtube' ? 'video title' : 'page'} — no
+                      typing needed.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="space-y-1.5">
+                    <Label>File / content</Label>
                     <Input
                       value={url}
                       onChange={(e) => setUrl(e.target.value)}
-                      placeholder={
-                        sourceType === 'youtube'
-                          ? 'https://youtube.com/watch?v=…'
-                          : sourceType === 'website'
-                            ? 'https://…'
-                            : 'filename or pasted text'
-                      }
+                      placeholder="filename or pasted text"
                     />
                   </div>
                 )}
               </div>
               <div className="flex justify-end gap-2 pt-1">
-                <Button
-                  variant="ghost"
-                  onClick={() => {
-                    setSourceType(null);
-                    setFiles([]);
-                  }}
-                >
+                <Button variant="ghost" onClick={closeSource}>
                   Cancel
                 </Button>
                 <Button
@@ -525,14 +618,17 @@ export function BoardToolbar(p: BoardToolbarProps) {
                       ? files.length === 0
                       : sourceType === 'image'
                         ? !name.trim() || files.length !== 1
-                        : !name.trim()
+                        : URL_TYPES.includes(sourceType)
+                          ? urls.trim().length === 0
+                          : !name.trim()
                   }
                   onClick={submitSource}
                 >
-                  Index &amp; place
+                  {URL_TYPES.includes(sourceType) ? 'Import' : 'Index & place'}
                 </Button>
               </div>
             </>
+            )
           )}
         </DialogContent>
       </Dialog>
