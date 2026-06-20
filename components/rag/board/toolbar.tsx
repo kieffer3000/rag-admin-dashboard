@@ -283,6 +283,7 @@ export function BoardToolbar(p: BoardToolbarProps) {
       const inBatch = new Set<string>();
       const created: { id: string; url: string }[] = [];
       const retried: { id: string; url: string }[] = [];
+      const allIds: string[] = []; // every pasted link's media id (for the box)
       let skipped = 0;
       for (const u of raw) {
         const k = dedupKey(sourceType, u);
@@ -293,19 +294,22 @@ export function BoardToolbar(p: BoardToolbarProps) {
         inBatch.add(k);
         const existing = byKey.get(k);
         if (existing) {
+          allIds.push(existing.id);
           if (existing.status === 'failed') {
             p.onRetrySource(sourceType, existing.id, u);
             retried.push({ id: existing.id, url: u });
           } else {
-            skipped++; // already indexed / indexing
+            skipped++; // already indexed / indexing (still gathered into the box)
           }
         } else {
-          created.push({ id: p.onNewSource(sourceType, '', u), url: u });
+          const id = p.onNewSource(sourceType, '', u);
+          created.push({ id, url: u });
+          allIds.push(id);
         }
       }
       const all = [...created, ...retried];
       setDupSkipped(skipped);
-      if (!all.length) {
+      if (!all.length && !addToBox) {
         window.alert(
           skipped
             ? `Nothing to do — all ${skipped} link${skipped === 1 ? ' is' : 's are'} already indexed in this project.`
@@ -313,8 +317,14 @@ export function BoardToolbar(p: BoardToolbarProps) {
         );
         return;
       }
-      // Only brand-new imports go into a box; retried pieces stay where they are.
-      maybeBox(created.map((c) => c.id));
+      // With "Add to a box" on, gather EVERY pasted link into the box (new,
+      // retried, and ones already in the project) so the whole set lives together.
+      maybeBox(allIds);
+      if (!all.length) {
+        // Everything was already indexed — just consolidated into the box.
+        closeSource();
+        return;
+      }
       setImporting(all);
       setUrls('');
       return; // stay open — progress view takes over
@@ -511,7 +521,7 @@ export function BoardToolbar(p: BoardToolbarProps) {
 
       {/* new-source dialog */}
       <Dialog open={!!sourceType} onOpenChange={(o) => !o && closeSource()}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className="sm:max-w-lg">
           {sourceType && importing.length > 0 ? (
             // ---- progress view: stays open until every link finishes ----
             <>

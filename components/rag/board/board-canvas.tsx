@@ -1870,15 +1870,18 @@ function BoardCanvasInner() {
             n.type === 'textNode' ||
             n.type === 'prompt' ||
             n.type === 'agent';
+          const idSet = new Set(mediaIds);
           setBoard((prev) => {
-            let nodes = prev.nodes.filter(
-              (n) =>
-                !(
-                  n.type === 'chip' &&
-                  !n.parentId &&
-                  mediaIds.includes(n.data.mediaId as string)
-                )
-            );
+            // Pull these sources' chips out of WHEREVER they are (free, or in
+            // another box) so the whole set ends up together in the target box.
+            const leftHubs = new Set<string>();
+            let nodes = prev.nodes.filter((n) => {
+              if (n.type === 'chip' && idSet.has(n.data.mediaId as string)) {
+                if (n.parentId) leftHubs.add(n.parentId);
+                return false;
+              }
+              return true;
+            });
             let hubId: string;
             if ('id' in box) {
               hubId = box.id;
@@ -1904,9 +1907,14 @@ function BoardCanvasInner() {
                 data: { mediaId: mid }
               })
             );
-            nodes = retile(nodes, hubId); // lay out members in the adaptive grid
-            const total = nodes.filter((n) => n.parentId === hubId && isMember(n)).length;
-            nodes = nodes.map((n) => (n.id === hubId ? { ...n, ...hubSize(total) } : n));
+            // Re-tile + resize the target box AND any boxes the chips left.
+            for (const h of new Set([hubId, ...leftHubs])) {
+              nodes = retile(nodes, h);
+              const count = nodes.filter(
+                (n) => n.parentId === h && isMember(n)
+              ).length;
+              nodes = nodes.map((n) => (n.id === h ? { ...n, ...hubSize(count) } : n));
+            }
             return { ...prev, nodes };
           });
         }}
