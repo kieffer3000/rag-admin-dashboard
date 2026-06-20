@@ -79,6 +79,25 @@ export interface BoardToolbarProps {
 
 const URL_TYPES: MediaType[] = ['youtube', 'website'];
 
+/** A stable identity for a link so the SAME video/page isn't imported twice —
+ *  YouTube collapses to its 11-char video id (any URL form); a website
+ *  normalizes host+path+query (case/trailing-slash-insensitive). */
+function dedupKey(type: MediaType | undefined, raw: string): string {
+  const u = raw.trim();
+  if (type === 'youtube') {
+    const id = (u.match(
+      /(?:v=|youtu\.be\/|\/shorts\/|\/embed\/|\/live\/)([\w-]{11})/
+    ) ?? [])[1];
+    return id ? `yt:${id}` : `url:${u.toLowerCase()}`;
+  }
+  try {
+    const x = new URL(u);
+    return `web:${(x.host + x.pathname).toLowerCase().replace(/\/$/, '')}${x.search}`;
+  } catch {
+    return `url:${u.toLowerCase()}`;
+  }
+}
+
 /** Common prompt-piece presets — instructions that guide how a brain answers.
  *  Wire several into a brain (or box them) and they all apply. */
 /**
@@ -106,6 +125,8 @@ export function BoardToolbar(p: BoardToolbarProps) {
   // "Add to a box": dock everything from this import into one named cluster.
   const [addToBox, setAddToBox] = useState(false);
   const [boxName, setBoxName] = useState('');
+  // How many links the last import skipped as already-in-this-project duplicates.
+  const [dupSkipped, setDupSkipped] = useState(0);
   const stripExt = (n: string) => n.replace(/\.[^.]+$/, '');
 
   // ---- voice recording ----
@@ -188,6 +209,7 @@ export function BoardToolbar(p: BoardToolbarProps) {
     setImporting([]);
     setAddToBox(false);
     setBoxName('');
+    setDupSkipped(0);
   }
 
   /** If "Add to a box" is on (and named), gather this import into one box. */
@@ -227,15 +249,34 @@ export function BoardToolbar(p: BoardToolbarProps) {
     } else if (URL_TYPES.includes(sourceType)) {
       // One or many links, one per line — each auto-titles itself. Keep the
       // dialog OPEN and show per-link progress so a piece is never "lost".
-      const list = Array.from(
-        new Set(
-          urls
-            .split('\n')
-            .map((s) => s.trim())
-            .filter(Boolean)
-        )
+      const raw = urls
+        .split('\n')
+        .map((s) => s.trim())
+        .filter(Boolean);
+      // Skip links already in THIS project, and repeats within the paste —
+      // the same video/page is never imported (or indexed) twice.
+      const seen = new Set(
+        projectMedia
+          .filter((m) => m.source)
+          .map((m) => dedupKey(m.type, m.source as string))
       );
-      if (!list.length) return;
+      const list: string[] = [];
+      for (const u of raw) {
+        const k = dedupKey(sourceType, u);
+        if (seen.has(k)) continue;
+        seen.add(k);
+        list.push(u);
+      }
+      const skipped = raw.length - list.length;
+      setDupSkipped(skipped);
+      if (!list.length) {
+        window.alert(
+          skipped
+            ? `Already in this project — ${skipped} duplicate link${skipped === 1 ? '' : 's'} skipped, nothing new to import.`
+            : 'No links to import.'
+        );
+        return;
+      }
       const created = list.map((u) => ({
         id: p.onNewSource(sourceType, '', u),
         url: u
@@ -450,6 +491,12 @@ export function BoardToolbar(p: BoardToolbarProps) {
                 <DialogDescription>
                   The pieces are already on your board — this stays open so you
                   can watch them finish and never lose one.
+                  {dupSkipped > 0 && (
+                    <span className="mt-1 block font-medium text-amber-600">
+                      Skipped {dupSkipped} duplicate
+                      {dupSkipped === 1 ? '' : 's'} already in this project.
+                    </span>
+                  )}
                 </DialogDescription>
               </DialogHeader>
               <div className="max-h-72 space-y-1.5 overflow-y-auto py-1">
