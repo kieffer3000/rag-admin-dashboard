@@ -35,6 +35,7 @@ import {
   BoardNode,
   hubSlot,
   hubSize,
+  hubCols,
   stackOf,
   CHIP_W,
   CHIP_H,
@@ -163,19 +164,18 @@ function enqueueIndex(task: () => Promise<unknown>) {
   pumpIndexQueue();
 }
 
-/** Re-tile a hub's docked tiles (chips + context notes + prompts) into the
- *  2-col grid. */
+/** Re-tile a hub's docked tiles (chips + context notes + prompts) into its grid
+ *  (columns widen with member count). */
 function retile(nodes: BoardNode[], hubId: string): BoardNode[] {
-  let i = 0;
-  return nodes.map((n) =>
+  const isMember = (n: BoardNode) =>
     (n.type === 'chip' ||
       n.type === 'textNode' ||
       n.type === 'prompt' ||
       n.type === 'agent') &&
-    n.parentId === hubId
-      ? { ...n, position: hubSlot(i++) }
-      : n
-  );
+    n.parentId === hubId;
+  const cols = hubCols(nodes.filter(isMember).length);
+  let i = 0;
+  return nodes.map((n) => (isMember(n) ? { ...n, position: hubSlot(i++, cols) } : n));
 }
 
 function BoardCanvasInner() {
@@ -1270,12 +1270,13 @@ function BoardCanvasInner() {
         ...hubSize(unplaced.length)
       }
     ];
+    const cols = hubCols(unplaced.length);
     unplaced.forEach((m, i) =>
       newNodes.push({
         id: nextBoardId('chip'),
         type: 'chip',
         parentId: hubId,
-        position: hubSlot(i),
+        position: hubSlot(i, cols),
         data: { mediaId: m.id }
       })
     );
@@ -1757,6 +1758,7 @@ function BoardCanvasInner() {
                 )
             );
             const size = hubSize(mediaIds.length);
+            const cols = hubCols(mediaIds.length);
             const pos = freePosition(nodes, centerPos(), size.width, size.height);
             nodes.push({
               id: hubId,
@@ -1770,7 +1772,7 @@ function BoardCanvasInner() {
                 id: nextBoardId('chip'),
                 type: 'chip',
                 parentId: hubId,
-                position: hubSlot(i),
+                position: hubSlot(i, cols),
                 data: { mediaId: mid }
               })
             );

@@ -23,6 +23,7 @@ import {
   BoardState,
   hubSize,
   hubSlot,
+  hubCols,
   stackOf
 } from './types';
 
@@ -260,12 +261,23 @@ export function BoardProvider({ children }: { children: ReactNode }) {
             // HEAL: docked pieces are never half-in/half-out of their tray —
             // re-tile every box's members into the grid (old saves may hold
             // arbitrary in-box offsets from before the magnet-tidy rules).
+            const hubCount = new Map<string, number>();
+            for (const n of nodes) {
+              if (
+                n.parentId &&
+                (n.type === 'chip' ||
+                  n.type === 'textNode' ||
+                  n.type === 'prompt' ||
+                  n.type === 'agent')
+              )
+                hubCount.set(n.parentId, (hubCount.get(n.parentId) ?? 0) + 1);
+            }
             const slotIdx = new Map<string, number>();
             nodes = nodes.map((n: BoardNode) => {
               if (n.type !== 'chip' || !n.parentId) return n;
               const i = slotIdx.get(n.parentId) ?? 0;
               slotIdx.set(n.parentId, i + 1);
-              const slot = hubSlot(i);
+              const slot = hubSlot(i, hubCols(hubCount.get(n.parentId) ?? 1));
               return n.position.x === slot.x && n.position.y === slot.y
                 ? n
                 : { ...n, position: slot };
@@ -494,15 +506,16 @@ export function BoardProvider({ children }: { children: ReactNode }) {
         }
         nodes = nodes.filter((n) => n.id !== nodeId);
         if (parentId) {
-          let i = 0;
-          nodes = nodes.map((n) =>
+          const isMember = (n: BoardNode) =>
             (n.type === 'chip' ||
               n.type === 'textNode' ||
               n.type === 'prompt' ||
               n.type === 'agent') &&
-            n.parentId === parentId
-              ? { ...n, position: hubSlot(i++) }
-              : n
+            n.parentId === parentId;
+          const cols = hubCols(nodes.filter(isMember).length);
+          let i = 0;
+          nodes = nodes.map((n) =>
+            isMember(n) ? { ...n, position: hubSlot(i++, cols) } : n
           );
         }
         const edges = prev.edges.filter(

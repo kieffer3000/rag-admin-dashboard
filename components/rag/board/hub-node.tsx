@@ -7,10 +7,10 @@ import { MEDIA_TYPES } from '@/lib/rag/media-config';
 import {
   hubSize,
   hubSlot,
+  hubCols,
   CHIP_W,
   CHIP_H,
   HUB_HEADER_H,
-  HUB_COLS,
   type HubData
 } from '@/lib/rag/board/types';
 import { MediaType } from '@/lib/rag/types';
@@ -60,6 +60,7 @@ function HubNodeInner({ id, data, selected }: NodeProps) {
     everything || cluster ? null : MEDIA_TYPES[d.mediaType as MediaType];
   const Icon = everything ? Sparkles : cluster ? Puzzle : meta!.icon;
   const size = everything ? { width: 230, height: 86 } : hubSize(memberCount);
+  const cols = hubCols(memberCount);
   const indexedAll = projectMedia.filter((m) => m.status === 'indexed').length;
 
   // Open "parking spaces" in the grid — dashed ghost tiles that say "drop
@@ -68,8 +69,8 @@ function HubNodeInner({ id, data, selected }: NodeProps) {
   const ghostSlots: number[] = everything
     ? []
     : memberCount === 0
-    ? Array.from({ length: HUB_COLS }, (_, i) => i)
-    : memberCount % HUB_COLS !== 0
+    ? Array.from({ length: cols }, (_, i) => i)
+    : memberCount % cols !== 0
     ? [memberCount]
     : [];
 
@@ -114,7 +115,7 @@ function HubNodeInner({ id, data, selected }: NodeProps) {
           />
           {/* ghost "parking spaces" — dashed empty tiles invite a drop */}
           {ghostSlots.map((i) => {
-            const slot = hubSlot(i);
+            const slot = hubSlot(i, cols);
             return (
               <div
                 key={i}

@@ -117,10 +117,21 @@ export const HUB_HEADER_H = 42;
 export const HUB_GAP = 12;
 export const HUB_COLS = 2;
 
+/** Columns a box uses for its grid — widens with item count so a big box (e.g.
+ *  50 imported videos) is a tidy grid, not a 25-row vertical strip. */
+export function hubCols(memberCount: number) {
+  if (memberCount <= 6) return HUB_COLS; // 2
+  if (memberCount <= 12) return 3;
+  if (memberCount <= 24) return 4;
+  if (memberCount <= 40) return 5;
+  return 6;
+}
+
 export function hubSize(memberCount: number) {
-  const rows = Math.max(1, Math.ceil(memberCount / HUB_COLS));
+  const cols = hubCols(memberCount);
+  const rows = Math.max(1, Math.ceil(memberCount / cols));
   return {
-    width: HUB_PAD_X * 2 + HUB_COLS * CHIP_W + (HUB_COLS - 1) * HUB_GAP,
+    width: HUB_PAD_X * 2 + cols * CHIP_W + (cols - 1) * HUB_GAP,
     height:
       memberCount === 0
         ? HUB_HEADER_H + CHIP_H + HUB_GAP * 2
@@ -158,10 +169,11 @@ export function stackOf(
   return out;
 }
 
-/** Grid slot for the i-th docked chip (relative to the hub). */
-export function hubSlot(i: number) {
-  const col = i % HUB_COLS;
-  const row = Math.floor(i / HUB_COLS);
+/** Grid slot for the i-th docked chip (relative to the hub). `cols` should be
+ *  hubCols(totalMembers) so slots match the box's adaptive width. */
+export function hubSlot(i: number, cols: number = HUB_COLS) {
+  const col = i % cols;
+  const row = Math.floor(i / cols);
   return {
     x: HUB_PAD_X + col * (CHIP_W + HUB_GAP),
     y: HUB_HEADER_H + HUB_GAP + row * (CHIP_H + HUB_GAP)
