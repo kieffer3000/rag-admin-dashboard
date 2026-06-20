@@ -378,6 +378,27 @@ export async function askBrain(
   }
 
   const data = await res.json();
+
+  const suggestedQuestions: string[] = Array.isArray(data.suggestedQuestions)
+    ? data.suggestedQuestions.filter(
+        (s: unknown) => typeof s === 'string' && s.trim()
+      )
+    : [];
+
+  // ⚡ Fast = citation-free: skip the footnote machinery entirely, and strip any
+  // [n] markers the model still emitted so they don't render as raw brackets.
+  // No citations → the message shows no footnotes section.
+  if (speed === 'fast') {
+    return {
+      answer: (data.answer ?? '').replace(/\s*\[\d+\](?:\s*\[\d+\])*/g, ''),
+      citations: [],
+      live: true,
+      noMatch: Boolean(data.noMatch),
+      topScore: typeof data.topScore === 'number' ? data.topScore : null,
+      suggestedQuestions
+    };
+  }
+
   const byId = new Map(items.map((m) => [m.id, m]));
 
   // Citations = the chunks the answer actually used. PREFERRED: the model's own
@@ -399,12 +420,6 @@ export async function askBrain(
   // Numbered footnotes: rewrite inline [name]/[n] markers → clickable [N]
   // refs that line up with the citation list below the answer.
   const answer = footnoteAnswer(data.answer ?? '', citations, ordered);
-
-  const suggestedQuestions: string[] = Array.isArray(data.suggestedQuestions)
-    ? data.suggestedQuestions.filter(
-        (s: unknown) => typeof s === 'string' && s.trim()
-      )
-    : [];
 
   return {
     answer,

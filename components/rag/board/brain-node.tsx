@@ -569,6 +569,10 @@ function BrainNodeInner({ id, data, selected }: NodeProps) {
         .map((mm) => ({
           role: mm.role,
           content: mm.content
+            // drop this turn's own footnote refs + [n] citation markers — they
+            // point at a DIFFERENT turn's sources and only confuse follow-ups
+            .replace(/<sup[^>]*>[\s\S]*?<\/sup>/gi, '')
+            .replace(/\[\d+\](?:\s*\[\d+\])*/g, '')
             .replace(/<[^>]+>/g, ' ')
             .replace(/&[a-z]+;/gi, ' ')
             .replace(/\s+/g, ' ')
