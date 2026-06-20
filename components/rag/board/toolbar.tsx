@@ -60,8 +60,14 @@ export interface BoardToolbarProps {
   onNewImage: (name: string, file: File) => string;
   /** Upload PDF/DOCX/TXT/… → extract text → chunk + index. Returns media ids. */
   onNewDocuments: (docs: { name: string; file: File }[]) => string[];
-  /** Gather freshly-imported media into ONE new named box instead of free chips. */
-  onCollectIntoBox: (boxName: string, mediaIds: string[]) => void;
+  /** Existing boxes (clusters) on the board, for "add to an existing box". */
+  boxes: { id: string; name: string }[];
+  /** Gather freshly-imported media into a box — a NEW one ({name}) or an
+   *  EXISTING one ({id}). */
+  onCollectIntoBox: (
+    box: { id: string } | { name: string },
+    mediaIds: string[]
+  ) => void;
   /** Re-run indexing for a source that failed (reuses its id — no duplicate). */
   onRetrySource: (type: MediaType, id: string, url: string) => void;
   /** Delete a source (chip + media + Pinecone vectors). */
@@ -128,9 +134,11 @@ export function BoardToolbar(p: BoardToolbarProps) {
   const [importing, setImporting] = useState<{ id: string; url: string }[]>([]);
   // File uploads — any number, any supported type, routed per file.
   const [files, setFiles] = useState<File[]>([]);
-  // "Add to a box": dock everything from this import into one named cluster.
+  // "Add to a box": dock everything into a cluster — an existing one or a new
+  // one. boxTarget is 'new' or an existing box id.
   const [addToBox, setAddToBox] = useState(false);
   const [boxName, setBoxName] = useState('');
+  const [boxTarget, setBoxTarget] = useState<string>('new');
   // How many links the last import skipped as already-in-this-project duplicates.
   const [dupSkipped, setDupSkipped] = useState(0);
   const stripExt = (n: string) => n.replace(/\.[^.]+$/, '');
@@ -215,13 +223,18 @@ export function BoardToolbar(p: BoardToolbarProps) {
     setImporting([]);
     setAddToBox(false);
     setBoxName('');
+    setBoxTarget('new');
     setDupSkipped(0);
   }
 
-  /** If "Add to a box" is on (and named), gather this import into one box. */
+  /** If "Add to a box" is on, gather this import into the chosen box (new or
+   *  existing). */
   function maybeBox(ids: string[]) {
-    if (addToBox && boxName.trim() && ids.length) {
-      p.onCollectIntoBox(boxName.trim(), ids);
+    if (!addToBox || !ids.length) return;
+    if (boxTarget === 'new') {
+      if (boxName.trim()) p.onCollectIntoBox({ name: boxName.trim() }, ids);
+    } else {
+      p.onCollectIntoBox({ id: boxTarget }, ids);
     }
   }
 
@@ -710,7 +723,8 @@ export function BoardToolbar(p: BoardToolbarProps) {
                   </div>
                 )}
 
-                {/* Add to a box — dock this whole import into one named cluster */}
+                {/* Add to a box — dock this whole import into a cluster (new or
+                    an existing one). */}
                 <div className="space-y-2 rounded-lg border border-dashed border-[rgb(var(--hairline)/0.25)] p-2.5">
                   <label className="flex cursor-pointer items-center gap-2 text-[13px] font-medium">
                     <input
@@ -723,14 +737,31 @@ export function BoardToolbar(p: BoardToolbarProps) {
                   </label>
                   {addToBox && (
                     <>
-                      <Input
-                        value={boxName}
-                        onChange={(e) => setBoxName(e.target.value)}
-                        placeholder="Box name — e.g. SEO Videos"
-                      />
+                      {p.boxes.length > 0 && (
+                        <select
+                          value={boxTarget}
+                          onChange={(e) => setBoxTarget(e.target.value)}
+                          className="block w-full rounded-lg border border-input bg-card px-3 py-2 text-[13px] outline-none focus:border-accent/50"
+                        >
+                          <option value="new">＋ Create a new box…</option>
+                          {p.boxes.map((b) => (
+                            <option key={b.id} value={b.id}>
+                              {b.name}
+                            </option>
+                          ))}
+                        </select>
+                      )}
+                      {boxTarget === 'new' && (
+                        <Input
+                          value={boxName}
+                          onChange={(e) => setBoxName(e.target.value)}
+                          placeholder="Box name — e.g. SEO Videos"
+                        />
+                      )}
                       <p className="text-[11px] text-muted-foreground/60">
-                        Everything from this import drops into one named box
-                        instead of scattering across the canvas.
+                        {boxTarget === 'new'
+                          ? 'Everything from this import drops into one new named box.'
+                          : 'Everything from this import is added to the selected box.'}
                       </p>
                     </>
                   )}
@@ -743,7 +774,7 @@ export function BoardToolbar(p: BoardToolbarProps) {
                 <Button
                   variant="accent"
                   disabled={
-                    (addToBox && !boxName.trim()) ||
+                    (addToBox && boxTarget === 'new' && !boxName.trim()) ||
                     (sourceType === 'image' || sourceType === 'document'
                       ? files.length === 0
                       : URL_TYPES.includes(sourceType)

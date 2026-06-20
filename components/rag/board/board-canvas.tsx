@@ -1822,14 +1822,21 @@ function BoardCanvasInner() {
         }}
         onRetrySource={retrySource}
         onDeleteSource={deleteSource}
-        onCollectIntoBox={(boxName, mediaIds) => {
-          // Gather freshly-imported pieces INTO a new named box (cluster) instead
-          // of scattering them on the canvas. The free chips just placed for these
-          // media are removed and re-created docked in the box's grid.
+        boxes={board.nodes
+          .filter((n) => n.type === 'hub' && n.data.mediaType === 'cluster')
+          .map((n) => ({ id: n.id, name: (n.data.name as string) || 'Untitled box' }))}
+        onCollectIntoBox={(box, mediaIds) => {
+          // Gather freshly-imported pieces into a box — either a NEW named box or
+          // an EXISTING one. The free chips just placed are removed and re-docked
+          // in the box's grid (existing members realign to the new column count).
           if (!mediaIds.length) return;
+          const isMember = (n: BoardNode) =>
+            n.type === 'chip' ||
+            n.type === 'textNode' ||
+            n.type === 'prompt' ||
+            n.type === 'agent';
           setBoard((prev) => {
-            const hubId = nextBoardId('hub');
-            const nodes = prev.nodes.filter(
+            let nodes = prev.nodes.filter(
               (n) =>
                 !(
                   n.type === 'chip' &&
@@ -1837,25 +1844,34 @@ function BoardCanvasInner() {
                   mediaIds.includes(n.data.mediaId as string)
                 )
             );
-            const size = hubSize(mediaIds.length);
-            const cols = hubCols(mediaIds.length);
-            const pos = freePosition(nodes, centerPos(), size.width, size.height);
-            nodes.push({
-              id: hubId,
-              type: 'hub',
-              position: pos,
-              data: { name: boxName, mediaType: 'cluster' },
-              ...size
-            });
-            mediaIds.forEach((mid, i) =>
+            let hubId: string;
+            if ('id' in box) {
+              hubId = box.id;
+              if (!nodes.some((n) => n.id === hubId)) return prev; // box gone
+            } else {
+              hubId = nextBoardId('hub');
+              const size = hubSize(mediaIds.length);
+              const pos = freePosition(nodes, centerPos(), size.width, size.height);
+              nodes.push({
+                id: hubId,
+                type: 'hub',
+                position: pos,
+                data: { name: box.name, mediaType: 'cluster' },
+                ...size
+              });
+            }
+            mediaIds.forEach((mid) =>
               nodes.push({
                 id: nextBoardId('chip'),
                 type: 'chip',
                 parentId: hubId,
-                position: hubSlot(i, cols),
+                position: { x: 0, y: 0 },
                 data: { mediaId: mid }
               })
             );
+            nodes = retile(nodes, hubId); // lay out members in the adaptive grid
+            const total = nodes.filter((n) => n.parentId === hubId && isMember(n)).length;
+            nodes = nodes.map((n) => (n.id === hubId ? { ...n, ...hubSize(total) } : n));
             return { ...prev, nodes };
           });
         }}
