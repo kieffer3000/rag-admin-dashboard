@@ -39,6 +39,8 @@ import {
   CHIP_W,
   CHIP_H,
   CHIP_TAB,
+  AGENT_W,
+  AGENT_H,
   STACK_PITCH,
   STACK_SNAP
 } from '@/lib/rag/board/types';
@@ -84,6 +86,48 @@ const DUP_PREFIX: Record<string, string> = {
 /** Node types that dock into cluster boxes as compact tiles (non-source
  *  context: notes + prompt/agent guides). */
 const DOCKABLE_CONTEXT = new Set(['textNode', 'prompt', 'agent']);
+
+/** Approx on-canvas footprint of a node (for overlap checks). */
+function nodeRect(n: BoardNode) {
+  const w = n.width ?? (n.type === 'brain' ? 400 : CHIP_W);
+  const h = n.height ?? (n.type === 'brain' ? 480 : CHIP_H + CHIP_TAB);
+  return { x: n.position.x, y: n.position.y, w, h };
+}
+
+/** Nudge `target` to the nearest spot where a w×h piece doesn't overlap any
+ *  existing free (non-docked) node, spiralling outward in card-sized steps.
+ *  Keeps freshly-dropped/placed pieces from landing on top of each other. */
+function freePosition(
+  nodes: BoardNode[],
+  target: { x: number; y: number },
+  w: number,
+  h: number
+): { x: number; y: number } {
+  const GAP = 16;
+  const others = nodes.filter((n) => !n.parentId).map(nodeRect);
+  const collides = (x: number, y: number) =>
+    others.some(
+      (b) =>
+        x < b.x + b.w + GAP &&
+        x + w + GAP > b.x &&
+        y < b.y + b.h + GAP &&
+        y + h + GAP > b.y
+    );
+  if (!collides(target.x, target.y)) return target;
+  const stepX = w + GAP;
+  const stepY = h + GAP;
+  for (let ring = 1; ring <= 14; ring++) {
+    for (let dy = -ring; dy <= ring; dy++) {
+      for (let dx = -ring; dx <= ring; dx++) {
+        if (Math.max(Math.abs(dx), Math.abs(dy)) !== ring) continue; // ring edge
+        const x = target.x + dx * stepX;
+        const y = target.y + dy * stepY;
+        if (!collides(x, y)) return { x, y };
+      }
+    }
+  }
+  return target; // board is dense — give up rather than loop forever
+}
 
 /** Re-tile a hub's docked tiles (chips + context notes + prompts) into the
  *  2-col grid. */
@@ -846,7 +890,14 @@ function BoardCanvasInner() {
 
   const pushNode = useCallback(
     (node: BoardNode) =>
-      setBoard((prev) => ({ ...prev, nodes: [...prev.nodes, node] })),
+      setBoard((prev) => {
+        // Resolve overlap against the LATEST nodes so a new piece never lands on
+        // top of another (covers single placement AND rapid batch drops).
+        const w = node.width ?? CHIP_W;
+        const h = node.height ?? CHIP_H + CHIP_TAB;
+        const position = freePosition(prev.nodes, node.position, w, h);
+        return { ...prev, nodes: [...prev.nodes, { ...node, position }] };
+      }),
     [setBoard]
   );
 
@@ -906,11 +957,11 @@ function BoardCanvasInner() {
           id: nextBoardId('agent'),
           type: 'agent',
           position: {
-            x: pos.x - CHIP_W / 2,
-            y: pos.y - (CHIP_H + CHIP_TAB) / 2
+            x: pos.x - AGENT_W / 2,
+            y: pos.y - AGENT_H / 2
           },
-          width: CHIP_W,
-          height: CHIP_H + CHIP_TAB,
+          width: AGENT_W,
+          height: AGENT_H,
           data: {
             agentId: payload.agentId ?? '',
             name: payload.name ?? 'Agent',
@@ -1650,8 +1701,8 @@ function BoardCanvasInner() {
             id: nextBoardId('agent'),
             type: 'agent',
             position: centerPos(),
-            width: CHIP_W,
-            height: CHIP_H + CHIP_TAB,
+            width: AGENT_W,
+            height: AGENT_H,
             data: {
               agentId: agent.agentId,
               name: agent.name,

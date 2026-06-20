@@ -5,7 +5,7 @@ import { Handle, Position, type NodeProps } from '@xyflow/react';
 import { cn } from '@/lib/utils';
 import { Bot, RotateCcw } from 'lucide-react';
 import { useBoard } from '@/lib/rag/board/store';
-import { CHIP_W, CHIP_H, CHIP_TAB, type AgentData } from '@/lib/rag/board/types';
+import { CHIP_W, CHIP_H, AGENT_W, AGENT_H, type AgentData } from '@/lib/rag/board/types';
 
 /**
  * An AGENT piece — a reusable ANSWERING PERSONA (a name + a robot icon + a
@@ -56,7 +56,7 @@ function AgentNodeInner({ id, data, selected, parentId }: NodeProps) {
   // so an agent reads as a "who" answering, distinct from source/prompt chips.
   return (
     <div
-      style={{ width: CHIP_W, height: CHIP_H + CHIP_TAB }}
+      style={{ width: AGENT_W, height: AGENT_H }}
       className="group relative flex flex-col items-center justify-center gap-1.5"
     >
       {/* Transparent robot — no card/box, just the graphic floating on the
