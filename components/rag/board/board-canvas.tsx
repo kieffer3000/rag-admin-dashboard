@@ -87,11 +87,16 @@ const DUP_PREFIX: Record<string, string> = {
  *  context: notes + prompt/agent guides). */
 const DOCKABLE_CONTEXT = new Set(['textNode', 'prompt', 'agent']);
 
-/** Approx on-canvas footprint of a node (for overlap checks). Prefers React
- *  Flow's measured size; chips render taller than CHIP_H (thumbnail + 2-line
- *  title), so the fallback is generous to leave real clearance, not a sliver. */
+/** Live measured node sizes from React Flow, keyed by id. Updated every render
+ *  (a brain with a long chat is far bigger than its declared 400×480, so static
+ *  estimates let pieces land on it — measured sizes fix that). */
+let MEASURED = new Map<string, { width: number; height: number }>();
+
+/** Real on-canvas footprint of a node (for overlap checks) — measured size when
+ *  React Flow has it, else a generous fallback (chips render taller than CHIP_H
+ *  once the thumbnail + 2-line title stack up). */
 function nodeRect(n: BoardNode) {
-  const m = (n as { measured?: { width?: number; height?: number } }).measured;
+  const m = MEASURED.get(n.id);
   const w = m?.width ?? n.width ?? (n.type === 'brain' ? 400 : CHIP_W);
   const h =
     m?.height ??
@@ -167,7 +172,20 @@ function BoardCanvasInner() {
   const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; nodeId: string } | null>(
     null
   );
-  const { getIntersectingNodes, screenToFlowPosition, fitView } = useReactFlow();
+  const { getIntersectingNodes, getNodes, screenToFlowPosition, fitView } =
+    useReactFlow();
+
+  // Keep the measured-size map fresh so overlap checks know each node's REAL
+  // footprint (esp. a brain grown tall by its chat). Runs after every commit.
+  useEffect(() => {
+    const next = new Map<string, { width: number; height: number }>();
+    for (const n of getNodes()) {
+      const w = n.measured?.width ?? n.width ?? undefined;
+      const h = n.measured?.height ?? n.height ?? undefined;
+      if (w && h) next.set(n.id, { width: w, height: h });
+    }
+    MEASURED = next;
+  });
   const wrapRef = useRef<HTMLDivElement>(null);
 
   // On load/refresh (and project switch) the viewport doesn't follow the saved
@@ -567,6 +585,30 @@ function BoardCanvasInner() {
     (e: unknown, node: Node) => {
       const s = dragSession.current;
       dragSession.current = null;
+
+      // NO-OVERLAP RULE: nothing ever rests on top of anything else — not the
+      // robot, not a puzzle piece, not the brain. After the drop fully settles
+      // (dock logic runs on tick 0), if this free piece overlaps any other free
+      // node, slide it to the nearest clear spot (measured sizes, so the big
+      // brain is fully respected). Docked-in-box pieces are exempt.
+      setTimeout(() => {
+        setBoard((prev) => {
+          const self = prev.nodes.find((n) => n.id === node.id);
+          if (!self || self.parentId) return prev;
+          const others = prev.nodes.filter(
+            (n) => n.id !== self.id && !n.parentId
+          );
+          const { w, h } = nodeRect(self);
+          const pos = freePosition(others, self.position, w, h);
+          if (pos.x === self.position.x && pos.y === self.position.y) return prev;
+          return {
+            ...prev,
+            nodes: prev.nodes.map((n) =>
+              n.id === self.id ? { ...n, position: pos } : n
+            )
+          };
+        });
+      }, 90);
 
       // Garbage bin: a source chip dropped on the bin → delete the source AND
       // its Pinecone vectors (via deleteMedia → /api/delete-source).
@@ -1141,29 +1183,34 @@ function BoardCanvasInner() {
     if (hydratedProject !== activeProjectId) return;
     if (untangled.current.has(activeProjectId)) return;
     untangled.current.add(activeProjectId);
-    setBoard((prev) => {
-      const fixed = prev.nodes.filter(
-        (n) => n.parentId || n.type === 'brain' || n.type === 'hub'
-      );
-      const movable = prev.nodes.filter(
-        (n) => !n.parentId && n.type !== 'brain' && n.type !== 'hub'
-      );
-      const accepted = [...fixed];
-      const moved = new Map<string, { x: number; y: number }>();
-      for (const n of movable) {
-        const { w, h } = nodeRect(n);
-        const pos = freePosition(accepted, n.position, w, h);
-        if (pos.x !== n.position.x || pos.y !== n.position.y) moved.set(n.id, pos);
-        accepted.push(pos === n.position ? n : { ...n, position: pos });
-      }
-      if (moved.size === 0) return prev;
-      return {
-        ...prev,
-        nodes: prev.nodes.map((n) =>
-          moved.has(n.id) ? { ...n, position: moved.get(n.id)! } : n
-        )
-      };
-    });
+    // Defer so React Flow has measured every node first (a brain's real height
+    // depends on its chat) — otherwise we'd de-overlap against stale sizes.
+    const t = setTimeout(() => {
+      setBoard((prev) => {
+        const fixed = prev.nodes.filter(
+          (n) => n.parentId || n.type === 'brain' || n.type === 'hub'
+        );
+        const movable = prev.nodes.filter(
+          (n) => !n.parentId && n.type !== 'brain' && n.type !== 'hub'
+        );
+        const accepted = [...fixed];
+        const moved = new Map<string, { x: number; y: number }>();
+        for (const n of movable) {
+          const { w, h } = nodeRect(n);
+          const pos = freePosition(accepted, n.position, w, h);
+          if (pos.x !== n.position.x || pos.y !== n.position.y) moved.set(n.id, pos);
+          accepted.push(pos === n.position ? n : { ...n, position: pos });
+        }
+        if (moved.size === 0) return prev;
+        return {
+          ...prev,
+          nodes: prev.nodes.map((n) =>
+            moved.has(n.id) ? { ...n, position: moved.get(n.id)! } : n
+          )
+        };
+      });
+    }, 350);
+    return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hydratedProject, activeProjectId]);
 
