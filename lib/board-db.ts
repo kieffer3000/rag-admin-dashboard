@@ -59,3 +59,20 @@ export async function ensureProjectsSchema() {
   `;
   projectsEnsured = true;
 }
+
+let userDataEnsured = false;
+
+/** Idempotent schema bootstrap for misc account data — notes + chat
+ *  conversations — as one JSONB blob per scope. */
+export async function ensureUserDataSchema() {
+  if (!sql || userDataEnsured) return;
+  await sql`
+    CREATE TABLE IF NOT EXISTS userdata_state (
+      scope text PRIMARY KEY,
+      user_id text,
+      data jsonb NOT NULL,
+      updated_at timestamptz NOT NULL DEFAULT now()
+    )
+  `;
+  userDataEnsured = true;
+}

@@ -272,6 +272,62 @@ export function RagProvider({ children }: { children: ReactNode }) {
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [activeConversationId, setActiveConversationId] = useState<string | null>(null);
   const [notes, setNotes] = useState<Note[]>(MOCK_NOTES);
+
+  // Notes + chat conversations persist to Neon (account-global) + localStorage,
+  // so they survive a refresh like everything else.
+  const userDataHydrated = useRef(false);
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const r = await fetch('/api/userdata');
+        const j = r.ok ? await r.json() : null;
+        const d = j?.data;
+        if (cancelled) return;
+        if (d && (Array.isArray(d.notes) || Array.isArray(d.conversations))) {
+          if (Array.isArray(d.notes)) setNotes(d.notes);
+          if (Array.isArray(d.conversations)) setConversations(d.conversations);
+        } else {
+          try {
+            const ls = localStorage.getItem('answersdoc_userdata_v1');
+            if (ls) {
+              const p = JSON.parse(ls);
+              if (Array.isArray(p?.notes)) setNotes(p.notes);
+              if (Array.isArray(p?.conversations)) setConversations(p.conversations);
+            }
+          } catch {
+            /* private mode */
+          }
+        }
+      } catch {
+        /* offline */
+      } finally {
+        if (!cancelled) userDataHydrated.current = true;
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!userDataHydrated.current) return;
+    const blob = JSON.stringify({ notes, conversations });
+    try {
+      localStorage.setItem('answersdoc_userdata_v1', blob);
+    } catch {
+      /* private mode */
+    }
+    const t = setTimeout(() => {
+      fetch('/api/userdata', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: blob
+      }).catch(() => {});
+    }, 500);
+    return () => clearTimeout(t);
+  }, [notes, conversations]);
+
   const [selectedIds, setSelectedIds] = useState<Set<string>>(
     () => new Set()
   );
