@@ -5,13 +5,7 @@ import { Handle, Position, type NodeProps } from '@xyflow/react';
 import { cn } from '@/lib/utils';
 import { Bot, RotateCcw } from 'lucide-react';
 import { useBoard } from '@/lib/rag/board/store';
-import {
-  CHIP_W,
-  CHIP_H,
-  CHIP_TAB,
-  CHIP_CLIP,
-  type AgentData
-} from '@/lib/rag/board/types';
+import { CHIP_W, CHIP_H, CHIP_TAB, type AgentData } from '@/lib/rag/board/types';
 
 /**
  * An AGENT piece — a reusable ANSWERING PERSONA (a name + a robot icon + a
@@ -57,45 +51,40 @@ function AgentNodeInner({ id, data, selected, parentId }: NodeProps) {
     );
   }
 
+  // Free on the board → a ROBOT FACE, not a puzzle piece. A circular emerald
+  // avatar (the Bot face, or the chosen emoji) with the persona's name beneath,
+  // so an agent reads as a "who" answering, distinct from source/prompt chips.
   return (
     <div
-      style={{
-        width: CHIP_W,
-        height: CHIP_H + CHIP_TAB,
-        filter: selected
-          ? 'drop-shadow(0 0 0.5px hsl(var(--accent))) drop-shadow(0 2px 8px hsl(var(--accent)/0.45))'
-          : 'drop-shadow(0 1px 2px rgb(0 0 0/0.08)) drop-shadow(0 4px 10px rgb(0 0 0/0.07))'
-      }}
-      className="group relative"
+      style={{ width: CHIP_W, height: CHIP_H + CHIP_TAB }}
+      className="group relative flex flex-col items-center justify-center gap-2"
     >
-      {/* puzzle body — emerald so it reads as a persona, not a source */}
       <div
-        style={{ width: CHIP_W, height: CHIP_H + CHIP_TAB, clipPath: CHIP_CLIP }}
-        className="absolute inset-0 bg-emerald-50 dark:bg-[hsl(157_35%_13%)]"
-      />
-      <div
-        style={{ clipPath: CHIP_CLIP, width: CHIP_W, height: CHIP_H + CHIP_TAB }}
-        className="pointer-events-none absolute inset-0"
-      >
-        <div className="absolute bottom-0 left-0 top-0 w-[5px] bg-emerald-500" />
-        <div className="absolute inset-0 bg-emerald-500 opacity-[0.04]" />
-      </div>
-      <div
-        style={{ height: CHIP_H }}
-        className="relative flex items-center gap-2 px-2.5 pt-1"
+        style={{
+          filter: selected
+            ? 'drop-shadow(0 0 0.5px hsl(var(--accent))) drop-shadow(0 2px 10px hsl(var(--accent)/0.5))'
+            : 'drop-shadow(0 2px 6px rgb(16 185 129/0.30)) drop-shadow(0 1px 2px rgb(0 0 0/0.10))'
+        }}
+        className={cn(
+          'relative flex h-[72px] w-[72px] items-center justify-center rounded-full',
+          'bg-gradient-to-b from-emerald-400 to-emerald-600 text-white',
+          'ring-4 ring-emerald-100 dark:ring-emerald-500/20',
+          selected && 'ring-emerald-300 dark:ring-emerald-400/40'
+        )}
       >
         {icon ? (
-          <span className="shrink-0 text-[18px] leading-none">{icon}</span>
+          <span className="text-[30px] leading-none">{icon}</span>
         ) : (
-          <Bot className="h-4 w-4 shrink-0 text-emerald-500" />
+          <Bot className="h-9 w-9" strokeWidth={2.25} />
         )}
-        <div className="min-w-0 flex-1 leading-tight">
-          <div className="text-[9px] font-bold uppercase tracking-wide text-emerald-600/80">
-            Agent
-          </div>
-          <div className="line-clamp-2 text-[11.5px] font-semibold leading-[1.18] text-emerald-900/85 dark:text-emerald-100/85">
-            {name}
-          </div>
+      </div>
+
+      <div className="max-w-[150px] text-center leading-tight">
+        <div className="text-[8.5px] font-bold uppercase tracking-wide text-emerald-600/80">
+          Agent
+        </div>
+        <div className="line-clamp-1 text-[12px] font-semibold text-emerald-900/85 dark:text-emerald-100/90">
+          {name}
         </div>
       </div>
 
@@ -105,7 +94,7 @@ function AgentNodeInner({ id, data, selected, parentId }: NodeProps) {
           e.stopPropagation();
           removeBoardNode(id);
         }}
-        className="nodrag absolute -bottom-1.5 -left-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-card text-muted-foreground/60 opacity-0 shadow-[0_1px_4px_rgb(0_0_0/0.12)] transition-opacity hover:text-foreground group-hover:opacity-100"
+        className="nodrag absolute -top-0.5 left-1/2 flex h-5 w-5 -translate-x-[44px] items-center justify-center rounded-full bg-card text-muted-foreground/60 opacity-0 shadow-[0_1px_4px_rgb(0_0_0/0.12)] transition-opacity hover:text-foreground group-hover:opacity-100"
       >
         <RotateCcw className="h-2.5 w-2.5" />
       </button>
