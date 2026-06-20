@@ -57,35 +57,35 @@ function AgentNodeInner({ id, data, selected, parentId }: NodeProps) {
   return (
     <div
       style={{ width: CHIP_W, height: CHIP_H + CHIP_TAB }}
-      className="group relative flex flex-col items-center justify-center gap-2"
+      className="group relative flex flex-col items-center justify-center gap-1.5"
     >
+      {/* Transparent robot — no card/box, just the graphic floating on the
+          canvas (like a sticker PNG). The connector hugs its right edge. */}
       <div
+        className="relative"
         style={{
           filter: selected
-            ? 'drop-shadow(0 0 0.5px hsl(var(--accent))) drop-shadow(0 2px 10px hsl(var(--accent)/0.5))'
-            : 'drop-shadow(0 2px 6px rgb(16 185 129/0.30)) drop-shadow(0 1px 2px rgb(0 0 0/0.10))'
+            ? 'drop-shadow(0 0 1px hsl(var(--accent))) drop-shadow(0 3px 10px hsl(var(--accent)/0.55))'
+            : 'drop-shadow(0 3px 6px rgb(16 185 129/0.40)) drop-shadow(0 1px 2px rgb(0 0 0/0.18))'
         }}
-        className={cn(
-          'relative flex h-[72px] w-[72px] items-center justify-center rounded-2xl',
-          'bg-gradient-to-b from-emerald-400 to-emerald-600 text-white',
-          'ring-4 ring-emerald-100 dark:ring-emerald-500/20',
-          selected && 'ring-emerald-300 dark:ring-emerald-400/40'
-        )}
       >
         {icon ? (
-          <span className="text-[30px] leading-none">{icon}</span>
+          <span className="block select-none text-[60px] leading-none">{icon}</span>
         ) : (
-          <Bot className="h-9 w-9" strokeWidth={2.25} />
+          <Bot className="h-16 w-16 text-emerald-500" strokeWidth={1.75} />
         )}
+
+        {/* Connector sits right on the robot's edge, not far out on a card. */}
+        <Handle
+          type="source"
+          position={Position.Right}
+          style={{ right: -7, top: '50%' }}
+          className="!h-2.5 !w-2.5 !border-2 !border-card !bg-emerald-500"
+        />
       </div>
 
-      <div className="max-w-[150px] text-center leading-tight">
-        <div className="text-[8.5px] font-bold uppercase tracking-wide text-emerald-600/80">
-          Agent
-        </div>
-        <div className="line-clamp-1 text-[12px] font-semibold text-emerald-900/85 dark:text-emerald-100/90">
-          {name}
-        </div>
+      <div className="line-clamp-1 max-w-[150px] text-center text-[12px] font-semibold text-emerald-900/90 drop-shadow-[0_1px_1px_rgb(255_255_255/0.6)] dark:text-emerald-100/90 dark:drop-shadow-[0_1px_2px_rgb(0_0_0/0.6)]">
+        {name}
       </div>
 
       <button
@@ -94,16 +94,10 @@ function AgentNodeInner({ id, data, selected, parentId }: NodeProps) {
           e.stopPropagation();
           removeBoardNode(id);
         }}
-        className="nodrag absolute -top-0.5 left-1/2 flex h-5 w-5 -translate-x-[44px] items-center justify-center rounded-full bg-card text-muted-foreground/60 opacity-0 shadow-[0_1px_4px_rgb(0_0_0/0.12)] transition-opacity hover:text-foreground group-hover:opacity-100"
+        className="nodrag absolute right-1/2 top-1.5 flex h-5 w-5 translate-x-[34px] items-center justify-center rounded-full bg-card text-muted-foreground/60 opacity-0 shadow-[0_1px_4px_rgb(0_0_0/0.12)] transition-opacity hover:text-foreground group-hover:opacity-100"
       >
         <RotateCcw className="h-2.5 w-2.5" />
       </button>
-
-      <Handle
-        type="source"
-        position={Position.Right}
-        className="!h-2.5 !w-2.5 !border-2 !border-card !bg-emerald-500"
-      />
     </div>
   );
 }

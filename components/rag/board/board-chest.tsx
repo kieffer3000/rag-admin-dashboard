@@ -19,8 +19,25 @@ import {
   Bot,
   Plus
 } from 'lucide-react';
-import Link from 'next/link';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription
+} from '@/components/ui/dialog';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuTrigger
+} from '@/components/ui/dropdown-menu';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
+import { Label } from '@/components/ui/label';
 import type { RefObject } from 'react';
+
+const AGENT_EMOJIS = ['🤖', '🎓', '💡', '🧠', '⚖️', '🔍', '✨', '📊', '🎯', '🧑‍💻'];
 
 /** Drag payload the canvas reads in its onDrop handler. */
 export const CHEST_MIME = 'application/answersdoc-chest';
@@ -55,12 +72,29 @@ export function BoardChest({
   /** Canvas reads the dock's screen bounds to push dropped nodes off it. */
   dockRef?: RefObject<HTMLDivElement | null>;
 }) {
-  const { projectMedia, deleteMedia, agents } = useRag();
+  const { projectMedia, deleteMedia, agents, addAgent } = useRag();
   const { board, unstashBrain } = useBoard();
   const stashedBrains = board.stashedBrains ?? [];
   const [open, setOpen] = useState<string | null>(null);
   const [q, setQ] = useState('');
   const rootRef = useRef<HTMLDivElement>(null);
+
+  // "New agent" inline popup (create without leaving the board).
+  const [newAgentOpen, setNewAgentOpen] = useState(false);
+  const [naName, setNaName] = useState('');
+  const [naPrompt, setNaPrompt] = useState('');
+  const [naIcon, setNaIcon] = useState('🤖');
+  function openNewAgent() {
+    setNaName('');
+    setNaPrompt('');
+    setNaIcon('🤖');
+    setNewAgentOpen(true);
+  }
+  function saveNewAgent() {
+    if (!naName.trim() || !naPrompt.trim()) return;
+    addAgent({ name: naName.trim(), systemPrompt: naPrompt.trim(), icon: naIcon });
+    setNewAgentOpen(false);
+  }
   // A drag-and-drop ends with a trailing `click` on the source in some browsers.
   // This guards the click-to-place handler so a dragged agent isn't ALSO placed
   // at center (which spawned a duplicate second piece).
@@ -158,13 +192,15 @@ export function BoardChest({
             {/* Agents panel always offers a create row, even when empty. */}
             {open === 'agent' ? (
               <>
-                <Link
-                  href="/agents"
-                  onClick={() => setOpen(null)}
-                  className="mb-1 flex items-center gap-2.5 rounded-[10px] border border-dashed border-emerald-300/70 px-2 py-2 text-[12.5px] font-medium text-emerald-700 transition-colors hover:bg-emerald-50 dark:border-emerald-400/30 dark:text-emerald-300 dark:hover:bg-emerald-500/[0.08]"
+                <button
+                  onClick={() => {
+                    setOpen(null);
+                    openNewAgent();
+                  }}
+                  className="mb-1 flex w-full items-center gap-2.5 rounded-[10px] border border-dashed border-emerald-300/70 px-2 py-2 text-[12.5px] font-medium text-emerald-700 transition-colors hover:bg-emerald-50 dark:border-emerald-400/30 dark:text-emerald-300 dark:hover:bg-emerald-500/[0.08]"
                 >
                   <Plus className="h-4 w-4 shrink-0" /> New agent
-                </Link>
+                </button>
                 {(panelItems as typeof agents).length === 0 ? (
                   <p className="px-2 py-2 text-center text-[11.5px] text-muted-foreground/60">
                     No agents yet — create one to wire into a brain.
@@ -202,6 +238,7 @@ export function BoardChest({
                           icon: a.icon,
                           text: a.systemPrompt
                         });
+                        setOpen(null); // close the panel so the new piece shows
                       }}
                       className="group flex cursor-grab items-center gap-2.5 rounded-[10px] px-2 py-1.5 transition-colors hover:bg-[rgb(var(--hairline)/0.05)] active:cursor-grabbing"
                     >
@@ -427,6 +464,76 @@ export function BoardChest({
           <Trash2 className="h-[18px] w-[18px]" />
         </button>
       </div>
+
+      {/* New-agent popup — create a persona without leaving the board. */}
+      <Dialog open={newAgentOpen} onOpenChange={setNewAgentOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>New agent</DialogTitle>
+            <DialogDescription>
+              An agent is an answering persona — give it a name and a prompt, then
+              wire it into a brain to steer how it answers.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            <div className="flex gap-3">
+              <div className="space-y-1.5">
+                <Label>Icon</Label>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <button className="flex h-10 w-12 items-center justify-center rounded-xl border border-input bg-card text-xl">
+                      {naIcon}
+                    </button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent className="grid grid-cols-5 gap-1 p-2">
+                    {AGENT_EMOJIS.map((e) => (
+                      <button
+                        key={e}
+                        onClick={() => setNaIcon(e)}
+                        className="flex h-8 w-8 items-center justify-center rounded-lg text-lg hover:bg-[rgb(var(--hairline)/0.06)]"
+                      >
+                        {e}
+                      </button>
+                    ))}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
+              <div className="flex-1 space-y-1.5">
+                <Label>Name</Label>
+                <Input
+                  autoFocus
+                  value={naName}
+                  onChange={(e) => setNaName(e.target.value)}
+                  placeholder="e.g. Scholar"
+                />
+              </div>
+            </div>
+            <div className="space-y-1.5">
+              <Label>System prompt</Label>
+              <Textarea
+                value={naPrompt}
+                onChange={(e) => setNaPrompt(e.target.value)}
+                placeholder="Describe the persona — tone, stance, how it should answer…"
+                className="min-h-[140px]"
+              />
+            </div>
+          </div>
+
+          <div className="flex justify-end gap-2 pt-1">
+            <Button variant="ghost" onClick={() => setNewAgentOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              variant="accent"
+              disabled={!naName.trim() || !naPrompt.trim()}
+              onClick={saveNewAgent}
+            >
+              Create agent
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
