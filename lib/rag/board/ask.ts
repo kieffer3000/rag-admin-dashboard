@@ -385,20 +385,10 @@ export async function askBrain(
       )
     : [];
 
-  // ⚡ Fast = citation-free: skip the footnote machinery entirely, and strip any
-  // [n] markers the model still emitted so they don't render as raw brackets.
-  // No citations → the message shows no footnotes section.
-  if (speed === 'fast') {
-    return {
-      answer: (data.answer ?? '').replace(/\s*\[\d+\](?:\s*\[\d+\])*/g, ''),
-      citations: [],
-      live: true,
-      noMatch: Boolean(data.noMatch),
-      topScore: typeof data.topScore === 'number' ? data.topScore : null,
-      suggestedQuestions
-    };
-  }
-
+  // Citations/footnotes are built here from the retrieved chunks — FREE,
+  // app-side, no extra LLM — so both fast and detailed get the same clickable
+  // footnotes. (Fast's speed win lives in the Make route + skipped server
+  // stages, not in dropping citations.)
   const byId = new Map(items.map((m) => [m.id, m]));
 
   // Citations = the chunks the answer actually used. PREFERRED: the model's own
