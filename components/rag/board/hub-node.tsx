@@ -15,7 +15,7 @@ import {
 } from '@/lib/rag/board/types';
 import { MediaType } from '@/lib/rag/types';
 import { MediaIcon } from '@/components/rag/shared';
-import { Sparkles, Puzzle, X } from 'lucide-react';
+import { Sparkles, Puzzle, X, ChevronUp, ChevronDown } from 'lucide-react';
 import { useRag } from '@/lib/rag/store';
 import { useBoard } from '@/lib/rag/board/store';
 
@@ -59,20 +59,28 @@ function HubNodeInner({ id, data, selected }: NodeProps) {
   const meta =
     everything || cluster ? null : MEDIA_TYPES[d.mediaType as MediaType];
   const Icon = everything ? Sparkles : cluster ? Puzzle : meta!.icon;
-  const size = everything ? { width: 230, height: 86 } : hubSize(memberCount);
+  // Minimized box: collapse to just its header bar (members are hidden on the
+  // canvas) so a 100-item box stops eating the whole screen. Click to expand.
+  const collapsed = cluster && !!d.collapsed;
+  const size = everything
+    ? { width: 230, height: 86 }
+    : collapsed
+    ? { width: 320, height: HUB_HEADER_H + 6 }
+    : hubSize(memberCount);
   const cols = hubCols(memberCount);
   const indexedAll = projectMedia.filter((m) => m.status === 'indexed').length;
 
   // Open "parking spaces" in the grid — dashed ghost tiles that say "drop
   // pieces here" without words. Empty tray shows a full first row; otherwise
   // the trailing open column of the current last row.
-  const ghostSlots: number[] = everything
-    ? []
-    : memberCount === 0
-    ? Array.from({ length: cols }, (_, i) => i)
-    : memberCount % cols !== 0
-    ? [memberCount]
-    : [];
+  const ghostSlots: number[] =
+    everything || collapsed
+      ? []
+      : memberCount === 0
+      ? Array.from({ length: cols }, (_, i) => i)
+      : memberCount % cols !== 0
+      ? [memberCount]
+      : [];
 
   function commitName(next: string) {
     const name = next.trim();
@@ -98,7 +106,7 @@ function HubNodeInner({ id, data, selected }: NodeProps) {
       {/* the recessed WELL — a distinct cool-gray surface cut into the body,
           with the inset shadow ONLY here so the dish depth is unmistakable.
           Docked chip tiles (RF children) render on top of it. */}
-      {!everything && (
+      {!everything && !collapsed && (
         <div
           style={{ top: HUB_HEADER_H - 2 }}
           className={cn(
@@ -207,6 +215,22 @@ function HubNodeInner({ id, data, selected }: NodeProps) {
         <span className="shrink-0 rounded-full bg-black/[0.05] px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground dark:bg-white/[0.07]">
           {everything ? `${indexedAll} sources` : memberCount}
         </span>
+        {cluster && memberCount > 0 && (
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              updateBoardNodeData(id, { collapsed: !collapsed });
+            }}
+            title={collapsed ? 'Expand box' : 'Minimize box'}
+            className="nodrag flex h-5 w-5 shrink-0 items-center justify-center rounded-md text-muted-foreground/60 transition-colors hover:bg-black/[0.06] hover:text-foreground"
+          >
+            {collapsed ? (
+              <ChevronDown className="h-3.5 w-3.5" />
+            ) : (
+              <ChevronUp className="h-3.5 w-3.5" />
+            )}
+          </button>
+        )}
       </div>
 
       {everything ? (

@@ -199,7 +199,12 @@ function BoardCanvasInner() {
     useReactFlow();
 
   // Keep the measured-size map fresh so overlap checks know each node's REAL
-  // footprint (esp. a brain grown tall by its chat). Runs after every commit.
+  // footprint (esp. a brain grown tall by its chat). Only when the node SET
+  // changes — not every render (that churned hard with 100+ nodes and flickered).
+  const nodeSig = board.nodes
+    .map((n) => n.id)
+    .sort()
+    .join(',');
   useEffect(() => {
     const next = new Map<string, { width: number; height: number }>();
     for (const n of getNodes()) {
@@ -208,7 +213,8 @@ function BoardCanvasInner() {
       if (w && h) next.set(n.id, { width: w, height: h });
     }
     MEASURED = next;
-  });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [nodeSig]);
   const wrapRef = useRef<HTMLDivElement>(null);
 
   // On load/refresh (and project switch) the viewport doesn't follow the saved
@@ -1292,6 +1298,20 @@ function BoardCanvasInner() {
     [board.edges, busyBrains]
   );
 
+  // Minimized boxes hide their docked members (still saved/wired — just not
+  // drawn) so a 100-item box collapses to its header bar.
+  const liveNodes = useMemo(() => {
+    const collapsed = new Set(
+      board.nodes
+        .filter((n) => n.type === 'hub' && n.data.collapsed)
+        .map((n) => n.id)
+    );
+    if (!collapsed.size) return board.nodes;
+    return board.nodes.map((n) =>
+      n.parentId && collapsed.has(n.parentId) ? { ...n, hidden: true } : n
+    );
+  }, [board.nodes]);
+
   const placedIds = useMemo(
     () =>
       new Set(
@@ -1538,7 +1558,7 @@ function BoardCanvasInner() {
 
       {/* Save + garbage bin live in the bottom-middle dock (BoardChest). */}
       <ReactFlow
-        nodes={board.nodes as Node[]}
+        nodes={liveNodes as Node[]}
         edges={liveEdges}
         nodeTypes={nodeTypes}
         edgeTypes={edgeTypes}

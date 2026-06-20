@@ -148,11 +148,16 @@ export function RagProvider({ children }: { children: ReactNode }) {
           }
           if (Array.isArray(fromLs)) setAgents(fromLs);
           const initial = Array.isArray(fromLs) ? fromLs : MOCK_AGENTS;
-          fetch('/api/agents', {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ agents: initial })
-          }).catch(() => {});
+          // Only write when the GET genuinely succeeded (row absent) or we have
+          // local data — NEVER on a failed GET (that could wipe saved agents we
+          // just couldn't read).
+          if (j !== null || Array.isArray(fromLs)) {
+            fetch('/api/agents', {
+              method: 'PUT',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ agents: initial })
+            }).catch(() => {});
+          }
         }
       } catch {
         /* offline → keep seed */
