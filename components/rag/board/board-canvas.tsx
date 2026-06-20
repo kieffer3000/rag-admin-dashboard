@@ -1578,12 +1578,14 @@ function BoardCanvasInner() {
         }
         zoomOnDoubleClick={false}
         // Gesture contract: plain drag on a node MOVES it; plain drag on the
-        // canvas PANS; the rubber-band multi-select box appears ONLY while
-        // holding Shift. Dragging never auto-selects (no surprise group box).
+        // canvas PANS. The rubber-band multi-select box is DISABLED entirely —
+        // a missed Shift keyup (focus stolen by an alert/dialog) used to leave
+        // React Flow stuck in "selecting" mode so nothing could be moved. With
+        // no selection key, a plain drag always moves a node / pans the canvas.
         panOnDrag
         selectionOnDrag={false}
-        selectionKeyCode="Shift"
-        multiSelectionKeyCode="Shift"
+        selectionKeyCode={null}
+        multiSelectionKeyCode={null}
         selectNodesOnDrag={false}
         // Don't pan the canvas when a node is dragged to the edge — it makes
         // the other (wired) pieces appear to scroll away.

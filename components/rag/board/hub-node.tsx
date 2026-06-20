@@ -31,7 +31,7 @@ import { useBoard } from '@/lib/rag/board/store';
 function HubNodeInner({ id, data, selected }: NodeProps) {
   const d = data as HubData;
   const { projectMedia, media } = useRag();
-  const { updateBoardNodeData, removeBoardNode } = useBoard();
+  const { updateBoardNodeData, removeBoardNode, toggleHubCollapse } = useBoard();
   const [editing, setEditing] = useState(false);
 
   // Docked members (joined ids keep the selector's equality check cheap).
@@ -261,7 +261,7 @@ function HubNodeInner({ id, data, selected }: NodeProps) {
           <button
             onClick={(e) => {
               e.stopPropagation();
-              updateBoardNodeData(id, { collapsed: !collapsed });
+              toggleHubCollapse(id);
             }}
             title={collapsed ? 'Expand box' : 'Minimize box'}
             className="nodrag flex h-5 w-5 shrink-0 items-center justify-center rounded-md text-muted-foreground/60 transition-colors hover:bg-black/[0.06] hover:text-foreground"

@@ -152,6 +152,7 @@ interface BoardCtxState {
   resolveBrainScope: (brainId: string) => BrainScope;
   /** Patch a node's data (controlled flow — must go through the provider). */
   updateBoardNodeData: (nodeId: string, patch: Record<string, unknown>) => void;
+  toggleHubCollapse: (nodeId: string) => void;
   /** Set a node's width/height (used by the half-screen toggle). */
   resizeBoardNode: (
     nodeId: string,
@@ -434,6 +435,43 @@ export function BoardProvider({ children }: { children: ReactNode }) {
           n.id === nodeId ? { ...n, data: { ...n.data, ...patch } } : n
         )
       }));
+    },
+    [setBoard]
+  );
+
+  // Toggle a box minimized — and keep its CENTER fixed so a tall box doesn't
+  // appear to fly off-screen (its top-left would otherwise stay way up high).
+  const toggleHubCollapse = useCallback(
+    (nodeId: string) => {
+      setBoard((prev) => {
+        const hub = prev.nodes.find((n) => n.id === nodeId);
+        if (!hub) return prev;
+        const willCollapse = !(hub.data as { collapsed?: boolean }).collapsed;
+        const members = prev.nodes.filter(
+          (n) =>
+            n.parentId === nodeId &&
+            (n.type === 'chip' ||
+              n.type === 'textNode' ||
+              n.type === 'prompt' ||
+              n.type === 'agent')
+        ).length;
+        const expanded = hubSize(members);
+        const mini = { width: 300, height: 232 };
+        const from = willCollapse ? expanded : mini;
+        const to = willCollapse ? mini : expanded;
+        const position = {
+          x: hub.position.x + (from.width - to.width) / 2,
+          y: hub.position.y + (from.height - to.height) / 2
+        };
+        return {
+          ...prev,
+          nodes: prev.nodes.map((n) =>
+            n.id === nodeId
+              ? { ...n, position, data: { ...n.data, collapsed: willCollapse } }
+              : n
+          )
+        };
+      });
     },
     [setBoard]
   );
@@ -721,6 +759,7 @@ export function BoardProvider({ children }: { children: ReactNode }) {
     clearBrainMessages,
     resolveBrainScope,
     updateBoardNodeData,
+    toggleHubCollapse,
     resizeBoardNode,
     removeBoardEdge,
     removeBoardNode,
