@@ -140,6 +140,29 @@ function freePosition(
   return target; // board is dense — give up rather than loop forever
 }
 
+// Concurrency-limited queue for INDEXING fetches. A 50-link import would
+// otherwise fire 50 requests at once — exhausting the browser's per-host
+// connection cap and hammering the Make webhook + Pinecone. Chips still appear
+// instantly (optimistic); their indexing just runs a few at a time.
+const INDEX_CONCURRENCY = 4;
+const indexQueue: Array<() => Promise<unknown>> = [];
+let indexActive = 0;
+function pumpIndexQueue() {
+  while (indexActive < INDEX_CONCURRENCY && indexQueue.length) {
+    const task = indexQueue.shift()!;
+    indexActive++;
+    Promise.resolve(task()).finally(() => {
+      indexActive--;
+      pumpIndexQueue();
+    });
+  }
+}
+/** Run an indexing fetch when a slot frees up (max INDEX_CONCURRENCY at once). */
+function enqueueIndex(task: () => Promise<unknown>) {
+  indexQueue.push(task);
+  pumpIndexQueue();
+}
+
 /** Re-tile a hub's docked tiles (chips + context notes + prompts) into the
  *  2-col grid. */
 function retile(nodes: BoardNode[], hubId: string): BoardNode[] {
@@ -1554,24 +1577,26 @@ function BoardCanvasInner() {
           // YouTube: fetch the full caption transcript (deterministic) → index
           // via the text pipeline. Website scrapes the page; text embeds as-is.
           if (type === 'youtube') {
-            fetch('/api/index-youtube', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ source_id: id, name: cleanName, url: source })
-            })
-              .then(async (r) => {
-                const j = await r.json().catch(() => ({}));
-                if (!r.ok || !j.ok)
-                  throw new Error(j?.error ?? j?.note ?? 'index failed');
-                // Inherit the real YouTube title + thumbnail (oEmbed).
-                updateMedia(id, {
-                  status: 'indexed',
-                  chunks: j.chunks,
-                  ...(j.title ? { name: j.title } : {}),
-                  ...(j.thumbnail ? { thumbnail: j.thumbnail } : {})
-                });
+            enqueueIndex(() =>
+              fetch('/api/index-youtube', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ source_id: id, name: cleanName, url: source })
               })
-              .catch(() => updateMedia(id, { status: 'failed' }));
+                .then(async (r) => {
+                  const j = await r.json().catch(() => ({}));
+                  if (!r.ok || !j.ok)
+                    throw new Error(j?.error ?? j?.note ?? 'index failed');
+                  // Inherit the real YouTube title + thumbnail (oEmbed).
+                  updateMedia(id, {
+                    status: 'indexed',
+                    chunks: j.chunks,
+                    ...(j.title ? { name: j.title } : {}),
+                    ...(j.thumbnail ? { thumbnail: j.thumbnail } : {})
+                  });
+                })
+                .catch(() => updateMedia(id, { status: 'failed' }))
+            );
             return id;
           }
 
@@ -1579,42 +1604,46 @@ function BoardCanvasInner() {
           // Soft failures (paywalled / private / illegible / robots-blocked)
           // come back as { ok:false, note } → tell the user plainly why.
           if (type === 'website') {
-            fetch('/api/index-website', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ source_id: id, name: cleanName, url: source })
-            })
-              .then(async (r) => {
-                const j = await r.json().catch(() => ({}));
-                if (!r.ok || !j.ok) {
-                  if (j?.note) window.alert(`Couldn’t read that website.\n\n${j.note}`);
-                  throw new Error(j?.note ?? j?.error ?? 'index failed');
-                }
-                updateMedia(id, {
-                  status: 'indexed',
-                  chunks: j.chunks,
-                  ...(j.title ? { name: j.title } : {})
-                });
+            enqueueIndex(() =>
+              fetch('/api/index-website', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ source_id: id, name: cleanName, url: source })
               })
-              .catch(() => updateMedia(id, { status: 'failed' }));
+                .then(async (r) => {
+                  const j = await r.json().catch(() => ({}));
+                  if (!r.ok || !j.ok) {
+                    if (j?.note) window.alert(`Couldn’t read that website.\n\n${j.note}`);
+                    throw new Error(j?.note ?? j?.error ?? 'index failed');
+                  }
+                  updateMedia(id, {
+                    status: 'indexed',
+                    chunks: j.chunks,
+                    ...(j.title ? { name: j.title } : {})
+                  });
+                })
+                .catch(() => updateMedia(id, { status: 'failed' }))
+            );
             return id;
           }
 
-          fetch('/api/index', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              source_id: id,
-              name: cleanName,
-              type,
-              text: source ? `${cleanName}\n${source}` : cleanName
+          enqueueIndex(() =>
+            fetch('/api/index', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                source_id: id,
+                name: cleanName,
+                type,
+                text: source ? `${cleanName}\n${source}` : cleanName
+              })
             })
-          })
-            .then((r) => {
-              if (!r.ok) throw new Error();
-              updateMedia(id, { status: 'indexed' });
-            })
-            .catch(() => updateMedia(id, { status: 'failed' }));
+              .then((r) => {
+                if (!r.ok) throw new Error();
+                updateMedia(id, { status: 'indexed' });
+              })
+              .catch(() => updateMedia(id, { status: 'failed' }))
+          );
           return id;
         }}
         onNewImage={(name, file) => {
@@ -1640,18 +1669,20 @@ function BoardCanvasInner() {
           fd.append('file', file);
           fd.append('name', name);
           fd.append('source_id', id);
-          fetch('/api/index-image', { method: 'POST', body: fd })
-            .then(async (r) => {
-              const j = await r.json().catch(() => ({}));
-              if (!r.ok || !j.ok) throw new Error(j?.error ?? 'upload failed');
-              updateMedia(id, {
-                status: j.indexed ? 'indexed' : 'processing',
-                source: j.image_url, // hosted URL → thumbnail + visual search
-                content: j.caption || name
-              });
-              if (!j.indexed && j.note) console.warn('[image-index]', j.note);
-            })
-            .catch(() => updateMedia(id, { status: 'failed' }));
+          enqueueIndex(() =>
+            fetch('/api/index-image', { method: 'POST', body: fd })
+              .then(async (r) => {
+                const j = await r.json().catch(() => ({}));
+                if (!r.ok || !j.ok) throw new Error(j?.error ?? 'upload failed');
+                updateMedia(id, {
+                  status: j.indexed ? 'indexed' : 'processing',
+                  source: j.image_url, // hosted URL → thumbnail + visual search
+                  content: j.caption || name
+                });
+                if (!j.indexed && j.note) console.warn('[image-index]', j.note);
+              })
+              .catch(() => updateMedia(id, { status: 'failed' }))
+          );
           return id;
         }}
         onNewDocuments={(docs) => {
