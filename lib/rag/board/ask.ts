@@ -248,10 +248,12 @@ function footnoteAnswer(
     if (fn) fnByRawIndex.set(idx + 1, fn);
   });
 
+  // ALWAYS emit a clickable footnote ref (not just for HTML answers) — the
+  // marker should be tappable in the text, not just in the list below.
   const ref = (n: number) =>
-    html ? `<sup class="fn-ref" data-fn="${n}">${n}</sup>` : `[${n}]`;
+    `<sup class="fn-ref" data-fn="${n}">${n}</sup>`;
 
-  return answer.replace(/\[([^\]\n]{1,60})\]/g, (full, inner: string) => {
+  const withRefs = answer.replace(/\[([^\]\n]{1,60})\]/g, (full, inner: string) => {
     const text = inner.trim();
     // numeric chunk index/indices: [4] or [4, 26]
     if (/^[\d][\d,\s]*$/.test(text)) {
@@ -268,6 +270,16 @@ function footnoteAnswer(
     const fn = fnByName.get(text);
     return fn ? ref(fn) : full; // unknown marker → leave as-is
   });
+
+  // HTML answers already route to the HTML renderer. A PLAIN answer that now
+  // carries <sup> refs must too — wrap it as minimal HTML (preserving line
+  // breaks) so the refs render as clickable superscripts, not literal text.
+  if (html || !withRefs.includes('<sup class="fn-ref"')) return withRefs;
+  return (
+    '<p>' +
+    withRefs.replace(/\n{2,}/g, '</p><p>').replace(/\n/g, '<br>') +
+    '</p>'
+  );
 }
 
 // Common words that carry no distinguishing signal — ignored when matching the
