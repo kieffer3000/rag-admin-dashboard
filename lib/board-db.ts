@@ -25,3 +25,20 @@ export async function ensureBoardSchema() {
   `;
   ensured = true;
 }
+
+let agentsEnsured = false;
+
+/** Idempotent schema bootstrap for agents — one JSONB array per scope (Clerk
+ *  org = the client, else the user). Agents are account-global, not per-project. */
+export async function ensureAgentsSchema() {
+  if (!sql || agentsEnsured) return;
+  await sql`
+    CREATE TABLE IF NOT EXISTS agents_state (
+      scope text PRIMARY KEY,
+      user_id text,
+      data jsonb NOT NULL,
+      updated_at timestamptz NOT NULL DEFAULT now()
+    )
+  `;
+  agentsEnsured = true;
+}

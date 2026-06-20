@@ -6,6 +6,8 @@ import {
   useState,
   useCallback,
   useMemo,
+  useEffect,
+  useRef,
   ReactNode
 } from 'react';
 import {
@@ -109,6 +111,67 @@ export function RagProvider({ children }: { children: ReactNode }) {
   // Start empty — only real, indexed sources appear (no sample/mock files).
   const [media, setMedia] = useState<MediaItem[]>([]);
   const [agents, setAgents] = useState<Agent[]>(MOCK_AGENTS);
+  // Agents persist to Neon (account-global) with a localStorage cache as the
+  // same-device safety net. `agentsHydrated` gates the save effect so the seed
+  // never clobbers saved agents before the load resolves.
+  const agentsHydrated = useRef(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const r = await fetch('/api/agents');
+        const j = r.ok ? await r.json() : null;
+        if (cancelled) return;
+        if (j && Array.isArray(j.agents)) {
+          setAgents(j.agents); // DB is authoritative
+        } else {
+          // No saved row (or no DB) → restore from localStorage, else keep the
+          // seed; then create the row so future loads are authoritative.
+          let fromLs: Agent[] | null = null;
+          try {
+            const ls = localStorage.getItem('answersdoc_agents_v1');
+            if (ls) fromLs = JSON.parse(ls);
+          } catch {
+            /* private mode / quota */
+          }
+          if (Array.isArray(fromLs)) setAgents(fromLs);
+          const initial = Array.isArray(fromLs) ? fromLs : MOCK_AGENTS;
+          fetch('/api/agents', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ agents: initial })
+          }).catch(() => {});
+        }
+      } catch {
+        /* offline → keep seed */
+      } finally {
+        if (!cancelled) agentsHydrated.current = true;
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // Persist on every change (localStorage immediately, DB debounced), but only
+  // after hydration so the initial seed render can't overwrite saved agents.
+  useEffect(() => {
+    if (!agentsHydrated.current) return;
+    try {
+      localStorage.setItem('answersdoc_agents_v1', JSON.stringify(agents));
+    } catch {
+      /* private mode / quota */
+    }
+    const t = setTimeout(() => {
+      fetch('/api/agents', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ agents })
+      }).catch(() => {});
+    }, 400);
+    return () => clearTimeout(t);
+  }, [agents]);
   const [projects, setProjects] = useState<Project[]>(MOCK_PROJECTS);
   const [activeProjectId, setActiveProjectId] = useState<string>(MOCK_PROJECTS[0].id);
   const [conversations, setConversations] = useState<Conversation[]>([]);
