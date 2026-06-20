@@ -124,7 +124,18 @@ export function RagProvider({ children }: { children: ReactNode }) {
         const j = r.ok ? await r.json() : null;
         if (cancelled) return;
         if (j && Array.isArray(j.agents)) {
-          setAgents(j.agents); // DB is authoritative
+          // Drop any stale built-in seeds (Scholar/Explainer) a prior version
+          // persisted — we no longer seed built-ins, and user-created agents
+          // are never `builtIn`. Re-persist if we cleaned anything.
+          const cleaned = (j.agents as Agent[]).filter((a) => !a.builtIn);
+          setAgents(cleaned); // DB is authoritative
+          if (cleaned.length !== j.agents.length) {
+            fetch('/api/agents', {
+              method: 'PUT',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ agents: cleaned })
+            }).catch(() => {});
+          }
         } else {
           // No saved row (or no DB) → restore from localStorage, else keep the
           // seed; then create the row so future loads are authoritative.
