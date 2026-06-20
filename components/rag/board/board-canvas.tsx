@@ -586,20 +586,27 @@ function BoardCanvasInner() {
       const s = dragSession.current;
       dragSession.current = null;
 
-      // NO-OVERLAP RULE: nothing ever rests on top of anything else — not the
-      // robot, not a puzzle piece, not the brain. After the drop fully settles
-      // (dock logic runs on tick 0), if this free piece overlaps any other free
-      // node, slide it to the nearest clear spot (measured sizes, so the big
-      // brain is fully respected). Docked-in-box pieces are exempt.
+      // NO-OVERLAP RULE (with ONE exception): a piece never rests on top of the
+      // brain, the robot, or a DIFFERENT kind of piece. Same-type puzzle pieces
+      // ARE allowed to overlap — that's the stack/weld (shadow → snap). After the
+      // drop settles (dock logic runs on tick 0), slide this free piece to the
+      // nearest clear spot if it overlaps anything it shouldn't.
       setTimeout(() => {
         setBoard((prev) => {
           const self = prev.nodes.find((n) => n.id === node.id);
           if (!self || self.parentId) return prev;
-          const others = prev.nodes.filter(
-            (n) => n.id !== self.id && !n.parentId
+          const typeOf = (n: BoardNode) =>
+            media.find((m) => m.id === n.data?.mediaId)?.type;
+          const selfChipType = self.type === 'chip' ? typeOf(self) : null;
+          // Obstacles = every free node EXCEPT a same-type chip (those weld).
+          const obstacles = prev.nodes.filter(
+            (n) =>
+              n.id !== self.id &&
+              !n.parentId &&
+              !(selfChipType && n.type === 'chip' && typeOf(n) === selfChipType)
           );
           const { w, h } = nodeRect(self);
-          const pos = freePosition(others, self.position, w, h);
+          const pos = freePosition(obstacles, self.position, w, h);
           if (pos.x === self.position.x && pos.y === self.position.y) return prev;
           return {
             ...prev,
@@ -1187,6 +1194,8 @@ function BoardCanvasInner() {
     // depends on its chat) — otherwise we'd de-overlap against stale sizes.
     const t = setTimeout(() => {
       setBoard((prev) => {
+        const typeOf = (n: BoardNode) =>
+          media.find((m) => m.id === n.data?.mediaId)?.type;
         const fixed = prev.nodes.filter(
           (n) => n.parentId || n.type === 'brain' || n.type === 'hub'
         );
@@ -1196,8 +1205,13 @@ function BoardCanvasInner() {
         const accepted = [...fixed];
         const moved = new Map<string, { x: number; y: number }>();
         for (const n of movable) {
+          const chipType = n.type === 'chip' ? typeOf(n) : null;
+          // Don't push a piece off a same-type chip — those are allowed to stack.
+          const obstacles = accepted.filter(
+            (a) => !(chipType && a.type === 'chip' && typeOf(a) === chipType)
+          );
           const { w, h } = nodeRect(n);
-          const pos = freePosition(accepted, n.position, w, h);
+          const pos = freePosition(obstacles, n.position, w, h);
           if (pos.x !== n.position.x || pos.y !== n.position.y) moved.set(n.id, pos);
           accepted.push(pos === n.position ? n : { ...n, position: pos });
         }
