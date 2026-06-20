@@ -1083,6 +1083,84 @@ function BoardCanvasInner() {
     [setBoard]
   );
 
+  /** Re-run indexing for an EXISTING source (after a failure) — reuses its id,
+   *  so retry never creates a duplicate. Routed through the throttle queue. */
+  const retrySource = useCallback(
+    (type: MediaType, id: string, url: string) => {
+      updateMedia(id, { status: 'processing' });
+      const cleanName = url
+        ? url.replace(/^https?:\/\//, '').replace(/\/.*$/, '')
+        : 'Source';
+      if (type === 'youtube') {
+        enqueueIndex(() =>
+          fetch('/api/index-youtube', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ source_id: id, name: cleanName, url })
+          })
+            .then(async (r) => {
+              const j = await r.json().catch(() => ({}));
+              if (!r.ok || !j.ok) throw new Error(j?.error ?? j?.note ?? 'failed');
+              updateMedia(id, {
+                status: 'indexed',
+                chunks: j.chunks,
+                ...(j.title ? { name: j.title } : {}),
+                ...(j.thumbnail ? { thumbnail: j.thumbnail } : {})
+              });
+            })
+            .catch(() => updateMedia(id, { status: 'failed' }))
+        );
+      } else if (type === 'website') {
+        enqueueIndex(() =>
+          fetch('/api/index-website', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ source_id: id, name: cleanName, url })
+          })
+            .then(async (r) => {
+              const j = await r.json().catch(() => ({}));
+              if (!r.ok || !j.ok) throw new Error(j?.note ?? j?.error ?? 'failed');
+              updateMedia(id, {
+                status: 'indexed',
+                chunks: j.chunks,
+                ...(j.title ? { name: j.title } : {})
+              });
+            })
+            .catch(() => updateMedia(id, { status: 'failed' }))
+        );
+      } else {
+        enqueueIndex(() =>
+          fetch('/api/index', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              source_id: id,
+              name: cleanName,
+              type,
+              text: url ? `${cleanName}\n${url}` : cleanName
+            })
+          })
+            .then((r) => {
+              if (!r.ok) throw new Error();
+              updateMedia(id, { status: 'indexed' });
+            })
+            .catch(() => updateMedia(id, { status: 'failed' }))
+        );
+      }
+    },
+    [updateMedia]
+  );
+
+  /** Delete a source: pull its chip(s) off the board AND remove the media + its
+   *  Pinecone vectors. */
+  const deleteSource = useCallback(
+    (id: string) => {
+      recallMedia(id);
+      deleteMedia(id);
+    },
+    [recallMedia, deleteMedia]
+  );
+
   // Delete one node by id. A source chip → delete the source + its Pinecone
   // vectors (confirmed); anything else → remove the node from the board.
   const deleteNodeById = useCallback(
@@ -1742,6 +1820,8 @@ function BoardCanvasInner() {
           void Promise.all(runners);
           return jobs.map((j) => j.id);
         }}
+        onRetrySource={retrySource}
+        onDeleteSource={deleteSource}
         onCollectIntoBox={(boxName, mediaIds) => {
           // Gather freshly-imported pieces INTO a new named box (cluster) instead
           // of scattering them on the canvas. The free chips just placed for these

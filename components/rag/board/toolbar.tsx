@@ -25,7 +25,9 @@ import {
   Volume2,
   VolumeX,
   Check,
-  AlertCircle
+  AlertCircle,
+  RotateCcw,
+  Trash2
 } from 'lucide-react';
 import {
   Dialog,
@@ -60,6 +62,10 @@ export interface BoardToolbarProps {
   onNewDocuments: (docs: { name: string; file: File }[]) => string[];
   /** Gather freshly-imported media into ONE new named box instead of free chips. */
   onCollectIntoBox: (boxName: string, mediaIds: string[]) => void;
+  /** Re-run indexing for a source that failed (reuses its id — no duplicate). */
+  onRetrySource: (type: MediaType, id: string, url: string) => void;
+  /** Delete a source (chip + media + Pinecone vectors). */
+  onDeleteSource: (id: string) => void;
   onAddBrain: () => void;
   onAddText: () => void;
   onAddAnnotation: () => void;
@@ -518,18 +524,52 @@ export function BoardToolbar(p: BoardToolbarProps) {
                       <span className="min-w-0 flex-1 truncate text-[12.5px] font-medium">
                         {m?.name?.trim() || url}
                       </span>
-                      <span className="shrink-0 text-[10.5px] text-muted-foreground/70">
-                        {st === 'indexed'
-                          ? 'Indexed'
-                          : st === 'failed'
-                            ? 'Failed'
-                            : 'Indexing…'}
-                      </span>
+                      {st === 'failed' ? (
+                        <div className="flex shrink-0 items-center gap-1">
+                          <button
+                            onClick={() => p.onRetrySource(sourceType, id, url)}
+                            title="Retry — index this one again"
+                            className="flex items-center gap-1 rounded-md bg-accent/10 px-2 py-1 text-[11px] font-semibold text-accent transition-colors hover:bg-accent/20"
+                          >
+                            <RotateCcw className="h-3 w-3" /> Retry
+                          </button>
+                          <button
+                            onClick={() => p.onDeleteSource(id)}
+                            title="Delete this source"
+                            className="flex h-6 w-6 items-center justify-center rounded-md text-muted-foreground/60 transition-colors hover:bg-red-500/10 hover:text-red-500"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
+                      ) : (
+                        <span className="shrink-0 text-[10.5px] text-muted-foreground/70">
+                          {st === 'indexed' ? 'Indexed' : 'Indexing…'}
+                        </span>
+                      )}
                     </div>
                   );
                 })}
               </div>
-              <div className="flex justify-end gap-2 pt-1">
+              <div className="flex items-center justify-end gap-2 pt-1">
+                {(() => {
+                  const failed = importing.filter(
+                    (it) => media.find((x) => x.id === it.id)?.status === 'failed'
+                  );
+                  return failed.length > 0 ? (
+                    <Button
+                      variant="outline"
+                      className="mr-auto gap-1.5"
+                      onClick={() =>
+                        failed.forEach((it) =>
+                          p.onRetrySource(sourceType, it.id, it.url)
+                        )
+                      }
+                    >
+                      <RotateCcw className="h-3.5 w-3.5" />
+                      Retry {failed.length} failed
+                    </Button>
+                  ) : null;
+                })()}
                 <Button variant="ghost" onClick={() => setImporting([])}>
                   Import more
                 </Button>
