@@ -1247,6 +1247,17 @@ function BoardCanvasInner() {
           })
         }
         onNewSource={(type, name, source) => {
+          // YouTube: show the thumbnail immediately (derived from the video id —
+          // no network wait); the real title arrives with the index response.
+          const ytId =
+            type === 'youtube' && source
+              ? (source.match(
+                  /(?:v=|youtu\.be\/|\/shorts\/|\/embed\/|\/live\/)([\w-]{11})/
+                ) ?? [])[1]
+              : undefined;
+          const thumb = ytId
+            ? `https://i.ytimg.com/vi/${ytId}/hqdefault.jpg`
+            : undefined;
           // Optimistic chip now; real status when indexing answers.
           const id = addMedia(
             {
@@ -1255,7 +1266,8 @@ function BoardCanvasInner() {
               description: '',
               date: new Date().toISOString().slice(0, 10),
               content: source || name,
-              source: source || undefined
+              source: source || undefined,
+              thumbnail: thumb
             },
             { simulate: false }
           );
@@ -1278,7 +1290,13 @@ function BoardCanvasInner() {
                 const j = await r.json().catch(() => ({}));
                 if (!r.ok || !j.ok)
                   throw new Error(j?.error ?? j?.note ?? 'index failed');
-                updateMedia(id, { status: 'indexed', chunks: j.chunks });
+                // Inherit the real YouTube title + thumbnail (oEmbed).
+                updateMedia(id, {
+                  status: 'indexed',
+                  chunks: j.chunks,
+                  ...(j.title ? { name: j.title } : {}),
+                  ...(j.thumbnail ? { thumbnail: j.thumbnail } : {})
+                });
               })
               .catch(() => updateMedia(id, { status: 'failed' }));
             return;

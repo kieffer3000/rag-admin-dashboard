@@ -24,6 +24,9 @@ export interface MediaItem {
   content: string;
   /** Type-specific source reference (URL for youtube/website, filename for files). */
   source?: string;
+  /** Preview image for the card chip — YouTube thumbnail, or a hosted image URL
+   *  for image sources. Absent for text/docs (they show a title only). */
+  thumbnail?: string;
   /** Approximate size label, e.g. "2.4 MB" or "312 pages". */
   sizeLabel?: string;
   /** User's freeform note on this source (schema v2 `user_note`). */

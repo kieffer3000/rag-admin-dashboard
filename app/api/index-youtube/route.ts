@@ -78,6 +78,28 @@ function parseVideoId(input: string): string | null {
   return null;
 }
 
+// oEmbed gives the real video title + thumbnail with NO API key. Fetched
+// server-side (the endpoint doesn't send CORS headers, so a browser fetch
+// would be blocked). Best-effort — failure just leaves the caller's name.
+async function fetchOEmbed(
+  url: string
+): Promise<{ title?: string; thumbnail?: string }> {
+  try {
+    const r = await fetch(
+      `https://www.youtube.com/oembed?url=${encodeURIComponent(url)}&format=json`
+    );
+    if (!r.ok) return {};
+    const j = await r.json();
+    return {
+      title: typeof j.title === 'string' ? j.title : undefined,
+      thumbnail:
+        typeof j.thumbnail_url === 'string' ? j.thumbnail_url : undefined
+    };
+  } catch {
+    return {};
+  }
+}
+
 function formatTs(totalSec: number): string {
   const s = Math.floor(totalSec % 60);
   const m = Math.floor((totalSec / 60) % 60);
@@ -131,6 +153,13 @@ export async function POST(req: Request) {
       { status: 400 }
     );
   }
+
+  // Auto-title + thumbnail from oEmbed (no API key). Title becomes the chip
+  // name; thumbnail falls back to the deterministic ytimg URL.
+  const oembed = await fetchOEmbed(url);
+  const title = oembed.title || name;
+  const thumbnail =
+    oembed.thumbnail || `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`;
 
   // 1) Try captions (verbatim, free, full-length). Prefer English.
   let transcript = '';
@@ -198,16 +227,20 @@ export async function POST(req: Request) {
       ok: false,
       indexed: false,
       source_url: url,
+      title,
+      thumbnail,
       note: 'No transcript could be produced for this video.'
     });
   }
 
   try {
-    const r = await indexText({ sourceId, name, type: 'youtube', text: transcript });
+    const r = await indexText({ sourceId, name: title, type: 'youtube', text: transcript });
     return Response.json({
       ok: true,
       indexed: true,
       source_url: url,
+      title,
+      thumbnail,
       method,
       chunks: r.chunks,
       chars: transcript.length
