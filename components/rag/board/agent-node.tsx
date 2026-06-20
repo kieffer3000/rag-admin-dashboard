@@ -70,9 +70,9 @@ function AgentNodeInner({ id, data, selected, parentId }: NodeProps) {
         }}
       >
         {icon ? (
-          <span className="block select-none text-[60px] leading-none">{icon}</span>
+          <span className="block select-none text-[120px] leading-none">{icon}</span>
         ) : (
-          <Bot className="h-16 w-16 text-emerald-500" strokeWidth={1.75} />
+          <Bot className="h-32 w-32 text-emerald-500" strokeWidth={1.6} />
         )}
 
         {/* Connector sits right on the robot's edge, not far out on a card. */}

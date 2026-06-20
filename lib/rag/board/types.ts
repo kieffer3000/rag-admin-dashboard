@@ -83,8 +83,8 @@ export const CHIP_W = 216;
  *  box keeps the source connector beside the robot AND leaves the edge's cut
  *  scissors outside the node, so it stays hoverable/clickable like every other
  *  piece (a wide transparent box would sit over the scissors and swallow it). */
-export const AGENT_W = 84;
-export const AGENT_H = 96;
+export const AGENT_W = 132;
+export const AGENT_H = 156;
 // Tall enough for a card: a ~16:9 thumbnail/preview banner on top + a two-line
 // title bar below. Text/doc pieces reuse the banner area for a big type glyph,
 // so every piece is the same size. The clip-path below derives from this.
