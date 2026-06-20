@@ -8,6 +8,7 @@ import { askBrain } from '@/lib/rag/board/ask';
 import { generateMockAnswer, streamText } from '@/lib/rag/mock-answer';
 import { startHum, stopHum, playChime } from '@/lib/rag/board/sound';
 import { BrainMessage, nextMsgId } from '@/components/rag/board/brain-node';
+import { ChatMessage } from '@/lib/rag/types';
 import { ArrowUp, Loader2, Minimize2, Brain } from 'lucide-react';
 
 /**
@@ -31,7 +32,9 @@ export function ResearchOverlay({
     resolveBrainScope,
     addBrainMessage,
     updateBrainMessage,
-    setBrainBusy
+    setBrainBusy,
+    setBoard,
+    nextBoardId
   } = useBoard();
   const { openViewer, activeProjectId } = useRag();
 
@@ -49,7 +52,53 @@ export function ResearchOverlay({
 
   const [question, setQuestion] = useState('');
   const [busy, setBusy] = useState(false);
+  const [voicingId, setVoicingId] = useState<string | null>(null);
   const taRef = useRef<HTMLTextAreaElement>(null);
+
+  // Per-message actions — the same ones the brain card offers, so research mode
+  // isn't a downgrade. Voiceover: ephemeral synth + play (regenerable). Edit:
+  // drop the answer into an editable text piece on the canvas (there on exit).
+  async function handleVoiceover(msg: ChatMessage) {
+    if (!msg.content || voicingId) return;
+    setVoicingId(msg.id);
+    try {
+      const res = await fetch('/api/voiceover', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: msg.content })
+      });
+      const j = await res.json();
+      if (!res.ok) throw new Error(j?.error ?? 'voiceover failed');
+      const playUrl: string = j.url ?? j.dataUrl;
+      if (playUrl) await new Audio(playUrl).play();
+    } catch {
+      /* clicking 🔈 again re-synthesizes */
+    } finally {
+      setVoicingId(null);
+    }
+  }
+
+  function handleEditInText(msg: ChatMessage) {
+    if (!msg.content) return;
+    const self = board.nodes.find((n) => n.id === brainId);
+    const pos = self
+      ? { x: self.position.x + (self.width ?? 380) + 40, y: self.position.y + 90 }
+      : { x: 0, y: 0 };
+    setBoard((prev) => ({
+      ...prev,
+      nodes: [
+        ...prev.nodes,
+        {
+          id: nextBoardId('text'),
+          type: 'textNode',
+          position: pos,
+          width: 300,
+          height: 200,
+          data: { text: msg.content }
+        }
+      ]
+    }));
+  }
   const scrollRef = useRef<HTMLDivElement>(null);
   const endRef = useRef<HTMLDivElement>(null);
 
@@ -219,6 +268,9 @@ export function ResearchOverlay({
                 onCitation={openViewer}
                 onCiteHover={() => {}}
                 onAsk={runQuery}
+                onVoiceover={handleVoiceover}
+                voicing={voicingId === m.id}
+                onEdit={handleEditInText}
                 modelLabel={m.role === 'assistant' ? modelId : undefined}
               />
             ))
