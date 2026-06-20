@@ -10,7 +10,6 @@ import {
 } from 'react';
 import {
   MediaItem,
-  Prompt,
   Agent,
   ChatMessage,
   QueryScope,
@@ -21,7 +20,6 @@ import {
   Citation
 } from './types';
 import {
-  MOCK_PROMPTS,
   MOCK_AGENTS,
   MOCK_PROJECTS,
   MOCK_NOTES
@@ -30,7 +28,6 @@ import { DEFAULT_MODEL_ID } from './models';
 
 interface RagState {
   media: MediaItem[];
-  prompts: Prompt[];
   agents: Agent[];
   projects: Project[];
   activeProjectId: string;
@@ -39,7 +36,6 @@ interface RagState {
   notes: Note[];
   selectedIds: Set<string>;
   scope: QueryScope;
-  activePromptId: string | null;
   modelId: string;
   /** Citation currently open in the source viewer sheet. */
   viewerCitation: Citation | null;
@@ -85,12 +81,6 @@ interface RagState {
   addNote: (content: string, citations?: Citation[]) => void;
   deleteNote: (id: string) => void;
 
-  // prompts
-  setActivePrompt: (id: string | null) => void;
-  addPrompt: (p: Omit<Prompt, 'id'>) => void;
-  updatePrompt: (id: string, patch: Partial<Prompt>) => void;
-  deletePrompt: (id: string) => void;
-
   // agents
   addAgent: (a: Omit<Agent, 'id'>) => void;
   updateAgent: (id: string, patch: Partial<Agent>) => void;
@@ -118,7 +108,6 @@ const now = () => new Date().toISOString();
 export function RagProvider({ children }: { children: ReactNode }) {
   // Start empty — only real, indexed sources appear (no sample/mock files).
   const [media, setMedia] = useState<MediaItem[]>([]);
-  const [prompts, setPrompts] = useState<Prompt[]>(MOCK_PROMPTS);
   const [agents, setAgents] = useState<Agent[]>(MOCK_AGENTS);
   const [projects, setProjects] = useState<Project[]>(MOCK_PROJECTS);
   const [activeProjectId, setActiveProjectId] = useState<string>(MOCK_PROJECTS[0].id);
@@ -129,7 +118,6 @@ export function RagProvider({ children }: { children: ReactNode }) {
     () => new Set()
   );
   const [scope, setScope] = useState<QueryScope>('selected');
-  const [activePromptId, setActivePromptId] = useState<string | null>('p1');
   const [modelId, setModelId] = useState<string>(DEFAULT_MODEL_ID);
   const [viewerCitation, setViewerCitation] = useState<Citation | null>(null);
   const [viewerHighlight, setViewerHighlight] = useState<string | null>(null);
@@ -423,20 +411,6 @@ export function RagProvider({ children }: { children: ReactNode }) {
     setNotes((prev) => prev.filter((n) => n.id !== id));
   }, []);
 
-  // ---- prompts ----
-  const addPrompt = useCallback((p: Omit<Prompt, 'id'>) => {
-    setPrompts((prev) => [{ ...p, id: nextId('p') }, ...prev]);
-  }, []);
-
-  const updatePrompt = useCallback((id: string, patch: Partial<Prompt>) => {
-    setPrompts((prev) => prev.map((p) => (p.id === id ? { ...p, ...patch } : p)));
-  }, []);
-
-  const deletePrompt = useCallback((id: string) => {
-    setPrompts((prev) => prev.filter((p) => p.id !== id));
-    setActivePromptId((cur) => (cur === id ? null : cur));
-  }, []);
-
   // ---- agents ----
   const addAgent = useCallback((a: Omit<Agent, 'id'>) => {
     setAgents((prev) => [{ ...a, id: nextId('a') }, ...prev]);
@@ -497,7 +471,6 @@ export function RagProvider({ children }: { children: ReactNode }) {
 
   const value: RagState = {
     media,
-    prompts,
     agents,
     projects,
     activeProjectId,
@@ -506,7 +479,6 @@ export function RagProvider({ children }: { children: ReactNode }) {
     notes,
     selectedIds,
     scope,
-    activePromptId,
     modelId,
     viewerCitation,
     viewerHighlight,
@@ -534,10 +506,6 @@ export function RagProvider({ children }: { children: ReactNode }) {
     addMessage,
     addNote,
     deleteNote,
-    setActivePrompt: setActivePromptId,
-    addPrompt,
-    updatePrompt,
-    deletePrompt,
     addAgent,
     updateAgent,
     deleteAgent,

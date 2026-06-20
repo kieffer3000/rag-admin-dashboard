@@ -1551,16 +1551,6 @@ function BoardCanvasInner() {
             data: { text: '' }
           })
         }
-        onAddPrompt={(text) =>
-          pushNode({
-            id: nextBoardId('prompt'),
-            type: 'prompt',
-            position: centerPos(),
-            width: CHIP_W,
-            height: CHIP_H + CHIP_TAB,
-            data: { text }
-          })
-        }
         onAddAnnotation={() =>
           pushNode({
             id: nextBoardId('ann'),
@@ -1655,16 +1645,6 @@ function BoardCanvasInner() {
             data: { mediaId }
           });
         }}
-        onPlacePrompt={(text) =>
-          pushNode({
-            id: nextBoardId('prompt'),
-            type: 'prompt',
-            position: centerPos(),
-            width: CHIP_W,
-            height: CHIP_H + CHIP_TAB,
-            data: { text }
-          })
-        }
         onPlaceAgent={(agent) =>
           pushNode({
             id: nextBoardId('agent'),

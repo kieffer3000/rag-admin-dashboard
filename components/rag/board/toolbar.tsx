@@ -24,7 +24,6 @@ import {
   Wand2,
   Volume2,
   VolumeX,
-  MessageSquareQuote,
   Check,
   AlertCircle
 } from 'lucide-react';
@@ -66,7 +65,6 @@ export interface BoardToolbarProps {
   onAddEverything: () => void;
   onAddMindmap: () => void;
   /** Drop a prompt piece (instruction that guides how a brain answers). */
-  onAddPrompt: (text: string) => void;
   onNewRecording: (name: string, transcript: string) => void;
   /** Auto-tidy: arrange the board into tidy type zones. */
   onCleanDesk: () => void;
@@ -80,16 +78,6 @@ const URL_TYPES: MediaType[] = ['youtube', 'website'];
 
 /** Common prompt-piece presets — instructions that guide how a brain answers.
  *  Wire several into a brain (or box them) and they all apply. */
-const PROMPT_PRESETS = [
-  'Answer concisely, in bullet points',
-  'Respond in a clear table',
-  'Be skeptical — surface contradictions and caveats',
-  'Explain simply, as if to a beginner',
-  'Use a professional, executive tone',
-  'Give step-by-step reasoning',
-  'Always quote the exact source text'
-];
-
 /**
  * Floating left rail — collapsible. Media buttons ingest a NEW source
  * (→ RAG database) and drop its chip; Record captures a voice memo,
@@ -384,39 +372,6 @@ export function BoardToolbar(p: BoardToolbarProps) {
             icon={<Type className="h-[17px] w-[17px]" />}
             onClick={p.onAddText}
           />
-          <Popover>
-            <PopoverTrigger asChild>
-              <span>
-                <RailButton
-                  label="Prompt piece"
-                  desc="A reusable instruction that guides HOW a brain answers (tone, format, stance). Wire several into a brain — or box them — and they all apply."
-                  icon={<MessageSquareQuote className="h-[17px] w-[17px] text-indigo-500" />}
-                />
-              </span>
-            </PopoverTrigger>
-            <PopoverContent side="right" align="center" className="w-64 p-1.5">
-              <p className="px-2 pb-1 pt-1 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-                Prompt pieces — guide the answer
-              </p>
-              {PROMPT_PRESETS.map((preset) => (
-                <button
-                  key={preset}
-                  onClick={() => p.onAddPrompt(preset)}
-                  className="flex w-full items-center gap-2 rounded-[10px] px-2 py-1.5 text-left text-[12.5px] transition-colors hover:bg-[rgb(var(--hairline)/0.05)]"
-                >
-                  <MessageSquareQuote className="h-3.5 w-3.5 shrink-0 text-indigo-500" />
-                  <span className="min-w-0 flex-1">{preset}</span>
-                </button>
-              ))}
-              <button
-                onClick={() => p.onAddPrompt('')}
-                className="mt-0.5 flex w-full items-center gap-2 rounded-[10px] border-t border-[rgb(var(--hairline)/0.10)] px-2 py-1.5 text-left text-[12.5px] font-medium text-accent transition-colors hover:bg-accent/[0.06]"
-              >
-                <Type className="h-3.5 w-3.5 shrink-0" />
-                Blank — write your own
-              </button>
-            </PopoverContent>
-          </Popover>
           <RailButton
             label="Annotation"
             desc="A free-floating label to caption a region of the board. Purely visual."

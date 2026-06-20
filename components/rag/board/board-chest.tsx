@@ -9,7 +9,6 @@ import { MediaIcon } from '@/components/rag/shared';
 import { MediaType } from '@/lib/rag/types';
 import {
   Search,
-  MessageSquareQuote,
   RotateCcw,
   X,
   Trash2,
@@ -17,34 +16,24 @@ import {
   Loader2,
   CloudOff,
   Brain,
-  Bot
+  Bot,
+  Plus
 } from 'lucide-react';
+import Link from 'next/link';
 import type { RefObject } from 'react';
 
 /** Drag payload the canvas reads in its onDrop handler. */
 export const CHEST_MIME = 'application/answersdoc-chest';
 
-/** Common prompt presets the chest can spawn (mirrors the toolbar list). */
-const PROMPT_PRESETS = [
-  'Answer concisely, in bullet points',
-  'Respond in a clear table',
-  'Be skeptical — surface contradictions and caveats',
-  'Explain simply, as if to a beginner',
-  'Use a professional, executive tone',
-  'Give step-by-step reasoning',
-  'Always quote the exact source text'
-];
-
 /**
- * The CHEST — a Make-style bottom dock. One bubble per media type (plus a
- * Prompts bubble); click a bubble to open a searchable panel of everything
+ * The CHEST — a Make-style bottom dock. One bubble per media type (plus an
+ * Agents bubble); click a bubble to open a searchable panel of everything
  * you've produced, then DRAG an item onto the canvas to drop it as a puzzle
- * piece (or click to add at center). Prompts drop as prompt pieces.
+ * piece (or click to add at center). Agents drop as persona pieces.
  */
 export function BoardChest({
   placedIds,
   onPlaceMedia,
-  onPlacePrompt,
   onPlaceAgent,
   onRecallMedia,
   saveStatus,
@@ -56,7 +45,6 @@ export function BoardChest({
 }: {
   placedIds: Set<string>;
   onPlaceMedia: (mediaId: string) => void;
-  onPlacePrompt: (text: string) => void;
   onPlaceAgent: (agent: { agentId: string; name: string; icon?: string; text: string }) => void;
   onRecallMedia: (mediaId: string) => void;
   saveStatus: 'saved' | 'saving' | 'local';
@@ -73,6 +61,10 @@ export function BoardChest({
   const [open, setOpen] = useState<string | null>(null);
   const [q, setQ] = useState('');
   const rootRef = useRef<HTMLDivElement>(null);
+  // A drag-and-drop ends with a trailing `click` on the source in some browsers.
+  // This guards the click-to-place handler so a dragged agent isn't ALSO placed
+  // at center (which spawned a duplicate second piece).
+  const draggedRef = useRef(false);
 
   // Click anywhere outside the chest → close the open panel.
   useEffect(() => {
@@ -107,9 +99,7 @@ export function BoardChest({
   }
 
   const panelItems =
-    open === 'prompt'
-      ? PROMPT_PRESETS.filter((p) => p.toLowerCase().includes(query))
-      : open === 'agent'
+    open === 'agent'
       ? agents.filter((a) => a.name.toLowerCase().includes(query))
       : open === 'brains'
       ? stashedBrains.filter((s) =>
@@ -131,18 +121,14 @@ export function BoardChest({
         <div className="mb-2 w-[320px] overflow-hidden rounded-[18px] bg-card shadow-[0_8px_40px_rgb(0_0_0/0.16)] ring-1 ring-black/[0.06] dark:ring-white/[0.08]">
           <div className="flex items-center gap-2 px-3 pt-2.5">
             <span className="text-[12px] font-semibold tracking-tight">
-              {open === 'prompt'
-                ? 'Prompt pieces'
-                : open === 'agent'
+              {open === 'agent'
                 ? 'Agents'
                 : open === 'brains'
                 ? 'Parked brains'
                 : MEDIA_TYPES[open as MediaType].plural}
             </span>
             <span className="text-[11px] text-muted-foreground/60">
-              {open === 'prompt'
-                ? 'drag a guide onto the board'
-                : open === 'agent'
+              {open === 'agent'
                 ? 'drag a persona onto the board'
                 : open === 'brains'
                 ? 'click to bring one back to the canvas'
@@ -169,7 +155,74 @@ export function BoardChest({
             </div>
           </div>
           <div className="max-h-[280px] overflow-y-auto px-1.5 pb-2 scroll-clean">
-            {panelItems.length === 0 ? (
+            {/* Agents panel always offers a create row, even when empty. */}
+            {open === 'agent' ? (
+              <>
+                <Link
+                  href="/agents"
+                  onClick={() => setOpen(null)}
+                  className="mb-1 flex items-center gap-2.5 rounded-[10px] border border-dashed border-emerald-300/70 px-2 py-2 text-[12.5px] font-medium text-emerald-700 transition-colors hover:bg-emerald-50 dark:border-emerald-400/30 dark:text-emerald-300 dark:hover:bg-emerald-500/[0.08]"
+                >
+                  <Plus className="h-4 w-4 shrink-0" /> New agent
+                </Link>
+                {(panelItems as typeof agents).length === 0 ? (
+                  <p className="px-2 py-2 text-center text-[11.5px] text-muted-foreground/60">
+                    No agents yet — create one to wire into a brain.
+                  </p>
+                ) : (
+                  (panelItems as typeof agents).map((a) => (
+                    <div
+                      key={a.id}
+                      draggable
+                      onDragStart={(e) => {
+                        draggedRef.current = true;
+                        e.dataTransfer.setData(
+                          CHEST_MIME,
+                          JSON.stringify({
+                            kind: 'agent',
+                            agentId: a.id,
+                            name: a.name,
+                            icon: a.icon,
+                            text: a.systemPrompt
+                          })
+                        );
+                        e.dataTransfer.effectAllowed = 'copy';
+                      }}
+                      onDragEnd={() => {
+                        // Swallow the trailing post-drop click, then re-enable.
+                        setTimeout(() => {
+                          draggedRef.current = false;
+                        }, 60);
+                      }}
+                      onClick={() => {
+                        if (draggedRef.current) return; // was a drag, not a click
+                        onPlaceAgent({
+                          agentId: a.id,
+                          name: a.name,
+                          icon: a.icon,
+                          text: a.systemPrompt
+                        });
+                      }}
+                      className="group flex cursor-grab items-center gap-2.5 rounded-[10px] px-2 py-1.5 transition-colors hover:bg-[rgb(var(--hairline)/0.05)] active:cursor-grabbing"
+                    >
+                      {a.icon ? (
+                        <span className="shrink-0 text-[16px] leading-none">{a.icon}</span>
+                      ) : (
+                        <Bot className="h-4 w-4 shrink-0 text-emerald-500" />
+                      )}
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate text-[12.5px] font-medium">
+                          {a.name}
+                        </span>
+                        <span className="block truncate text-[10.5px] text-muted-foreground/65">
+                          {a.systemPrompt}
+                        </span>
+                      </span>
+                    </div>
+                  ))
+                )}
+              </>
+            ) : panelItems.length === 0 ? (
               <p className="px-2 py-3 text-center text-[12px] text-muted-foreground/60">
                 Nothing here yet.
               </p>
@@ -200,68 +253,6 @@ export function BoardChest({
                   </div>
                 );
               })
-            ) : open === 'agent' ? (
-              (panelItems as typeof agents).map((a) => (
-                <div
-                  key={a.id}
-                  draggable
-                  onDragStart={(e) => {
-                    e.dataTransfer.setData(
-                      CHEST_MIME,
-                      JSON.stringify({
-                        kind: 'agent',
-                        agentId: a.id,
-                        name: a.name,
-                        icon: a.icon,
-                        text: a.systemPrompt
-                      })
-                    );
-                    e.dataTransfer.effectAllowed = 'copy';
-                  }}
-                  onClick={() =>
-                    onPlaceAgent({
-                      agentId: a.id,
-                      name: a.name,
-                      icon: a.icon,
-                      text: a.systemPrompt
-                    })
-                  }
-                  className="group flex cursor-grab items-center gap-2.5 rounded-[10px] px-2 py-1.5 transition-colors hover:bg-[rgb(var(--hairline)/0.05)] active:cursor-grabbing"
-                >
-                  {a.icon ? (
-                    <span className="shrink-0 text-[16px] leading-none">{a.icon}</span>
-                  ) : (
-                    <Bot className="h-4 w-4 shrink-0 text-emerald-500" />
-                  )}
-                  <span className="min-w-0 flex-1">
-                    <span className="block truncate text-[12.5px] font-medium">
-                      {a.name}
-                    </span>
-                    <span className="block truncate text-[10.5px] text-muted-foreground/65">
-                      {a.systemPrompt}
-                    </span>
-                  </span>
-                </div>
-              ))
-            ) : open === 'prompt' ? (
-              (panelItems as string[]).map((preset) => (
-                <div
-                  key={preset}
-                  draggable
-                  onDragStart={(e) => {
-                    e.dataTransfer.setData(
-                      CHEST_MIME,
-                      JSON.stringify({ kind: 'prompt', text: preset })
-                    );
-                    e.dataTransfer.effectAllowed = 'copy';
-                  }}
-                  onClick={() => onPlacePrompt(preset)}
-                  className="flex cursor-grab items-center gap-2.5 rounded-[10px] px-2 py-1.5 transition-colors hover:bg-[rgb(var(--hairline)/0.05)] active:cursor-grabbing"
-                >
-                  <MessageSquareQuote className="h-4 w-4 shrink-0 text-indigo-500" />
-                  <span className="min-w-0 flex-1 truncate text-[12.5px]">{preset}</span>
-                </div>
-              ))
             ) : (
               (panelItems as typeof projectMedia).map((m) => {
                 const placed = placedIds.has(m.id);
@@ -367,17 +358,6 @@ export function BoardChest({
           );
         })}
         <div className="mx-0.5 h-7 w-px bg-[rgb(var(--hairline)/0.12)]" />
-        <button
-          onClick={() => toggle('prompt')}
-          title="Prompt pieces"
-          className={cn(
-            'flex h-10 w-10 items-center justify-center rounded-full bg-indigo-50 transition-all dark:bg-indigo-500/[0.12]',
-            open === 'prompt' ? 'ring-2 ring-accent' : 'hover:brightness-95'
-          )}
-        >
-          <MessageSquareQuote className="h-[18px] w-[18px] text-indigo-500" strokeWidth={2.25} />
-        </button>
-
         {/* Agents — saved answering personas; drag one onto the board and wire
             it into a brain to steer how it answers. */}
         <button

@@ -35,15 +35,13 @@ const PILL_BTN =
   'flex h-9 items-center gap-1.5 rounded-full bg-card px-3 text-[13px] font-medium text-foreground shadow-soft transition-all hover:brightness-95 dark:bg-[rgb(255_255_255_/_0.06)] dark:shadow-none dark:hover:bg-[rgb(255_255_255_/_0.1)]';
 
 export function Composer({ onSend, busy }: ComposerProps) {
-  const { prompts, activePromptId, setActivePrompt, contextItems, modelId, setModel } =
-    useRag();
+  const { contextItems, modelId, setModel } = useRag();
   const activeModel = LLM_MODELS.find((m) => m.id === modelId) ?? LLM_MODELS[0];
   const [text, setText] = useState('');
   const [attachment, setAttachment] = useState<ChatAttachment | undefined>();
   const fileRef = useRef<HTMLInputElement>(null);
   const taRef = useRef<HTMLTextAreaElement>(null);
 
-  const activePrompt = prompts.find((p) => p.id === activePromptId);
   const canSend = text.trim().length > 0 && !busy;
 
   function submit() {
@@ -162,37 +160,6 @@ export function Composer({ onSend, busy }: ComposerProps) {
             >
               <Paperclip className="h-[17px] w-[17px]" />
             </button>
-
-            {/* prompt picker */}
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <button className={PILL_BTN}>
-                  <Sparkles className="h-3.5 w-3.5 text-accent" />
-                  <span className="max-w-[130px] truncate">
-                    {activePrompt ? activePrompt.title : 'No prompt'}
-                  </span>
-                  <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
-                </button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="start" className="w-64">
-                <DropdownMenuItem
-                  onClick={() => setActivePrompt(null)}
-                  className={cn(!activePromptId && 'bg-secondary')}
-                >
-                  <span className="text-muted-foreground">No prompt</span>
-                </DropdownMenuItem>
-                {prompts.map((p) => (
-                  <DropdownMenuItem
-                    key={p.id}
-                    onClick={() => setActivePrompt(p.id)}
-                    className={cn('gap-2', activePromptId === p.id && 'bg-secondary')}
-                  >
-                    <span>{p.icon ?? '✨'}</span>
-                    <span className="truncate">{p.title}</span>
-                  </DropdownMenuItem>
-                ))}
-              </DropdownMenuContent>
-            </DropdownMenu>
 
             {/* model picker */}
             <DropdownMenu>

@@ -73,8 +73,6 @@ export function ChatView() {
     addMessage,
     addMedia,
     contextItems,
-    prompts,
-    activePromptId,
   } = useRag();
   const [busy, setBusy] = useState(false);
   const [streaming, setStreaming] = useState<ChatMessage | null>(null);
@@ -96,8 +94,6 @@ export function ChatView() {
   }, [messages.length, streaming]);
 
   function handleSend(text: string, attachment?: ChatAttachment) {
-    const activePrompt = prompts.find((p) => p.id === activePromptId);
-
     // "Add to library" attachments also become permanent indexed sources.
     if (attachment?.mode === 'index') {
       addMedia({
@@ -122,7 +118,7 @@ export function ChatView() {
     setBusy(true);
 
     const { content, citations } = generateMockAnswer(
-      activePrompt ? `${activePrompt.body}\n\n${text}` : text,
+      text,
       contextItems,
       attachment
     );
