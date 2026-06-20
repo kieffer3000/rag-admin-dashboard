@@ -192,50 +192,92 @@ export function RagProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     let cancelled = false;
     (async () => {
+      // Pull projects from BOTH the DB and localStorage and UNION them — neither
+      // source may ever wipe the other (that was the data-loss bug). Then RECOVER
+      // any saved board whose project went missing, so nothing becomes orphaned.
+      let dbList: Project[] | null = null;
       try {
         const r = await fetch('/api/projects');
-        const j = r.ok ? await r.json() : null;
-        if (cancelled) return;
-        let list: Project[] | null = null;
-        if (j && Array.isArray(j.projects) && j.projects.length) {
-          list = j.projects;
-        } else {
-          try {
-            const ls = localStorage.getItem('answersdoc_projects_v1');
-            if (ls) {
-              const arr = JSON.parse(ls);
-              if (Array.isArray(arr) && arr.length) list = arr;
-            }
-          } catch {
-            /* private mode */
-          }
-          if (!list && (!j || j.projects === null)) {
-            // Never saved → persist the current seed so the row exists.
-            fetch('/api/projects', {
-              method: 'PUT',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ projects: MOCK_PROJECTS })
-            }).catch(() => {});
-          }
-        }
-        if (list) {
-          setProjects(list);
-          // Re-open the project you were last on, if it still exists.
-          let last: string | null = null;
-          try {
-            last = localStorage.getItem('answersdoc_active_project_v1');
-          } catch {
-            /* ignore */
-          }
-          setActiveProjectId(
-            (last && list.some((p) => p.id === last) ? last : list[0].id)
-          );
+        if (r.ok) {
+          const j = await r.json();
+          if (Array.isArray(j.projects)) dbList = j.projects;
         }
       } catch {
-        /* offline → keep seed */
-      } finally {
-        if (!cancelled) projectsHydrated.current = true;
+        /* offline → rely on localStorage */
       }
+      if (cancelled) return;
+
+      let lsList: Project[] = [];
+      try {
+        const ls = localStorage.getItem('answersdoc_projects_v1');
+        if (ls) {
+          const a = JSON.parse(ls);
+          if (Array.isArray(a)) lsList = a;
+        }
+      } catch {
+        /* private mode */
+      }
+
+      // Merge by id (a real saved project always wins over the seed).
+      const byId = new Map<string, Project>();
+      const seedIds = new Set(MOCK_PROJECTS.map((p) => p.id));
+      for (const p of lsList) byId.set(p.id, p);
+      for (const p of dbList ?? []) {
+        // Don't let the bare seed clobber a real project of the same id.
+        if (seedIds.has(p.id) && byId.has(p.id)) continue;
+        byId.set(p.id, p);
+      }
+
+      // RECOVER orphaned boards: any locally-saved board whose project isn't in
+      // the list gets a project resurrected for it (its sources live in the
+      // board doc, so opening it brings the videos back).
+      try {
+        for (let i = 0; i < localStorage.length; i++) {
+          const key = localStorage.key(i);
+          const m = key && /^answersdoc_board_v2_(.+)$/.exec(key);
+          if (!m) continue;
+          const pid = m[1];
+          if (byId.has(pid)) continue;
+          let count = 0;
+          try {
+            const doc = JSON.parse(localStorage.getItem(key) || '{}');
+            count = Array.isArray(doc?.media) ? doc.media.length : 0;
+          } catch {
+            /* skip unreadable */
+          }
+          byId.set(pid, {
+            id: pid,
+            name: count ? `Recovered — ${count} source${count === 1 ? '' : 's'}` : 'Recovered project',
+            icon: '🗂️',
+            description: 'Restored from a local backup',
+            sourceIds: [],
+            createdAt: new Date().toISOString().slice(0, 10)
+          });
+        }
+      } catch {
+        /* private mode */
+      }
+
+      let list = Array.from(byId.values());
+      if (!list.length) list = MOCK_PROJECTS; // genuinely first run
+
+      setProjects(list);
+      let last: string | null = null;
+      try {
+        last = localStorage.getItem('answersdoc_active_project_v1');
+      } catch {
+        /* ignore */
+      }
+      setActiveProjectId(last && list.some((p) => p.id === last) ? last : list[0].id);
+
+      projectsHydrated.current = true;
+      // Re-save the merged/recovered list so the recovery sticks (and a wiped DB
+      // row is restored).
+      fetch('/api/projects', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ projects: list })
+      }).catch(() => {});
     })();
     return () => {
       cancelled = true;
