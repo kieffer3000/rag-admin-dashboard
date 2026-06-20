@@ -126,7 +126,7 @@ export function RagProvider({ children }: { children: ReactNode }) {
   const [activeConversationId, setActiveConversationId] = useState<string | null>(null);
   const [notes, setNotes] = useState<Note[]>(MOCK_NOTES);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(
-    () => new Set(['m1', 'm4'])
+    () => new Set()
   );
   const [scope, setScope] = useState<QueryScope>('selected');
   const [activePromptId, setActivePromptId] = useState<string | null>('p1');
@@ -198,6 +198,19 @@ export function RagProvider({ children }: { children: ReactNode }) {
 
   const hydrateMedia = useCallback((items: MediaItem[], projectId: string) => {
     if (!items?.length) return;
+    // Advance the id counter past every loaded id. The counter is module-level
+    // and resets to its seed on each page load, so without this a fresh import
+    // (`m1001`, `m1002`, …) collides with already-persisted media of the same
+    // id — the new item is prepended and shadows the old one, making an
+    // existing chip render the newly-imported source. Bumping here guarantees
+    // freshly-created media ids never collide with hydrated ones.
+    for (const it of items) {
+      const m = /(\d+)$/.exec(it.id);
+      if (m) {
+        const n = parseInt(m[1], 10);
+        if (n > idCounter) idCounter = n;
+      }
+    }
     setMedia((prev) => {
       const have = new Set(prev.map((m) => m.id));
       const add = items.filter((i) => !have.has(i.id));

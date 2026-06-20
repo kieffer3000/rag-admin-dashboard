@@ -59,41 +59,18 @@ export const MOCK_AGENTS: Agent[] = [
   }
 ];
 
+// One clean, empty default project so the app bootstraps (the store seeds the
+// active project from MOCK_PROJECTS[0]). Real sources reattach on hydrate; users
+// add their own projects. No sample sourceIds/notes — those were stale mock data.
 export const MOCK_PROJECTS: Project[] = [
   {
     id: 'proj1',
-    name: 'Learning Science',
-    icon: '🧠',
-    description: 'Habits, memory and study technique research.',
-    sourceIds: ['m1', 'm2', 'm4', 'm5', 'm6', 'm7', 'm8', 'm9', 'm10', 's_invoice_pincay', 's_q2_budget', 's_monthly_sales', 's_plan_compare'],
-    createdAt: '2026-05-30'
-  },
-  {
-    id: 'proj2',
-    name: 'Startup Playbook',
-    icon: '🚀',
-    description: 'Lean methodology and product strategy.',
-    sourceIds: ['m3'],
-    createdAt: '2026-06-01'
+    name: 'My Workspace',
+    icon: '📁',
+    description: '',
+    sourceIds: [],
+    createdAt: '2026-06-20'
   }
 ];
 
-export const MOCK_NOTES: Note[] = [
-  {
-    id: 'n1',
-    projectId: 'proj1',
-    content:
-      'Key insight: habit formation is governed by the basal ganglia and dopamine reward prediction — and the best execution window is early in the day. Pair this with Atomic Habits\' systems-over-goals framing for the exam answer.',
-    citations: [
-      {
-        mediaId: 'm4',
-        mediaName: 'How to Build Habits — Andrew Huberman',
-        type: 'youtube',
-        locator: '12:40',
-        snippet:
-          'There is a neuroscience to habit formation that involves the basal ganglia and dopamine reward prediction.'
-      }
-    ],
-    createdAt: '2026-06-08'
-  }
-];
+export const MOCK_NOTES: Note[] = [];
