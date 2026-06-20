@@ -208,11 +208,6 @@ function BrainNodeInner({ id, data, selected }: NodeProps) {
   const wavRef = useRef<WavRecorder | null>(null);
   /** Message id currently being voiced (spinner on its 🔈 button). */
   const [voicingId, setVoicingId] = useState<string | null>(null);
-  /** True when the chat content overflows its viewport. Drives the `nowheel`
-   *  class so a plain wheel scrolls the conversation instead of zooming the
-   *  canvas — React Flow's native wheel-zoom skips any element under `nowheel`,
-   *  which `stopPropagation` on the React event cannot reliably do. */
-  const [chatOverflows, setChatOverflows] = useState(false);
   /** Composer text at the moment dictation started — interim results append to it. */
   const dictBaseRef = useRef('');
 
@@ -433,19 +428,21 @@ function BrainNodeInner({ id, data, selected }: NodeProps) {
     const el = scrollRef.current;
     if (!el) return;
     el.scrollTo({ top: el.scrollHeight });
-    setChatOverflows(el.scrollHeight > el.clientHeight + 1);
   }, [messages]);
 
-  // Re-measure overflow when the brain itself is resized (size mode, window) —
-  // content growth is covered by the [messages] effect above.
+  // Wheel over the brain: pinch / ctrl-wheel ALWAYS zooms the canvas (we don't
+  // touch it); a plain wheel scrolls the chat ONLY when there's overflow, and
+  // we stop it (NATIVELY — a React synthetic stopPropagation can't) from also
+  // reaching React Flow's zoom. No overflow → it falls through and zooms too.
   useEffect(() => {
     const el = scrollRef.current;
     if (!el) return;
-    const ro = new ResizeObserver(() =>
-      setChatOverflows(el.scrollHeight > el.clientHeight + 1)
-    );
-    ro.observe(el);
-    return () => ro.disconnect();
+    const onWheel = (e: WheelEvent) => {
+      if (e.ctrlKey) return; // pinch / zoom gesture → let the canvas zoom
+      if (el.scrollHeight > el.clientHeight + 1) e.stopPropagation();
+    };
+    el.addEventListener('wheel', onWheel, { passive: false });
+    return () => el.removeEventListener('wheel', onWheel);
   }, []);
 
   // Rolling summary: once the conversation exceeds the verbatim window, fold the
@@ -983,24 +980,14 @@ function BrainNodeInner({ id, data, selected }: NodeProps) {
         // for the accessibility text-size control, so larger type genuinely
         // takes more room — exactly what low-vision reading needs.
         style={textScale !== 1 ? { zoom: textScale } : undefined}
-        // Zoom-vs-scroll over the brain: pinch / ctrl-wheel ALWAYS zooms the
-        // canvas; a plain wheel scrolls the chat only when there's overflow to
-        // scroll — otherwise it falls through and zooms too. So you can zoom
-        // with the cursor over the brain, yet still scroll long conversations.
-        onWheel={(e) => {
-          if (e.ctrlKey) return; // pinch-zoom → let React Flow handle it
-          const el = e.currentTarget;
-          if (el.scrollHeight > el.clientHeight + 1) e.stopPropagation();
-        }}
+        // Wheel handling lives in a NATIVE listener (effect above) so pinch/zoom
+        // still works over the brain while a plain wheel scrolls a long chat.
         className={cn(
           // NOT `nodrag`: the message area is a drag surface so the brain can be
           // grabbed from its whole body, not just the header. The answer text
           // bubbles below opt back out (nodrag + select-text) so reading and
           // selecting still work; buttons click fine (a click isn't a drag).
           'scroll-brain flex min-h-0 flex-1 flex-col gap-2.5 overflow-y-auto py-3',
-          // When the conversation overflows, `nowheel` lets a plain wheel scroll
-          // it instead of zooming the canvas (pinch/ctrl-wheel still zooms).
-          chatOverflows && 'nowheel',
           // Reading mode: a comfortable ~70ch centered measure (not full-bleed)
           // plus larger type — a premium reading column, not a stretched page.
           sizeMode === 'full'

@@ -597,6 +597,10 @@ function BoardCanvasInner() {
           if (!self || self.parentId) return prev;
           const typeOf = (n: BoardNode) =>
             media.find((m) => m.id === n.data?.mediaId)?.type;
+          // WELDED STACK is sacred: if this chip is part of a same-type stack,
+          // never move it — that's the deliberate weld, even near other things.
+          if (self.type === 'chip' && stackOf(self, prev.nodes, typeOf).length > 1)
+            return prev;
           const selfChipType = self.type === 'chip' ? typeOf(self) : null;
           // Obstacles = every free node EXCEPT a same-type chip (those weld).
           const obstacles = prev.nodes.filter(
