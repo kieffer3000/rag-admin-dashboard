@@ -21,7 +21,6 @@ import {
   Citation
 } from './types';
 import {
-  MOCK_MEDIA,
   MOCK_PROMPTS,
   MOCK_AGENTS,
   MOCK_PROJECTS,
@@ -117,7 +116,8 @@ const nextId = (prefix: string) => `${prefix}${++idCounter}`;
 const now = () => new Date().toISOString();
 
 export function RagProvider({ children }: { children: ReactNode }) {
-  const [media, setMedia] = useState<MediaItem[]>(MOCK_MEDIA);
+  // Start empty — only real, indexed sources appear (no sample/mock files).
+  const [media, setMedia] = useState<MediaItem[]>([]);
   const [prompts, setPrompts] = useState<Prompt[]>(MOCK_PROMPTS);
   const [agents, setAgents] = useState<Agent[]>(MOCK_AGENTS);
   const [projects, setProjects] = useState<Project[]>(MOCK_PROJECTS);

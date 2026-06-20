@@ -7,11 +7,12 @@ import { useRag } from '@/lib/rag/store';
 import { useBoard } from '@/lib/rag/board/store';
 import { MediaIcon } from '@/components/rag/shared';
 import { MEDIA_TYPES } from '@/lib/rag/media-config';
-import { Loader2, StickyNote, Layers, RotateCcw, Scissors } from 'lucide-react';
+import { Loader2, StickyNote, Layers, RotateCcw, Scissors, Play } from 'lucide-react';
 import {
   CHIP_W,
   CHIP_H,
   CHIP_TAB,
+  CHIP_TITLE_H,
   CHIP_CLIP,
   CHIP_CLIP_FLATBOTTOM,
   STACK_PITCH,
@@ -83,6 +84,10 @@ function ChipNodeInner({ id, data, selected, parentId }: NodeProps) {
   const isTop = inStack && !above;
   const isBottom = inStack && !below;
   const meta = MEDIA_TYPES[item.type];
+  // Banner image: YouTube/image thumbnail (image sources keep their hosted URL
+  // in `source`). Other types have none → the banner shows a type glyph.
+  const thumb =
+    item.thumbnail || (item.type === 'image' ? item.source : undefined);
   const pulse = !!d.pulse; // a citation in some brain is pointing at this piece
   const snapTarget = !!d.snapTarget; // a dragged piece is about to click onto this
   const settle = (d.settle as number) ?? 0;
@@ -222,40 +227,66 @@ function ChipNodeInner({ id, data, selected, parentId }: NodeProps) {
           />
         </div>
       )}
+      {/* CARD: a thumbnail/preview banner on top, a title bar below. YouTube +
+          image pieces show their picture; everything else shows a big type
+          glyph in the banner so all pieces stay the SAME size. Clipped to the
+          puzzle silhouette so the banner takes the notch/tab shape too. */}
       <div
-        style={{ height: CHIP_H }}
+        style={{ height: CHIP_H, ...(clipPath ? { clipPath } : {}) }}
         className={cn(
-          'relative flex items-center gap-2.5 px-2.5',
-          docked ? 'pl-3' : 'pt-1'
+          'relative flex flex-col overflow-hidden',
+          docked && 'rounded-[11px]'
         )}
       >
-        <MediaIcon type={item.type} size="sm" />
-        <div className="min-w-0 flex-1 leading-tight">
-          {item.status === 'processing' ? (
+        {/* banner */}
+        <div
+          style={{ height: CHIP_H - CHIP_TITLE_H }}
+          className="relative shrink-0 overflow-hidden"
+        >
+          {thumb ? (
             <>
-              <div className="line-clamp-1 text-[12px] font-semibold leading-[1.15]">
-                {item.name}
-              </div>
-              <div className="mt-0.5 flex items-center gap-1 text-[10px] text-muted-foreground/70">
-                <Loader2 className="h-2.5 w-2.5 animate-spin" /> Processing
-              </div>
-            </>
-          ) : item.status === 'failed' ? (
-            <>
-              <div className="line-clamp-1 text-[12px] font-semibold leading-[1.15]">
-                {item.name}
-              </div>
-              <div className="mt-0.5 text-[10px] text-red-500">Failed</div>
+              <img
+                src={thumb}
+                alt=""
+                draggable={false}
+                className="h-full w-full object-cover"
+              />
+              {item.type === 'youtube' && (
+                <span className="pointer-events-none absolute inset-0 flex items-center justify-center">
+                  <span className="flex h-9 w-9 items-center justify-center rounded-full bg-black/55 text-white shadow-md backdrop-blur-[1px]">
+                    <Play className="ml-0.5 h-4 w-4 fill-current" />
+                  </span>
+                </span>
+              )}
             </>
           ) : (
-            // Indexed: give the title BOTH lines (chunk count moves to tooltip).
-            <div
-              title={`${item.chunks} chunks`}
-              className="line-clamp-2 text-[12px] font-semibold leading-[1.16]"
-            >
-              {item.name}
+            <div className="flex h-full w-full items-center justify-center bg-black/[0.035] dark:bg-white/[0.05]">
+              <MediaIcon type={item.type} size="lg" />
             </div>
           )}
+          {item.status === 'processing' && (
+            <span className="absolute right-1.5 top-1.5 flex items-center gap-1 rounded-full bg-black/55 px-1.5 py-0.5 text-[9px] font-semibold text-white backdrop-blur-sm">
+              <Loader2 className="h-2.5 w-2.5 animate-spin" /> Indexing
+            </span>
+          )}
+          {item.status === 'failed' && (
+            <span className="absolute right-1.5 top-1.5 rounded-full bg-red-500 px-1.5 py-0.5 text-[9px] font-semibold text-white">
+              Failed
+            </span>
+          )}
+        </div>
+        {/* title bar */}
+        <div
+          style={{ height: CHIP_TITLE_H }}
+          className="relative flex items-center gap-2 px-2.5"
+        >
+          <MediaIcon type={item.type} size="sm" />
+          <div
+            title={item.status === 'indexed' ? `${item.chunks} chunks` : undefined}
+            className="line-clamp-2 min-w-0 flex-1 text-[12px] font-semibold leading-[1.18]"
+          >
+            {item.name}
+          </div>
         </div>
       </div>
 

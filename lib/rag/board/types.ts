@@ -79,7 +79,12 @@ export interface BoardState {
 // gaudy; the clip-paths below derive every coordinate from these constants so
 // the puzzle notch/tab survives any resize.
 export const CHIP_W = 216;
-export const CHIP_H = 64;
+// Tall enough for a card: a ~16:9 thumbnail/preview banner on top + a two-line
+// title bar below. Text/doc pieces reuse the banner area for a big type glyph,
+// so every piece is the same size. The clip-path below derives from this.
+export const CHIP_H = 150;
+/** Height of the title bar at the bottom of the card (banner takes the rest). */
+export const CHIP_TITLE_H = 50;
 /** Depth of the Scratch-style puzzle tab below the chip body. */
 export const CHIP_TAB = 7;
 /** Corner radius of the rounded chip body. */
