@@ -867,6 +867,8 @@ function BoardCanvasInner() {
   // increments per placement so a batch fans across the grid; it's reconciled up
   // to the real node count so it never falls behind after deletes/loads.
   const placeCounter = useRef(0);
+  /** Projects whose saved board we've already de-overlapped once this session. */
+  const untangled = useRef<Set<string>>(new Set());
   const centerPos = useCallback(() => {
     const el = wrapRef.current;
     const rect = el?.getBoundingClientRect();
@@ -1130,6 +1132,40 @@ function BoardCanvasInner() {
       ),
     [board.nodes]
   );
+
+  // De-overlap the SAVED board once, after it loads — placement-time spacing only
+  // covers new pieces, so a board saved with pieces piled up stays piled until
+  // we nudge them apart here. Brains, hubs and box-docked tiles stay put; only
+  // free pieces that actually overlap get moved to the nearest clear spot.
+  useEffect(() => {
+    if (hydratedProject !== activeProjectId) return;
+    if (untangled.current.has(activeProjectId)) return;
+    untangled.current.add(activeProjectId);
+    setBoard((prev) => {
+      const fixed = prev.nodes.filter(
+        (n) => n.parentId || n.type === 'brain' || n.type === 'hub'
+      );
+      const movable = prev.nodes.filter(
+        (n) => !n.parentId && n.type !== 'brain' && n.type !== 'hub'
+      );
+      const accepted = [...fixed];
+      const moved = new Map<string, { x: number; y: number }>();
+      for (const n of movable) {
+        const { w, h } = nodeRect(n);
+        const pos = freePosition(accepted, n.position, w, h);
+        if (pos.x !== n.position.x || pos.y !== n.position.y) moved.set(n.id, pos);
+        accepted.push(pos === n.position ? n : { ...n, position: pos });
+      }
+      if (moved.size === 0) return prev;
+      return {
+        ...prev,
+        nodes: prev.nodes.map((n) =>
+          moved.has(n.id) ? { ...n, position: moved.get(n.id)! } : n
+        )
+      };
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hydratedProject, activeProjectId]);
 
   /** Gather every not-yet-placed source into ONE new cluster box so the user
    *  can see all their resources and pick what to wire. */
