@@ -57,12 +57,16 @@ function AgentNodeInner({ id, data, selected, parentId }: NodeProps) {
   return (
     <div
       style={{ width: AGENT_W, height: AGENT_H }}
-      className="group relative flex flex-col items-center justify-center gap-1.5"
+      // pointer-events-none on the OUTER box: the box is mostly transparent, and
+      // when it overlaps other pieces a solid hit-box would steal their clicks
+      // (you couldn't grab a chip sitting under the robot). Only the robot, name,
+      // handle and button opt back IN — so the empty margins are click-through.
+      className="pointer-events-none relative flex flex-col items-center justify-center gap-1.5"
     >
       {/* Transparent robot — no card/box, just the graphic floating on the
-          canvas (like a sticker PNG). The connector hugs its right edge. */}
+          canvas (like a sticker PNG). This is the grab/drag surface. */}
       <div
-        className="relative"
+        className="group pointer-events-auto relative"
         style={{
           filter: selected
             ? 'drop-shadow(0 0 1px hsl(var(--accent))) drop-shadow(0 3px 10px hsl(var(--accent)/0.55))'
@@ -74,30 +78,29 @@ function AgentNodeInner({ id, data, selected, parentId }: NodeProps) {
         ) : (
           <Bot className="h-32 w-32 text-emerald-500" strokeWidth={1.6} />
         )}
+
+        <button
+          title="Remove from board"
+          onClick={(e) => {
+            e.stopPropagation();
+            removeBoardNode(id);
+          }}
+          className="nodrag absolute -right-1 -top-1 flex h-5 w-5 items-center justify-center rounded-full bg-card text-muted-foreground/60 opacity-0 shadow-[0_1px_4px_rgb(0_0_0/0.12)] transition-opacity hover:text-foreground group-hover:opacity-100"
+        >
+          <RotateCcw className="h-2.5 w-2.5" />
+        </button>
       </div>
 
-      <div className="line-clamp-1 max-w-[150px] text-center text-[12px] font-semibold text-emerald-900/90 drop-shadow-[0_1px_1px_rgb(255_255_255/0.6)] dark:text-emerald-100/90 dark:drop-shadow-[0_1px_2px_rgb(0_0_0/0.6)]">
+      <div className="pointer-events-auto line-clamp-1 max-w-[150px] text-center text-[12px] font-semibold text-emerald-900/90 drop-shadow-[0_1px_1px_rgb(255_255_255/0.6)] dark:text-emerald-100/90 dark:drop-shadow-[0_1px_2px_rgb(0_0_0/0.6)]">
         {name}
       </div>
 
-      <button
-        title="Remove from board"
-        onClick={(e) => {
-          e.stopPropagation();
-          removeBoardNode(id);
-        }}
-        className="nodrag absolute right-1/2 top-1.5 flex h-5 w-5 translate-x-[34px] items-center justify-center rounded-full bg-card text-muted-foreground/60 opacity-0 shadow-[0_1px_4px_rgb(0_0_0/0.12)] transition-opacity hover:text-foreground group-hover:opacity-100"
-      >
-        <RotateCcw className="h-2.5 w-2.5" />
-      </button>
-
-      {/* Connector on the node's RIGHT EDGE (not inset into the robot) — so no
-          part of the node sits over the edge's cut-scissors, exactly like every
-          other piece. The tight box keeps it beside the robot regardless. */}
+      {/* Connector on the node's RIGHT EDGE so nothing sits over the edge's cut
+          point. pointer-events-auto so it's still draggable for wiring. */}
       <Handle
         type="source"
         position={Position.Right}
-        className="!h-2.5 !w-2.5 !border-2 !border-card !bg-emerald-500"
+        className="pointer-events-auto !h-2.5 !w-2.5 !border-2 !border-card !bg-emerald-500"
       />
     </div>
   );

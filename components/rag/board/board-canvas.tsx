@@ -87,10 +87,16 @@ const DUP_PREFIX: Record<string, string> = {
  *  context: notes + prompt/agent guides). */
 const DOCKABLE_CONTEXT = new Set(['textNode', 'prompt', 'agent']);
 
-/** Approx on-canvas footprint of a node (for overlap checks). */
+/** Approx on-canvas footprint of a node (for overlap checks). Prefers React
+ *  Flow's measured size; chips render taller than CHIP_H (thumbnail + 2-line
+ *  title), so the fallback is generous to leave real clearance, not a sliver. */
 function nodeRect(n: BoardNode) {
-  const w = n.width ?? (n.type === 'brain' ? 400 : CHIP_W);
-  const h = n.height ?? (n.type === 'brain' ? 480 : CHIP_H + CHIP_TAB);
+  const m = (n as { measured?: { width?: number; height?: number } }).measured;
+  const w = m?.width ?? n.width ?? (n.type === 'brain' ? 400 : CHIP_W);
+  const h =
+    m?.height ??
+    n.height ??
+    (n.type === 'brain' ? 480 : n.type === 'agent' ? AGENT_H : CHIP_H + 64);
   return { x: n.position.x, y: n.position.y, w, h };
 }
 
@@ -894,7 +900,7 @@ function BoardCanvasInner() {
         // Resolve overlap against the LATEST nodes so a new piece never lands on
         // top of another (covers single placement AND rapid batch drops).
         const w = node.width ?? CHIP_W;
-        const h = node.height ?? CHIP_H + CHIP_TAB;
+        const h = node.height ?? CHIP_H + 64;
         const position = freePosition(prev.nodes, node.position, w, h);
         return { ...prev, nodes: [...prev.nodes, { ...node, position }] };
       }),

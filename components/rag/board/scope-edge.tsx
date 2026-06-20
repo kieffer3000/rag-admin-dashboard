@@ -29,7 +29,7 @@ export function ScopeEdge({
 }: EdgeProps) {
   const { removeBoardEdge } = useBoard();
   const [hover, setHover] = useState(false);
-  const [edgePath] = getBezierPath({
+  const [edgePath, labelX, labelY] = getBezierPath({
     sourceX,
     sourceY,
     sourcePosition,
@@ -41,18 +41,12 @@ export function ScopeEdge({
     curvature: 0.18
   });
 
-  // Disconnect button position: a FIXED distance OUT from the source handle,
-  // not the shared midpoint. Many cables converging on one brain all cross the
-  // same midpoint — their ✕ buttons stack there and only the top one is
-  // clickable. Anchoring each cut point beside its OWN source fans them apart,
-  // so every wire stays individually reachable. Clamped so short cables still
-  // place the button off the endpoints.
-  const dx = targetX - sourceX;
-  const dy = targetY - sourceY;
-  const len = Math.hypot(dx, dy) || 1;
-  const f = Math.min(0.42, Math.max(0.12, 54 / len));
-  const cutX = sourceX + dx * f;
-  const cutY = sourceY + dy * f;
+  // Cut button at the cable's MIDPOINT — out in open space between the piece and
+  // the brain, so it never sits over a node (which was swallowing the click).
+  // The whole wire is ALSO clickable to cut, so you don't even need the button.
+  const cutX = labelX;
+  const cutY = labelY;
+  const cut = () => removeBoardEdge(id);
 
   return (
     <>
@@ -100,15 +94,20 @@ export function ScopeEdge({
           strokeLinecap="round"
         />
       )}
-      {/* fat transparent hit-area so the line is easy to hover */}
+      {/* fat transparent hit-area: hover highlights, and a CLICK anywhere on the
+          wire cuts it (no need to hit the little scissors). */}
       <path
         d={edgePath}
         fill="none"
         stroke="transparent"
-        strokeWidth={22}
-        style={{ cursor: 'pointer' }}
+        strokeWidth={24}
+        style={{ cursor: 'pointer', pointerEvents: 'stroke' }}
         onMouseEnter={() => setHover(true)}
         onMouseLeave={() => setHover(false)}
+        onClick={(e) => {
+          e.stopPropagation();
+          cut();
+        }}
       />
       <EdgeLabelRenderer>
         {/* A scissor sits on EVERY cable, always visible (so each connection is
