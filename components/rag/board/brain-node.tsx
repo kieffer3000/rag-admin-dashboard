@@ -1021,12 +1021,21 @@ function BrainNodeInner({ id, data, selected }: NodeProps) {
         // for the accessibility text-size control, so larger type genuinely
         // takes more room — exactly what low-vision reading needs.
         style={textScale !== 1 ? { zoom: textScale } : undefined}
+        // Zoom-vs-scroll over the brain: pinch / ctrl-wheel ALWAYS zooms the
+        // canvas; a plain wheel scrolls the chat only when there's overflow to
+        // scroll — otherwise it falls through and zooms too. So you can zoom
+        // with the cursor over the brain, yet still scroll long conversations.
+        onWheel={(e) => {
+          if (e.ctrlKey) return; // pinch-zoom → let React Flow handle it
+          const el = e.currentTarget;
+          if (el.scrollHeight > el.clientHeight + 1) e.stopPropagation();
+        }}
         className={cn(
           // NOT `nodrag`: the message area is a drag surface so the brain can be
           // grabbed from its whole body, not just the header. The answer text
           // bubbles below opt back out (nodrag + select-text) so reading and
           // selecting still work; buttons click fine (a click isn't a drag).
-          'nowheel scroll-brain flex min-h-0 flex-1 flex-col gap-2.5 overflow-y-auto py-3',
+          'scroll-brain flex min-h-0 flex-1 flex-col gap-2.5 overflow-y-auto py-3',
           // Reading mode: a comfortable ~70ch centered measure (not full-bleed)
           // plus larger type — a premium reading column, not a stretched page.
           sizeMode === 'full'
