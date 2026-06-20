@@ -185,6 +185,90 @@ export function RagProvider({ children }: { children: ReactNode }) {
   }, [agents]);
   const [projects, setProjects] = useState<Project[]>(MOCK_PROJECTS);
   const [activeProjectId, setActiveProjectId] = useState<string>(MOCK_PROJECTS[0].id);
+  // Projects persist to Neon (account-global) + a localStorage cache, so a
+  // project you create survives a refresh (its board/sources already persist).
+  const projectsHydrated = useRef(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const r = await fetch('/api/projects');
+        const j = r.ok ? await r.json() : null;
+        if (cancelled) return;
+        let list: Project[] | null = null;
+        if (j && Array.isArray(j.projects) && j.projects.length) {
+          list = j.projects;
+        } else {
+          try {
+            const ls = localStorage.getItem('answersdoc_projects_v1');
+            if (ls) {
+              const arr = JSON.parse(ls);
+              if (Array.isArray(arr) && arr.length) list = arr;
+            }
+          } catch {
+            /* private mode */
+          }
+          if (!list && (!j || j.projects === null)) {
+            // Never saved → persist the current seed so the row exists.
+            fetch('/api/projects', {
+              method: 'PUT',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ projects: MOCK_PROJECTS })
+            }).catch(() => {});
+          }
+        }
+        if (list) {
+          setProjects(list);
+          // Re-open the project you were last on, if it still exists.
+          let last: string | null = null;
+          try {
+            last = localStorage.getItem('answersdoc_active_project_v1');
+          } catch {
+            /* ignore */
+          }
+          setActiveProjectId(
+            (last && list.some((p) => p.id === last) ? last : list[0].id)
+          );
+        }
+      } catch {
+        /* offline → keep seed */
+      } finally {
+        if (!cancelled) projectsHydrated.current = true;
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // Persist the project list (localStorage now, DB debounced) once hydrated.
+  useEffect(() => {
+    if (!projectsHydrated.current) return;
+    try {
+      localStorage.setItem('answersdoc_projects_v1', JSON.stringify(projects));
+    } catch {
+      /* private mode */
+    }
+    const t = setTimeout(() => {
+      fetch('/api/projects', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ projects })
+      }).catch(() => {});
+    }, 400);
+    return () => clearTimeout(t);
+  }, [projects]);
+
+  // Remember which project is open, so a refresh reopens it (not always the seed).
+  useEffect(() => {
+    try {
+      localStorage.setItem('answersdoc_active_project_v1', activeProjectId);
+    } catch {
+      /* private mode */
+    }
+  }, [activeProjectId]);
+
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [activeConversationId, setActiveConversationId] = useState<string | null>(null);
   const [notes, setNotes] = useState<Note[]>(MOCK_NOTES);

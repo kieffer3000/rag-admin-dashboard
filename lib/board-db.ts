@@ -42,3 +42,20 @@ export async function ensureAgentsSchema() {
   `;
   agentsEnsured = true;
 }
+
+let projectsEnsured = false;
+
+/** Idempotent schema bootstrap for the project LIST — one JSONB array per scope
+ *  (the projects themselves; each project's board/sources persist separately). */
+export async function ensureProjectsSchema() {
+  if (!sql || projectsEnsured) return;
+  await sql`
+    CREATE TABLE IF NOT EXISTS projects_state (
+      scope text PRIMARY KEY,
+      user_id text,
+      data jsonb NOT NULL,
+      updated_at timestamptz NOT NULL DEFAULT now()
+    )
+  `;
+  projectsEnsured = true;
+}
