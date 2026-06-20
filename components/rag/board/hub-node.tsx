@@ -65,7 +65,7 @@ function HubNodeInner({ id, data, selected }: NodeProps) {
   const size = everything
     ? { width: 230, height: 86 }
     : collapsed
-    ? { width: 320, height: HUB_HEADER_H + 6 }
+    ? { width: 300, height: 232 } // header + a 3-col, ~3-row scrollable preview
     : hubSize(memberCount);
   const cols = hubCols(memberCount);
   const indexedAll = projectMedia.filter((m) => m.status === 'indexed').length;
@@ -143,6 +143,48 @@ function HubNodeInner({ id, data, selected }: NodeProps) {
               />
             );
           })}
+        </div>
+      )}
+
+      {/* MINIMIZED: a scrollable thumbnail grid in the box's own DOM (the real
+          chips are hidden on the canvas). A 100-item box becomes a tidy 3-wide
+          preview you can scroll, instead of eating the screen. */}
+      {cluster && collapsed && (
+        <div
+          style={{ top: HUB_HEADER_H - 2, bottom: 6 }}
+          className="nodrag nowheel scroll-clean absolute inset-x-1.5 overflow-y-auto rounded-[13px] bg-[#eef1f5] p-1.5 dark:bg-black/30"
+        >
+          <div className="grid grid-cols-3 gap-1.5">
+            {memberIds.map((mid) => {
+              const m = media.find((x) => x.id === mid);
+              return (
+                <div
+                  key={mid}
+                  title={m?.name}
+                  className="relative aspect-video overflow-hidden rounded-md bg-black/[0.06] ring-1 ring-black/[0.05] dark:bg-white/[0.06]"
+                >
+                  {m?.thumbnail ? (
+                    <img
+                      src={m.thumbnail}
+                      alt=""
+                      loading="lazy"
+                      className="h-full w-full object-cover"
+                    />
+                  ) : (
+                    <span className="flex h-full w-full items-center justify-center">
+                      <MediaIcon type={(m?.type ?? 'document') as MediaType} size="sm" />
+                    </span>
+                  )}
+                  {m?.status === 'failed' && (
+                    <span className="absolute right-0.5 top-0.5 h-1.5 w-1.5 rounded-full bg-red-500 ring-1 ring-white" />
+                  )}
+                  {m && m.status !== 'indexed' && m.status !== 'failed' && (
+                    <span className="absolute right-0.5 top-0.5 h-1.5 w-1.5 rounded-full bg-amber-400 ring-1 ring-white" />
+                  )}
+                </div>
+              );
+            })}
+          </div>
         </div>
       )}
 
