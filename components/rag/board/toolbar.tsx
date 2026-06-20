@@ -259,36 +259,50 @@ export function BoardToolbar(p: BoardToolbarProps) {
         .split('\n')
         .map((s) => s.trim())
         .filter(Boolean);
-      // Skip links already in THIS project, and repeats within the paste —
-      // the same video/page is never imported (or indexed) twice.
-      const seen = new Set(
+      // Map existing sources by identity. A link already INDEXED is skipped; a
+      // link that FAILED is RETRIED (reusing its id — no duplicate); a new link
+      // imports. So re-pasting a batch heals failures without making dupes.
+      const byKey = new Map(
         projectMedia
           .filter((m) => m.source)
-          .map((m) => dedupKey(m.type, m.source as string))
+          .map((m) => [dedupKey(m.type, m.source as string), m] as const)
       );
-      const list: string[] = [];
+      const inBatch = new Set<string>();
+      const created: { id: string; url: string }[] = [];
+      const retried: { id: string; url: string }[] = [];
+      let skipped = 0;
       for (const u of raw) {
         const k = dedupKey(sourceType, u);
-        if (seen.has(k)) continue;
-        seen.add(k);
-        list.push(u);
+        if (inBatch.has(k)) {
+          skipped++;
+          continue;
+        }
+        inBatch.add(k);
+        const existing = byKey.get(k);
+        if (existing) {
+          if (existing.status === 'failed') {
+            p.onRetrySource(sourceType, existing.id, u);
+            retried.push({ id: existing.id, url: u });
+          } else {
+            skipped++; // already indexed / indexing
+          }
+        } else {
+          created.push({ id: p.onNewSource(sourceType, '', u), url: u });
+        }
       }
-      const skipped = raw.length - list.length;
+      const all = [...created, ...retried];
       setDupSkipped(skipped);
-      if (!list.length) {
+      if (!all.length) {
         window.alert(
           skipped
-            ? `Already in this project — ${skipped} duplicate link${skipped === 1 ? '' : 's'} skipped, nothing new to import.`
+            ? `Nothing to do — all ${skipped} link${skipped === 1 ? ' is' : 's are'} already indexed in this project.`
             : 'No links to import.'
         );
         return;
       }
-      const created = list.map((u) => ({
-        id: p.onNewSource(sourceType, '', u),
-        url: u
-      }));
+      // Only brand-new imports go into a box; retried pieces stay where they are.
       maybeBox(created.map((c) => c.id));
-      setImporting(created);
+      setImporting(all);
       setUrls('');
       return; // stay open — progress view takes over
     } else {
