@@ -66,7 +66,7 @@ function AgentNodeInner({ id, data, selected, parentId }: NodeProps) {
             : 'drop-shadow(0 2px 6px rgb(16 185 129/0.30)) drop-shadow(0 1px 2px rgb(0 0 0/0.10))'
         }}
         className={cn(
-          'relative flex h-[72px] w-[72px] items-center justify-center rounded-full',
+          'relative flex h-[72px] w-[72px] items-center justify-center rounded-2xl',
           'bg-gradient-to-b from-emerald-400 to-emerald-600 text-white',
           'ring-4 ring-emerald-100 dark:ring-emerald-500/20',
           selected && 'ring-emerald-300 dark:ring-emerald-400/40'
