@@ -74,14 +74,6 @@ function AgentNodeInner({ id, data, selected, parentId }: NodeProps) {
         ) : (
           <Bot className="h-32 w-32 text-emerald-500" strokeWidth={1.6} />
         )}
-
-        {/* Connector sits right on the robot's edge, not far out on a card. */}
-        <Handle
-          type="source"
-          position={Position.Right}
-          style={{ right: -7, top: '50%' }}
-          className="!h-2.5 !w-2.5 !border-2 !border-card !bg-emerald-500"
-        />
       </div>
 
       <div className="line-clamp-1 max-w-[150px] text-center text-[12px] font-semibold text-emerald-900/90 drop-shadow-[0_1px_1px_rgb(255_255_255/0.6)] dark:text-emerald-100/90 dark:drop-shadow-[0_1px_2px_rgb(0_0_0/0.6)]">
@@ -98,6 +90,15 @@ function AgentNodeInner({ id, data, selected, parentId }: NodeProps) {
       >
         <RotateCcw className="h-2.5 w-2.5" />
       </button>
+
+      {/* Connector on the node's RIGHT EDGE (not inset into the robot) — so no
+          part of the node sits over the edge's cut-scissors, exactly like every
+          other piece. The tight box keeps it beside the robot regardless. */}
+      <Handle
+        type="source"
+        position={Position.Right}
+        className="!h-2.5 !w-2.5 !border-2 !border-card !bg-emerald-500"
+      />
     </div>
   );
 }
