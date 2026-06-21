@@ -8,6 +8,8 @@ import {
   hubSize,
   hubSlot,
   hubCols,
+  hubCollapsed,
+  HUB_MINI_SIZE,
   CHIP_W,
   CHIP_H,
   HUB_HEADER_H,
@@ -59,13 +61,15 @@ function HubNodeInner({ id, data, selected }: NodeProps) {
   const meta =
     everything || cluster ? null : MEDIA_TYPES[d.mediaType as MediaType];
   const Icon = everything ? Sparkles : cluster ? Puzzle : meta!.icon;
-  // Minimized box: collapse to just its header bar (members are hidden on the
-  // canvas) so a 100-item box stops eating the whole screen. Click to expand.
-  const collapsed = cluster && !!d.collapsed;
+  // Minimized box: render members as a scrollable thumbnail grid in the hub's
+  // OWN DOM (not as canvas child nodes) so a 100-item box stays a tidy fixed
+  // preview instead of an enormous object that flickers / flies away. Big boxes
+  // minimize automatically (hubCollapsed); the ▲/▼ button forces either state.
+  const collapsed = hubCollapsed(d, memberCount);
   const size = everything
     ? { width: 230, height: 86 }
     : collapsed
-    ? { width: 300, height: 232 } // header + a 3-col, ~3-row scrollable preview
+    ? { ...HUB_MINI_SIZE } // header + a 3-col scrollable thumbnail preview
     : hubSize(memberCount);
   const cols = hubCols(memberCount);
   const indexedAll = projectMedia.filter((m) => m.status === 'indexed').length;

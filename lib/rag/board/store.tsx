@@ -24,6 +24,8 @@ import {
   hubSize,
   hubSlot,
   hubCols,
+  hubCollapsed,
+  HUB_MINI_SIZE,
   stackOf
 } from './types';
 
@@ -441,12 +443,14 @@ export function BoardProvider({ children }: { children: ReactNode }) {
 
   // Toggle a box minimized — and keep its CENTER fixed so a tall box doesn't
   // appear to fly off-screen (its top-left would otherwise stay way up high).
+  // Flips the EFFECTIVE state (auto-minimized big boxes have collapsed===undefined
+  // yet render minimized), and records the result EXPLICITLY (true/false) so the
+  // user's choice overrides the auto-by-size default.
   const toggleHubCollapse = useCallback(
     (nodeId: string) => {
       setBoard((prev) => {
         const hub = prev.nodes.find((n) => n.id === nodeId);
         if (!hub) return prev;
-        const willCollapse = !(hub.data as { collapsed?: boolean }).collapsed;
         const members = prev.nodes.filter(
           (n) =>
             n.parentId === nodeId &&
@@ -455,9 +459,11 @@ export function BoardProvider({ children }: { children: ReactNode }) {
               n.type === 'prompt' ||
               n.type === 'agent')
         ).length;
+        const isCollapsed = hubCollapsed(hub.data, members);
+        const willCollapse = !isCollapsed;
         const expanded = hubSize(members);
-        const mini = { width: 300, height: 232 };
-        const from = willCollapse ? expanded : mini;
+        const mini = { ...HUB_MINI_SIZE };
+        const from = isCollapsed ? mini : expanded;
         const to = willCollapse ? mini : expanded;
         const position = {
           x: hub.position.x + (from.width - to.width) / 2,

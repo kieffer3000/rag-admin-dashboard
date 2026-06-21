@@ -21,6 +21,11 @@ export interface HubData extends Record<string, unknown> {
   name: string;
   mediaType: HubType;
   glow?: boolean;
+  /** Minimize state — tri-state so big boxes can default to minimized without
+   *  fighting an explicit user choice: `true` = forced minimized, `false` =
+   *  forced expanded, `undefined` = AUTO (minimized once it passes
+   *  HUB_AUTOCOLLAPSE_AT members). See hubCollapsed(). */
+  collapsed?: boolean;
 }
 
 export interface BrainData extends Record<string, unknown> {
@@ -137,6 +142,44 @@ export function hubSize(memberCount: number) {
         ? HUB_HEADER_H + CHIP_H + HUB_GAP * 2
         : HUB_HEADER_H + rows * (CHIP_H + HUB_GAP) + HUB_GAP
   };
+}
+
+/** Fixed footprint of a MINIMIZED cluster box — a header + a 3-col scrollable
+ *  thumbnail preview rendered in the hub's own DOM (not as canvas child nodes).
+ *  Big boxes collapse to this so they stop flickering and "flying away" when
+ *  grabbed (a 100-item expanded box is enormous; dragging its header drags a
+ *  mostly-off-screen giant). */
+export const HUB_MINI_SIZE = { width: 300, height: 232 } as const;
+
+/** A cluster box AUTO-minimizes past this many pieces. The minimized renderer
+ *  (a scrollable DOM grid) is fixed-size and always fully on-screen, which is
+ *  what makes big boxes manageable. Kept low so the common "import 100 videos
+ *  into one box" case never produces an unwieldy canvas object. */
+export const HUB_AUTOCOLLAPSE_AT = 12;
+
+/** Is this hub rendered minimized? Tri-state `data.collapsed` (explicit
+ *  true/false) overrides; otherwise auto by member count. Only cluster boxes
+ *  minimize — the Everything hub and legacy typed hubs never do. */
+export function hubCollapsed(
+  data: { mediaType?: HubType; collapsed?: boolean },
+  memberCount: number
+): boolean {
+  if (data.mediaType !== 'cluster') return false;
+  if (data.collapsed === true) return true;
+  if (data.collapsed === false) return false;
+  return memberCount > HUB_AUTOCOLLAPSE_AT;
+}
+
+/** Real on-canvas size of a hub (collapse-aware). Overlap math + Clean Desk
+ *  must reserve the ACTUAL footprint — a minimized box is HUB_MINI_SIZE, not
+ *  its expanded grid — or auto-minimized boxes leave huge gaps / mis-overlap. */
+export function hubFootprint(
+  data: { mediaType?: HubType; collapsed?: boolean },
+  memberCount: number
+): { width: number; height: number } {
+  if (data.mediaType === 'everything') return { width: 230, height: 86 };
+  if (hubCollapsed(data, memberCount)) return { ...HUB_MINI_SIZE };
+  return hubSize(memberCount);
 }
 
 /**

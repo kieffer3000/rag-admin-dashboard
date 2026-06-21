@@ -36,6 +36,8 @@ import {
   hubSlot,
   hubSize,
   hubCols,
+  hubCollapsed,
+  hubFootprint,
   stackOf,
   CHIP_W,
   CHIP_H,
@@ -865,12 +867,10 @@ function BoardCanvasInner() {
             const trays = nodes
               .filter((n) => n.type === 'hub')
               .map((h) => {
-                const sz =
-                  h.data.mediaType === 'everything'
-                    ? { width: 230, height: 86 }
-                    : hubSize(
-                        nodes.filter((c) => c.parentId === h.id).length
-                      );
+                const sz = hubFootprint(
+                  h.data,
+                  nodes.filter((c) => c.parentId === h.id).length
+                );
                 return {
                   x: h.position.x - HALO,
                   y: h.position.y - HALO,
@@ -1303,11 +1303,28 @@ function BoardCanvasInner() {
   );
 
   // Minimized boxes hide their docked members (still saved/wired — just not
-  // drawn) so a 100-item box collapses to its header bar.
+  // drawn): the hub renders them as a scrollable thumbnail grid in its own DOM
+  // instead. Big boxes minimize automatically (hubCollapsed), so a 100-item box
+  // is never a giant cloud of canvas nodes — that's what flickered + flew away.
   const liveNodes = useMemo(() => {
+    const memberCount = new Map<string, number>();
+    for (const n of board.nodes) {
+      if (
+        n.parentId &&
+        (n.type === 'chip' ||
+          n.type === 'textNode' ||
+          n.type === 'prompt' ||
+          n.type === 'agent')
+      )
+        memberCount.set(n.parentId, (memberCount.get(n.parentId) ?? 0) + 1);
+    }
     const collapsed = new Set(
       board.nodes
-        .filter((n) => n.type === 'hub' && n.data.collapsed)
+        .filter(
+          (n) =>
+            n.type === 'hub' &&
+            hubCollapsed(n.data, memberCount.get(n.id) ?? 0)
+        )
         .map((n) => n.id)
     );
     if (!collapsed.size) return board.nodes;
@@ -1458,7 +1475,12 @@ function BoardCanvasInner() {
         let w = (n.width as number) ?? 240;
         let h = (n.height as number) ?? 150;
         if (n.type === 'hub') {
-          const sz = hubSize(nodes.filter((c) => c.parentId === n.id).length);
+          // Collapse-aware: a minimized box reserves its real mini footprint,
+          // not the expanded grid — else Clean Desk leaves a huge empty gap.
+          const sz = hubFootprint(
+            n.data,
+            nodes.filter((c) => c.parentId === n.id).length
+          );
           w = sz.width;
           h = sz.height;
         }
