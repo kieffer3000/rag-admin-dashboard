@@ -7,6 +7,7 @@ import {
   Background,
   BackgroundVariant,
   Controls,
+  ControlButton,
   applyNodeChanges,
   applyEdgeChanges,
   addEdge,
@@ -25,7 +26,8 @@ import {
   ArrowDownToLine,
   Copy,
   Unplug,
-  Trash2
+  Trash2,
+  Maximize
 } from 'lucide-react';
 import { ResearchOverlay } from '@/components/rag/board/research-overlay';
 
@@ -1671,8 +1673,19 @@ function BoardCanvasInner() {
         <Controls
           position="bottom-right"
           showInteractive={false}
+          showFitView={false}
           className="!rounded-[14px] !border-none !bg-card !shadow-[0_2px_8px_rgb(0_0_0/0.08)]"
-        />
+        >
+          {/* Manual Fit: re-runs fitToFill so the user can re-frame the board to
+              fill the usable canvas any time (not just on load). */}
+          <ControlButton
+            onClick={() => fitToFill(500)}
+            title="Fit content to screen"
+            aria-label="Fit content to screen"
+          >
+            <Maximize />
+          </ControlButton>
+        </Controls>
       </ReactFlow>
 
       {/* RESEARCH MODE — a clean full-screen chat overlay for one brain. It sits
