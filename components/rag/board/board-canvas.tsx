@@ -10,6 +10,7 @@ import {
   applyNodeChanges,
   applyEdgeChanges,
   addEdge,
+  getNodesBounds,
   useReactFlow,
   type Node,
   type Edge,
@@ -179,8 +180,17 @@ function retile(nodes: BoardNode[], hubId: string): BoardNode[] {
   return nodes.map((n) => (isMember(n) ? { ...n, position: hubSlot(i++, cols) } : n));
 }
 
+// Usable-canvas insets (px): the floating chrome that overlays the React Flow
+// pane — left rails, right edge, top header, bottom dock. fitToFill() zooms the
+// content to FILL the area BETWEEN these, so the work dominates the screen
+// instead of sitting tiny in a sea of empty canvas.
+const FILL_INSET = { left: 200, right: 48, top: 76, bottom: 104 };
+/** Don't blow a single small piece up to cartoon size — cap the fill zoom. */
+const FILL_MAX_ZOOM = 2;
+const FILL_MIN_ZOOM = 0.2;
+
 function BoardCanvasInner() {
-  const { board, setBoard, setBoardSilent, nextBoardId, busyBrains, saveStatus, saveNow, removeBoardNode, brainMessages, hydratedProject, researchBrainId, setResearchBrainId } =
+  const { board, setBoard, setBoardSilent, nextBoardId, busyBrains, saveStatus, saveNow, removeBoardNode, hydratedProject, researchBrainId, setResearchBrainId } =
     useBoard();
   const { media, projectMedia, addMedia, updateMedia, deleteMedia, activeProjectId, activeProject } = useRag();
   // Garbage bin (bottom-left): drag a source chip onto it to delete the source
@@ -196,7 +206,7 @@ function BoardCanvasInner() {
   const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; nodeId: string } | null>(
     null
   );
-  const { getIntersectingNodes, getNodes, screenToFlowPosition, fitView } =
+  const { getIntersectingNodes, getNodes, screenToFlowPosition, fitView, setViewport } =
     useReactFlow();
 
   // Keep the measured-size map fresh so overlap checks know each node's REAL
@@ -317,36 +327,46 @@ function BoardCanvasInner() {
     activeProject,
     backfillTick
   ]);
+  // Measure the bounding box of ALL visible content and zoom it to FILL the
+  // usable canvas (inset from the rails + top/bottom menus), centered between
+  // them. This is why the work dominates the screen instead of looking tiny.
+  const fitToFill = useCallback(
+    (duration = 600) => {
+      const el = wrapRef.current;
+      if (!el) return;
+      const rect = el.getBoundingClientRect();
+      const nodes = getNodes().filter((n) => !n.hidden); // skip collapsed members
+      if (!nodes.length) return;
+      const b = getNodesBounds(nodes);
+      if (!b.width || !b.height) return;
+      const availW = Math.max(120, rect.width - FILL_INSET.left - FILL_INSET.right);
+      const availH = Math.max(120, rect.height - FILL_INSET.top - FILL_INSET.bottom);
+      const zoom = Math.max(
+        FILL_MIN_ZOOM,
+        Math.min(FILL_MAX_ZOOM, availW / b.width, availH / b.height)
+      );
+      // Center the content's box within the inset area (screen = flow*zoom + v).
+      const x = FILL_INSET.left + (availW - b.width * zoom) / 2 - b.x * zoom;
+      const y = FILL_INSET.top + (availH - b.height * zoom) / 2 - b.y * zoom;
+      setViewport({ x, y, zoom }, { duration });
+    },
+    [getNodes, setViewport]
+  );
+
   useEffect(() => {
     if (hydratedProject !== activeProjectId) return; // wait for the real board
     if (focusedProject.current === activeProjectId) return;
     focusedProject.current = activeProjectId;
-    const brains = board.nodes.filter((n) => n.type === 'brain');
-    let active: string | null = null;
-    let latest = -1;
-    for (const b of brains) {
-      const msgs = brainMessages[b.id] ?? [];
-      const last = msgs[msgs.length - 1];
-      const ts = last?.createdAt ? Date.parse(last.createdAt) : 0;
-      if (ts >= latest) {
-        latest = ts;
-        active = b.id;
-      }
-    }
-    // delay so React Flow has measured the freshly-loaded nodes before fitView
+    // delay so React Flow has measured the freshly-loaded nodes before fitting
     const t = setTimeout(() => {
       try {
-        if (active && latest > 0) {
-          fitView({ nodes: [{ id: active }], duration: 600, padding: 0.45, maxZoom: 1 });
-        } else {
-          fitView({ duration: 600, padding: 0.18 });
-        }
+        fitToFill(600);
       } catch (e) {
-        console.error('focus-on-load fitView', e);
+        console.error('focus-on-load fitToFill', e);
       }
     }, 300);
     return () => clearTimeout(t);
-  }, [hydratedProject, activeProjectId, board.nodes, brainMessages, fitView]);
+  }, [hydratedProject, activeProjectId, board.nodes, fitToFill]);
 
   // RESEARCH MODE is a dedicated full-screen overlay (ResearchOverlay), rendered
   // below — it covers the whole canvas, so nothing here needs to change.
