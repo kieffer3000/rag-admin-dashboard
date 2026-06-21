@@ -624,6 +624,10 @@ function BoardCanvasInner() {
         setBoard((prev) => {
           const self = prev.nodes.find((n) => n.id === node.id);
           if (!self || self.parentId) return prev;
+          // Boxes and brains are BIG and placed deliberately — never auto-move
+          // them (a huge box would "fly away" by its own size). Only loose
+          // pieces get the no-overlap nudge.
+          if (self.type === 'hub' || self.type === 'brain') return prev;
           const typeOf = (n: BoardNode) =>
             media.find((m) => m.id === n.data?.mediaId)?.type;
           // WELDED STACK is sacred: if this chip is part of a same-type stack,
