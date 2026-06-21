@@ -9,7 +9,15 @@ import { generateMockAnswer, streamText } from '@/lib/rag/mock-answer';
 import { startHum, stopHum, playChime } from '@/lib/rag/board/sound';
 import { BrainMessage, nextMsgId } from '@/components/rag/board/brain-node';
 import { ChatMessage } from '@/lib/rag/types';
-import { ArrowUp, Loader2, Minimize2, Brain } from 'lucide-react';
+import {
+  ArrowUp,
+  Loader2,
+  Minimize2,
+  Brain,
+  Zap,
+  Search,
+  Telescope
+} from 'lucide-react';
 
 /**
  * RESEARCH MODE — a clean, full-screen chat for one brain (Claude-style:
@@ -34,6 +42,7 @@ export function ResearchOverlay({
     updateBrainMessage,
     setBrainBusy,
     setBoard,
+    updateBoardNodeData,
     nextBoardId
   } = useBoard();
   const { openViewer, activeProjectId } = useRag();
@@ -319,6 +328,55 @@ export function ResearchOverlay({
                 <ArrowUp className="h-4 w-4" />
               )}
             </button>
+          </div>
+          {/* speed: Fast / Detailed / Research — same control as the brain card */}
+          <div className="mt-3 flex justify-center">
+            <div
+              role="group"
+              aria-label="Answer speed"
+              className="flex items-center rounded-full bg-black/[0.05] p-0.5 dark:bg-white/[0.06]"
+            >
+              <button
+                onClick={() => updateBoardNodeData(brainId, { speed: 'fast' })}
+                title="Fast — a quick, lightning answer (fewer steps, no extra checks)."
+                className={cn(
+                  'flex items-center gap-1 rounded-full px-3 py-1 text-[12px] font-semibold uppercase tracking-wide transition-colors',
+                  speed === 'fast'
+                    ? 'bg-amber-400 text-white shadow-[0_1px_3px_rgb(0_0_0/0.18)]'
+                    : 'text-muted-foreground/70 hover:text-foreground'
+                )}
+              >
+                <Zap className="h-3.5 w-3.5" /> Fast
+              </button>
+              <button
+                onClick={() =>
+                  updateBoardNodeData(brainId, { speed: 'detailed' })
+                }
+                title="Detailed — the full pipeline: query expansion, validation, and per-claim citations. Slower, more thorough."
+                className={cn(
+                  'flex items-center gap-1 rounded-full px-3 py-1 text-[12px] font-semibold uppercase tracking-wide transition-colors',
+                  speed === 'detailed'
+                    ? 'bg-accent text-white shadow-[0_1px_3px_rgb(0_0_0/0.18)]'
+                    : 'text-muted-foreground/70 hover:text-foreground'
+                )}
+              >
+                <Search className="h-3.5 w-3.5" /> Detailed
+              </button>
+              <button
+                onClick={() =>
+                  updateBoardNodeData(brainId, { speed: 'research' })
+                }
+                title="Research — the deepest answer: the full pipeline plus a heavier reasoning model that organizes findings across many sources and bridges to related concepts. Slowest, most thorough."
+                className={cn(
+                  'flex items-center gap-1 rounded-full px-3 py-1 text-[12px] font-semibold uppercase tracking-wide transition-colors',
+                  speed === 'research'
+                    ? 'bg-violet-500 text-white shadow-[0_1px_3px_rgb(0_0_0/0.18)]'
+                    : 'text-muted-foreground/70 hover:text-foreground'
+                )}
+              >
+                <Telescope className="h-3.5 w-3.5" /> Research
+              </button>
+            </div>
           </div>
           <p className="mt-2 text-center text-[11px] text-muted-foreground/55">
             answersDoc cites every claim. Press Esc to exit research mode.
