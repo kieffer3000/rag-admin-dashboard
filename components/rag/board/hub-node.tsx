@@ -17,7 +17,16 @@ import {
 } from '@/lib/rag/board/types';
 import { MediaType } from '@/lib/rag/types';
 import { MediaIcon } from '@/components/rag/shared';
-import { Sparkles, Puzzle, X, ChevronUp, ChevronDown } from 'lucide-react';
+import {
+  Sparkles,
+  Puzzle,
+  X,
+  ChevronUp,
+  ChevronDown,
+  ExternalLink,
+  ArrowUpRight,
+  Trash2
+} from 'lucide-react';
 import { useRag } from '@/lib/rag/store';
 import { useBoard } from '@/lib/rag/board/store';
 
@@ -32,21 +41,29 @@ import { useBoard } from '@/lib/rag/board/store';
  */
 function HubNodeInner({ id, data, selected }: NodeProps) {
   const d = data as HubData;
-  const { projectMedia, media } = useRag();
-  const { updateBoardNodeData, removeBoardNode, toggleHubCollapse } = useBoard();
+  const { projectMedia, media, deleteMedia } = useRag();
+  const { updateBoardNodeData, removeBoardNode, toggleHubCollapse, undockMember } =
+    useBoard();
   const [editing, setEditing] = useState(false);
 
-  // Docked members (joined ids keep the selector's equality check cheap).
-  const memberIdsKey = useStore((s) =>
+  // Docked members (joined node-id~type~mediaId keeps the selector's equality
+  // check cheap while giving the per-tile actions the real NODE id to act on).
+  const memberKey = useStore((s) =>
     d.mediaType === 'everything'
       ? ''
       : s.nodes
           .filter((n) => n.parentId === id)
-          .map((n) => (n.data as any).mediaId as string)
+          .map((n) => `${n.id}~${n.type ?? ''}~${(n.data as any).mediaId ?? ''}`)
           .join('|')
   );
-  const memberIds = memberIdsKey ? memberIdsKey.split('|') : [];
-  const memberCount = memberIds.length;
+  const members = memberKey
+    ? memberKey.split('|').map((p) => {
+        const [nodeId, nodeType, mediaId] = p.split('~');
+        return { nodeId, nodeType, mediaId };
+      })
+    : [];
+  const memberIds = members.map((m) => m.mediaId).filter(Boolean);
+  const memberCount = members.length;
   /** Distinct media types inside — the tray's "family portrait" dots. */
   const memberTypes = [
     ...new Set(
@@ -159,13 +176,20 @@ function HubNodeInner({ id, data, selected }: NodeProps) {
           className="nodrag nowheel scroll-clean absolute inset-x-1.5 overflow-y-auto rounded-[13px] bg-[#eef1f5] p-1.5 dark:bg-black/30"
         >
           <div className="grid grid-cols-3 gap-1.5">
-            {memberIds.map((mid) => {
-              const m = media.find((x) => x.id === mid);
+            {members.map(({ nodeId, nodeType, mediaId }) => {
+              const m = mediaId ? media.find((x) => x.id === mediaId) : undefined;
+              const isSource = nodeType === 'chip';
+              // "Open" the original when it has a real URL (YouTube/website, or
+              // an image source). Indexed-only types (doc/audio/text) have none.
+              const url =
+                m && typeof m.source === 'string' && /^https?:\/\//.test(m.source)
+                  ? m.source
+                  : undefined;
               return (
                 <div
-                  key={mid}
+                  key={nodeId}
                   title={m?.name}
-                  className="relative aspect-video overflow-hidden rounded-md bg-black/[0.06] ring-1 ring-black/[0.05] dark:bg-white/[0.06]"
+                  className="group/tile relative aspect-video overflow-hidden rounded-md bg-black/[0.06] ring-1 ring-black/[0.05] dark:bg-white/[0.06]"
                 >
                   {m?.thumbnail ? (
                     <img
@@ -176,7 +200,10 @@ function HubNodeInner({ id, data, selected }: NodeProps) {
                     />
                   ) : (
                     <span className="flex h-full w-full items-center justify-center">
-                      <MediaIcon type={(m?.type ?? 'document') as MediaType} size="sm" />
+                      <MediaIcon
+                        type={(m?.type ?? 'document') as MediaType}
+                        size="sm"
+                      />
                     </span>
                   )}
                   {m?.status === 'failed' && (
@@ -185,6 +212,58 @@ function HubNodeInner({ id, data, selected }: NodeProps) {
                   {m && m.status !== 'indexed' && m.status !== 'failed' && (
                     <span className="absolute right-0.5 top-0.5 h-1.5 w-1.5 rounded-full bg-amber-400 ring-1 ring-white" />
                   )}
+                  {/* per-tile actions — open / pop out to canvas / delete. Only
+                      on hover so the preview stays clean; nodrag so a click
+                      never starts dragging the box. */}
+                  <div className="nodrag absolute inset-0 flex items-center justify-center gap-1 bg-black/55 opacity-0 backdrop-blur-[1px] transition-opacity group-hover/tile:opacity-100">
+                    {url && (
+                      <button
+                        title="Open the original"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          window.open(url, '_blank', 'noopener,noreferrer');
+                        }}
+                        className="flex h-6 w-6 items-center justify-center rounded-full bg-white/90 text-black shadow-sm transition-transform hover:scale-110"
+                      >
+                        <ExternalLink className="h-3 w-3" />
+                      </button>
+                    )}
+                    <button
+                      title="Pop out to the canvas"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        undockMember(nodeId);
+                      }}
+                      className="flex h-6 w-6 items-center justify-center rounded-full bg-white/90 text-black shadow-sm transition-transform hover:scale-110"
+                    >
+                      <ArrowUpRight className="h-3 w-3" />
+                    </button>
+                    <button
+                      title={
+                        isSource
+                          ? 'Delete source (removes it + its vectors)'
+                          : 'Remove from the board'
+                      }
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (isSource && mediaId) {
+                          if (
+                            window.confirm(
+                              `Delete "${m?.name ?? mediaId}" permanently? This removes it from your knowledge base and Pinecone. This cannot be undone.`
+                            )
+                          ) {
+                            deleteMedia(mediaId);
+                            removeBoardNode(nodeId);
+                          }
+                        } else {
+                          removeBoardNode(nodeId);
+                        }
+                      }}
+                      className="flex h-6 w-6 items-center justify-center rounded-full bg-white/90 text-red-600 shadow-sm transition-transform hover:scale-110"
+                    >
+                      <Trash2 className="h-3 w-3" />
+                    </button>
+                  </div>
                 </div>
               );
             })}

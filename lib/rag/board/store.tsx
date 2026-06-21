@@ -26,6 +26,9 @@ import {
   hubCols,
   hubCollapsed,
   HUB_MINI_SIZE,
+  CHIP_W,
+  CHIP_H,
+  CHIP_TAB,
   stackOf
 } from './types';
 
@@ -156,6 +159,9 @@ interface BoardCtxState {
   /** Patch a node's data (controlled flow — must go through the provider). */
   updateBoardNodeData: (nodeId: string, patch: Record<string, unknown>) => void;
   toggleHubCollapse: (nodeId: string) => void;
+  /** Pop a docked member out of its box onto the canvas (becomes a free piece),
+   *  re-tiling the box it left. Used by the minimized box's per-tile actions. */
+  undockMember: (nodeId: string) => void;
   /** Set a node's width/height (used by the half-screen toggle). */
   resizeBoardNode: (
     nodeId: string,
@@ -492,6 +498,58 @@ export function BoardProvider({ children }: { children: ReactNode }) {
     [setBoard]
   );
 
+  // Pop a docked piece out of its box onto the canvas just to the box's right
+  // (a small cascade keeps several pop-outs from landing in one stack), then
+  // re-tile the box it left. The box is the plug, so a docked piece never had a
+  // private wire — nothing to disconnect.
+  const undockMember = useCallback(
+    (nodeId: string) => {
+      setBoard((prev) => {
+        const node = prev.nodes.find((n) => n.id === nodeId);
+        if (!node || !node.parentId) return prev;
+        const oldHub = node.parentId;
+        const hub = prev.nodes.find((n) => n.id === oldHub);
+        const base = hub ? hub.position : node.position;
+        const freeChips = prev.nodes.filter(
+          (n) => !n.parentId && n.type === 'chip'
+        ).length;
+        const off = (freeChips % 6) * 20;
+        const restore =
+          node.type === 'prompt' || node.type === 'agent'
+            ? { width: CHIP_W, height: CHIP_H + CHIP_TAB }
+            : node.type === 'textNode'
+            ? { width: 234, height: 132 }
+            : { width: CHIP_W, height: CHIP_H };
+        let nodes = prev.nodes.map((n) =>
+          n.id === nodeId
+            ? {
+                ...n,
+                parentId: undefined,
+                position: {
+                  x: base.x + HUB_MINI_SIZE.width + 24 + off,
+                  y: base.y + off
+                },
+                ...restore
+              }
+            : n
+        );
+        const isMember = (n: BoardNode) =>
+          (n.type === 'chip' ||
+            n.type === 'textNode' ||
+            n.type === 'prompt' ||
+            n.type === 'agent') &&
+          n.parentId === oldHub;
+        const cols = hubCols(nodes.filter(isMember).length);
+        let i = 0;
+        nodes = nodes.map((n) =>
+          isMember(n) ? { ...n, position: hubSlot(i++, cols) } : n
+        );
+        return { ...prev, nodes };
+      });
+    },
+    [setBoard]
+  );
+
   const resizeBoardNode = useCallback(
     (
       nodeId: string,
@@ -776,6 +834,7 @@ export function BoardProvider({ children }: { children: ReactNode }) {
     resolveBrainScope,
     updateBoardNodeData,
     toggleHubCollapse,
+    undockMember,
     resizeBoardNode,
     removeBoardEdge,
     removeBoardNode,
