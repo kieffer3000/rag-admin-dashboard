@@ -308,7 +308,12 @@ export function RagProvider({ children }: { children: ReactNode }) {
   }, [projects]);
 
   // Remember which project is open, so a refresh reopens it (not always the seed).
+  // CRITICAL: skip until hydration finishes. On mount activeProjectId is the
+  // SEED id, and this effect runs synchronously BEFORE the async hydration
+  // reads the saved key — without this guard it overwrites "last project" with
+  // the seed every reload, so you always land back on the first project.
   useEffect(() => {
+    if (!projectsHydrated.current) return;
     try {
       localStorage.setItem('answersdoc_active_project_v1', activeProjectId);
     } catch {

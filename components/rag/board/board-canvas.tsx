@@ -34,7 +34,6 @@ import { MediaType } from '@/lib/rag/types';
 import {
   BoardNode,
   hubSlot,
-  hubSize,
   hubCols,
   hubCollapsed,
   hubFootprint,
@@ -1400,8 +1399,8 @@ function BoardCanvasInner() {
         id: hubId,
         type: 'hub',
         position: centerPos(),
-        data: { name: 'All sources', mediaType: 'cluster' },
-        ...hubSize(unplaced.length)
+        data: { name: 'All sources', mediaType: 'cluster' }
+        // No width/height — the hub measures its own collapse-aware DOM.
       }
     ];
     const cols = hubCols(unplaced.length);
@@ -1936,14 +1935,15 @@ function BoardCanvasInner() {
               if (!nodes.some((n) => n.id === hubId)) return prev; // box gone
             } else {
               hubId = nextBoardId('hub');
-              const size = hubSize(mediaIds.length);
+              // Reserve the box's REAL (collapse-aware) footprint when placing
+              // it, but DON'T bake size onto the node — it measures its own DOM.
+              const size = hubFootprint({ mediaType: 'cluster' }, mediaIds.length);
               const pos = freePosition(nodes, centerPos(), size.width, size.height);
               nodes.push({
                 id: hubId,
                 type: 'hub',
                 position: pos,
-                data: { name: box.name, mediaType: 'cluster' },
-                ...size
+                data: { name: box.name, mediaType: 'cluster' }
               });
             }
             mediaIds.forEach((mid) =>
@@ -1955,13 +1955,16 @@ function BoardCanvasInner() {
                 data: { mediaId: mid }
               })
             );
-            // Re-tile + resize the target box AND any boxes the chips left.
+            // Re-tile the target box AND any boxes the chips left. Hubs size
+            // themselves from their DOM, so just strip any stale baked-in size
+            // (a leftover width/height = a huge invisible hit box).
             for (const h of new Set([hubId, ...leftHubs])) {
               nodes = retile(nodes, h);
-              const count = nodes.filter(
-                (n) => n.parentId === h && isMember(n)
-              ).length;
-              nodes = nodes.map((n) => (n.id === h ? { ...n, ...hubSize(count) } : n));
+              nodes = nodes.map((n) =>
+                n.id === h && (n.width != null || n.height != null)
+                  ? { ...n, width: undefined, height: undefined }
+                  : n
+              );
             }
             return { ...prev, nodes };
           });

@@ -90,8 +90,9 @@ function seedBoard(media: MediaItem[]): BoardState {
       id: hubId,
       type: 'hub',
       position: { x: 80, y: 80 },
-      data: { name: 'Documents', mediaType: 'cluster' },
-      ...hubSize(docs.length)
+      data: { name: 'Documents', mediaType: 'cluster' }
+      // No width/height: the hub measures its own (collapse-aware) DOM. A baked
+      // size gives React Flow a huge invisible hit box on a minimized box.
     });
     docs.forEach((m, i) => {
       nodes.push({
@@ -285,6 +286,15 @@ export function BoardProvider({ children }: { children: ReactNode }) {
                 ? n
                 : { ...n, position: slot };
             });
+            // Hubs measure their own (collapse-aware) DOM. Strip any baked-in
+            // width/height from older saves — a stale size gives React Flow a
+            // huge INVISIBLE hit box, so a minimized box drags from far away /
+            // when the cursor is nowhere near it.
+            nodes = nodes.map((n: BoardNode) =>
+              n.type === 'hub' && (n.width != null || n.height != null)
+                ? { ...n, width: undefined, height: undefined }
+                : n
+            );
             // Don't clobber work the user started before this load resolved.
             if (!touched.current.has(pid))
               setBoards((prev) => ({
