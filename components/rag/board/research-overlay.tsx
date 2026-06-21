@@ -45,8 +45,12 @@ export function ResearchOverlay({
   const answerMode: 'cited' | 'hybrid' =
     data.answerMode === 'hybrid' ? 'hybrid' : 'cited';
   const summary = (data.summary as string) ?? '';
-  const speed: 'fast' | 'detailed' =
-    data.speed === 'detailed' ? 'detailed' : 'fast';
+  const speed: 'fast' | 'detailed' | 'research' =
+    data.speed === 'detailed'
+      ? 'detailed'
+      : data.speed === 'research'
+        ? 'research'
+        : 'fast';
   const messages = brainMessages[brainId] ?? [];
   const scopeCount = resolveBrainScope(brainId).items.length;
 

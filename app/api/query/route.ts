@@ -86,7 +86,7 @@ async function callMake(
   guides: string[],
   model: string,
   profile: string,
-  speed: 'fast' | 'detailed'
+  speed: 'fast' | 'detailed' | 'research'
 ): Promise<MakeResult> {
   const res = await fetch(url, {
     method: 'POST',
@@ -299,6 +299,15 @@ export async function POST(req: Request) {
   // Long-term memory is kept (cheap embed+lookup). 🔍 Detailed (default) runs
   // the full pipeline.
   const fast = body.speed === 'fast';
+  // 🔬 Research = the deepest tier. NOT fast (runs every server-side check),
+  // and forwarded to Make as 'research' so the Query scenario can serve its
+  // heavier answer model (GLM) instead of the fast GPT-OSS path.
+  const research = body.speed === 'research';
+  const speedParam: 'fast' | 'detailed' | 'research' = fast
+    ? 'fast'
+    : research
+      ? 'research'
+      : 'detailed';
 
   // ── Summary fast-path (the summary tree) ─────────────────────────────────
   // "Summarize this / what is this about" is a GLOBAL question: top-k retrieval
@@ -401,7 +410,7 @@ export async function POST(req: Request) {
       guides,
       model,
       profile,
-      fast ? 'fast' : 'detailed'
+      speedParam
     );
   } catch (e) {
     return Response.json(
@@ -426,7 +435,7 @@ export async function POST(req: Request) {
           guides,
           model,
           profile,
-          fast ? 'fast' : 'detailed'
+          speedParam
         );
         retried = true;
         // prefer the pass that isn't a no-match; otherwise the higher score.

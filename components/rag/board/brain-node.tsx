@@ -67,7 +67,8 @@ import {
   Clock,
   Archive,
   Zap,
-  Search
+  Search,
+  Telescope
 } from 'lucide-react';
 import type { BrainData } from '@/lib/rag/board/types';
 
@@ -171,7 +172,7 @@ function BrainNodeInner({ id, data, selected }: NodeProps) {
   const d = data as BrainData & {
     color?: string;
     answerMode?: 'cited' | 'hybrid';
-    speed?: 'fast' | 'detailed';
+    speed?: 'fast' | 'detailed' | 'research';
   };
   const {
     board,
@@ -196,7 +197,7 @@ function BrainNodeInner({ id, data, selected }: NodeProps) {
   const answerMode: 'cited' | 'hybrid' = d.answerMode ?? 'cited';
   // ⚡ Fast (lightning, fewer round-trips) vs 🔍 Detailed (full pipeline).
   // Defaults to Fast and persists with the brain (stays on across sessions).
-  const speed: 'fast' | 'detailed' = d.speed ?? 'fast';
+  const speed: 'fast' | 'detailed' | 'research' = d.speed ?? 'fast';
   const headerColor = BRAIN_COLORS[d.color ?? 'indigo'] ?? BRAIN_COLORS.indigo;
   const [listening, setListening] = useState(false);
   const [transcribing, setTranscribing] = useState(false);
@@ -1164,31 +1165,43 @@ function BrainNodeInner({ id, data, selected }: NodeProps) {
                 onClick={() => updateBoardNodeData(id, { speed: 'fast' })}
                 title="Fast — a quick, lightning answer (fewer steps, no per-claim citations or extra checks)."
                 className={cn(
-                  'flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide transition-colors',
+                  'flex items-center gap-1 rounded-full px-2 py-0.5 text-[15px] font-semibold uppercase tracking-wide transition-colors',
                   speed === 'fast'
                     ? 'bg-amber-400 text-white shadow-[0_1px_3px_rgb(0_0_0/0.18)]'
                     : 'text-muted-foreground/70 hover:text-foreground'
                 )}
               >
-                <Zap className="h-2.5 w-2.5" /> Fast
+                <Zap className="h-[15px] w-[15px]" /> Fast
               </button>
               <button
                 onClick={() => updateBoardNodeData(id, { speed: 'detailed' })}
                 title="Detailed — the full pipeline: query expansion, validation, and per-claim citations. Slower, more thorough."
                 className={cn(
-                  'flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide transition-colors',
+                  'flex items-center gap-1 rounded-full px-2 py-0.5 text-[15px] font-semibold uppercase tracking-wide transition-colors',
                   speed === 'detailed'
                     ? 'bg-accent text-white shadow-[0_1px_3px_rgb(0_0_0/0.18)]'
                     : 'text-muted-foreground/70 hover:text-foreground'
                 )}
               >
-                <Search className="h-2.5 w-2.5" /> Detailed
+                <Search className="h-[15px] w-[15px]" /> Detailed
+              </button>
+              <button
+                onClick={() => updateBoardNodeData(id, { speed: 'research' })}
+                title="Research — the deepest answer: the full pipeline plus a heavier reasoning model that organizes findings across many sources and bridges to related concepts. Slowest, most thorough."
+                className={cn(
+                  'flex items-center gap-1 rounded-full px-2 py-0.5 text-[15px] font-semibold uppercase tracking-wide transition-colors',
+                  speed === 'research'
+                    ? 'bg-violet-500 text-white shadow-[0_1px_3px_rgb(0_0_0/0.18)]'
+                    : 'text-muted-foreground/70 hover:text-foreground'
+                )}
+              >
+                <Telescope className="h-[15px] w-[15px]" /> Research
               </button>
             </div>
           </div>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <button className="nodrag flex items-center gap-1.5 rounded-md px-1.5 py-0.5 text-[10.5px] font-medium text-muted-foreground/80 transition-colors hover:bg-black/[0.04] hover:text-foreground dark:hover:bg-white/[0.06]">
+              <button className="nodrag flex items-center gap-1.5 rounded-md px-1.5 py-0.5 text-[16px] font-medium text-muted-foreground/80 transition-colors hover:bg-black/[0.04] hover:text-foreground dark:hover:bg-white/[0.06]">
                 <span
                   className={cn(
                     'h-1.5 w-1.5 rounded-full',
@@ -1196,7 +1209,7 @@ function BrainNodeInner({ id, data, selected }: NodeProps) {
                   )}
                 />
                 {model.label}
-                <ChevronDown className="h-2.5 w-2.5" />
+                <ChevronDown className="h-[15px] w-[15px]" />
               </button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="start" className="w-60">
@@ -1244,7 +1257,7 @@ function BrainNodeInner({ id, data, selected }: NodeProps) {
                 : 'Cited + AI — sources first, then the model fills gaps (marked “Beyond your sources”). Click for cited-only.'
             }
             className={cn(
-              'nodrag flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide transition-colors',
+              'nodrag flex items-center gap-1 rounded-full px-2 py-0.5 text-[15px] font-semibold uppercase tracking-wide transition-colors',
               answerMode === 'cited'
                 ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
                 : 'bg-accent/12 text-accent'
@@ -1252,11 +1265,11 @@ function BrainNodeInner({ id, data, selected }: NodeProps) {
           >
             {answerMode === 'cited' ? (
               <>
-                <Quote className="h-2.5 w-2.5" /> Cited only
+                <Quote className="h-[15px] w-[15px]" /> Cited only
               </>
             ) : (
               <>
-                <Sparkles className="h-2.5 w-2.5" /> Cited + AI
+                <Sparkles className="h-[15px] w-[15px]" /> Cited + AI
               </>
             )}
           </button>

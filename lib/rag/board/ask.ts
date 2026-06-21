@@ -365,8 +365,10 @@ export async function askBrain(
   /** Rolling summary of turns older than the verbatim window (long convos). */
   summary = '',
   /** 'detailed' = full pipeline (expander/validator/attribution/memory);
-   *  'fast' = lightning path that skips the extra LLM round-trips for speed. */
-  speed: 'fast' | 'detailed' = 'detailed',
+   *  'fast' = lightning path that skips the extra LLM round-trips for speed;
+   *  'research' = deepest tier (full pipeline + the heavier GLM answer model
+   *  on the Make side). */
+  speed: 'fast' | 'detailed' | 'research' = 'detailed',
   /** Wired box ids / everything-hub / project id — lets a "summarize" question
    *  use the precomputed box or project rollup instead of re-synthesizing. */
   clusterIds: string[] = [],
