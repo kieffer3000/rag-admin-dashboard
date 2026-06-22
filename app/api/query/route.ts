@@ -169,7 +169,18 @@ async function callMake(
     .filter((s) => Number.isFinite(s));
   const topScore = scores.length ? Math.max(...scores) : null;
 
-  const rawSuggested = data.suggestedQuestions ?? data.suggested_questions ?? [];
+  // Make often hands this back as a JSON-encoded STRING (e.g. a Bedrock/Nova
+  // prompt module emits the array as text) — parse it so the follow-ups render
+  // without needing a Parse-JSON step in the scenario.
+  let rawSuggested: unknown =
+    data.suggestedQuestions ?? data.suggested_questions ?? [];
+  if (typeof rawSuggested === 'string') {
+    try {
+      rawSuggested = JSON.parse(rawSuggested);
+    } catch {
+      rawSuggested = [];
+    }
+  }
   const suggestedQuestions: string[] = (
     Array.isArray(rawSuggested) ? rawSuggested : []
   )
