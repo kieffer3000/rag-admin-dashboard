@@ -16,18 +16,42 @@ const ChartBlock = dynamic(
   { ssr: false }
 );
 
-/** Split an answer into prose + fenced graphic blocks (```mermaid / ```chart). */
+// A mermaid diagram's first line names its type. Models often fence diagrams as
+// a plain ``` or ```flowchart instead of ```mermaid — so we sniff the content,
+// not just the language tag, or the diagram renders as a raw code block.
+const MERMAID_FIRST =
+  /^\s*(flowchart|graph|sequenceDiagram|classDiagram|stateDiagram(?:-v2)?|erDiagram|gantt|pie|journey|mindmap|gitGraph|timeline|quadrantChart|requirementDiagram|C4Context|sankey(?:-beta)?|xychart(?:-beta)?|block-beta|packet-beta|kanban|architecture(?:-beta)?)\b/i;
+
+/** Classify a fenced block by its language tag, falling back to a content sniff
+ *  for mermaid. Returns null for ordinary code blocks (left in the prose). */
+function classifyFence(tag: string, body: string): 'mermaid' | 'chart' | null {
+  const t = tag.trim().toLowerCase();
+  if (t === 'chart') return 'chart';
+  if (t === 'mermaid' || MERMAID_FIRST.test(t)) return 'mermaid';
+  // No / generic tag: sniff the first non-empty line for a mermaid diagram type.
+  if (!t || t === 'text' || t === 'plaintext') {
+    const firstLine = body.split('\n').find((l) => l.trim());
+    if (firstLine && MERMAID_FIRST.test(firstLine)) return 'mermaid';
+  }
+  return null;
+}
+
+/** Split an answer into prose + fenced graphic blocks (mermaid / chart). Mermaid
+ *  is detected by tag OR by content, so a plain/```flowchart fence still renders
+ *  as a diagram. Non-graphic code blocks are left in the prose untouched. */
 export function splitGraphicBlocks(
   content: string
 ): { type: 'prose' | 'mermaid' | 'chart'; text: string }[] {
-  const re = /```(mermaid|chart)\s*\n([\s\S]*?)```/g;
+  const re = /```([a-zA-Z0-9_-]*)[ \t]*\n([\s\S]*?)```/g;
   const out: { type: 'prose' | 'mermaid' | 'chart'; text: string }[] = [];
   let last = 0;
   let m: RegExpExecArray | null;
   while ((m = re.exec(content)) !== null) {
+    const kind = classifyFence(m[1], m[2]);
+    if (!kind) continue; // ordinary code block — keep it in the prose slice
     if (m.index > last)
       out.push({ type: 'prose', text: content.slice(last, m.index) });
-    out.push({ type: m[1] as 'mermaid' | 'chart', text: m[2] });
+    out.push({ type: kind, text: m[2] });
     last = m.index + m[0].length;
   }
   if (last < content.length) out.push({ type: 'prose', text: content.slice(last) });
