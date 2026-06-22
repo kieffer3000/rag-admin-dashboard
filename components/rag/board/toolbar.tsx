@@ -141,6 +141,12 @@ export function BoardToolbar(p: BoardToolbarProps) {
   const [boxTarget, setBoxTarget] = useState<string>('new');
   // How many links the last import skipped as already-in-this-project duplicates.
   const [dupSkipped, setDupSkipped] = useState(0);
+  // The actual skipped URLs, so the "Skipped" filter pill can list them.
+  const [dupSkippedList, setDupSkippedList] = useState<string[]>([]);
+  // Status filter for the import progress list: all | indexed | failed | pending | skipped.
+  const [importFilter, setImportFilter] = useState<
+    'all' | 'indexed' | 'failed' | 'pending' | 'skipped'
+  >('all');
   const stripExt = (n: string) => n.replace(/\.[^.]+$/, '');
 
   // ---- voice recording ----
@@ -225,6 +231,8 @@ export function BoardToolbar(p: BoardToolbarProps) {
     setBoxName('');
     setBoxTarget('new');
     setDupSkipped(0);
+    setDupSkippedList([]);
+    setImportFilter('all');
   }
 
   /** If "Add to a box" is on, gather this import into the chosen box (new or
@@ -284,11 +292,13 @@ export function BoardToolbar(p: BoardToolbarProps) {
       const created: { id: string; url: string }[] = [];
       const retried: { id: string; url: string }[] = [];
       const allIds: string[] = []; // every pasted link's media id (for the box)
+      const skippedUrls = new Set<string>(); // dupes, for the Skipped filter list
       let skipped = 0;
       for (const u of raw) {
         const k = dedupKey(sourceType, u);
         if (inBatch.has(k)) {
           skipped++;
+          skippedUrls.add(u);
           continue;
         }
         inBatch.add(k);
@@ -300,6 +310,7 @@ export function BoardToolbar(p: BoardToolbarProps) {
             retried.push({ id: existing.id, url: u });
           } else {
             skipped++; // already indexed / indexing (still gathered into the box)
+            skippedUrls.add(u);
           }
         } else {
           const id = p.onNewSource(sourceType, '', u);
@@ -309,6 +320,8 @@ export function BoardToolbar(p: BoardToolbarProps) {
       }
       const all = [...created, ...retried];
       setDupSkipped(skipped);
+      setDupSkippedList([...skippedUrls]);
+      setImportFilter('all');
       if (!all.length && !addToBox) {
         window.alert(
           skipped
@@ -542,8 +555,62 @@ export function BoardToolbar(p: BoardToolbarProps) {
                   )}
                 </DialogDescription>
               </DialogHeader>
+              {/* status filter pills — click to slice the list by status */}
+              {(() => {
+                const stOf = (mid: string) =>
+                  media.find((x) => x.id === mid)?.status ?? 'processing';
+                const indexedN = importing.filter(
+                  (it) => stOf(it.id) === 'indexed'
+                ).length;
+                const failedN = importing.filter(
+                  (it) => stOf(it.id) === 'failed'
+                ).length;
+                const pendingN = importing.length - indexedN - failedN;
+                const skippedN = dupSkippedList.length;
+                const pills: {
+                  key: 'all' | 'indexed' | 'failed' | 'pending' | 'skipped';
+                  label: string;
+                  show: boolean;
+                }[] = [
+                  { key: 'all', label: `All ${importing.length + skippedN}`, show: true },
+                  { key: 'indexed', label: `${indexedN} Imported`, show: true },
+                  { key: 'pending', label: `${pendingN} Indexing`, show: pendingN > 0 },
+                  { key: 'failed', label: `${failedN} Failed`, show: failedN > 0 },
+                  { key: 'skipped', label: `${skippedN} Skipped`, show: skippedN > 0 }
+                ];
+                return (
+                  <div className="flex flex-wrap items-center gap-1.5 pb-0.5">
+                    {pills
+                      .filter((pl) => pl.show)
+                      .map((pl) => (
+                        <button
+                          key={pl.key}
+                          onClick={() => setImportFilter(pl.key)}
+                          className={cn(
+                            'rounded-full px-2.5 py-1 text-[11px] font-semibold transition-colors',
+                            importFilter === pl.key
+                              ? 'bg-accent text-white shadow-[0_1px_3px_rgb(0_0_0/0.18)]'
+                              : 'bg-black/[0.05] text-muted-foreground hover:text-foreground dark:bg-white/[0.06]'
+                          )}
+                        >
+                          {pl.label}
+                        </button>
+                      ))}
+                  </div>
+                );
+              })()}
               <div className="max-h-72 space-y-1.5 overflow-y-auto py-1">
-                {importing.map(({ id, url }) => {
+                {importing
+                  .filter((it) => {
+                    if (importFilter === 'all') return true;
+                    if (importFilter === 'skipped') return false;
+                    const s =
+                      media.find((x) => x.id === it.id)?.status ?? 'processing';
+                    if (importFilter === 'indexed') return s === 'indexed';
+                    if (importFilter === 'failed') return s === 'failed';
+                    return s !== 'indexed' && s !== 'failed'; // pending
+                  })
+                  .map(({ id, url }) => {
                   const m = media.find((x) => x.id === id);
                   const st = m?.status ?? 'processing';
                   return (
@@ -599,6 +666,22 @@ export function BoardToolbar(p: BoardToolbarProps) {
                     </div>
                   );
                 })}
+                {(importFilter === 'all' || importFilter === 'skipped') &&
+                  dupSkippedList.map((url) => (
+                    <div
+                      key={`skip-${url}`}
+                      className="flex items-center gap-2.5 rounded-lg border border-input/60 px-2.5 py-2 opacity-75"
+                      title={`${url}\n\nSkipped — already in this project.`}
+                    >
+                      <span className="h-2 w-2 shrink-0 rounded-full bg-amber-500/70" />
+                      <span className="min-w-0 flex-1 truncate text-[12.5px] font-medium">
+                        {url}
+                      </span>
+                      <span className="shrink-0 text-[10.5px] text-amber-600/80">
+                        Skipped
+                      </span>
+                    </div>
+                  ))}
               </div>
               <div className="flex items-center justify-end gap-2 pt-1">
                 {(() => {
