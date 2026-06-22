@@ -52,7 +52,10 @@ export function sanitizeHtml(html: string): string {
     .replace(/\son\w+\s*=\s*"[^"]*"/gi, '')
     .replace(/\son\w+\s*=\s*'[^']*'/gi, '')
     .replace(/\son\w+\s*=\s*[^\s>]+/gi, '')
-    .replace(/(href|src)\s*=\s*("|')\s*javascript:[^"']*\2/gi, '$1=$2#$2');
+    .replace(/(href|src)\s*=\s*("|')\s*javascript:[^"']*\2/gi, '$1=$2#$2')
+    // Belt-and-suspenders: the model occasionally leaks markdown **bold** into
+    // an HTML answer — render it as <strong> rather than literal asterisks.
+    .replace(/\*\*(?=\S)([\s\S]+?\S)\*\*/g, '<strong>$1</strong>');
 }
 
 /**

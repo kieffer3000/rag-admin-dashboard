@@ -99,6 +99,61 @@ function dedupeRaw(raw: RawCitation[]): RawCitation[] {
   });
 }
 
+const NARRATIVE_KEYS = [
+  'summary',
+  'summary_text',
+  'overall_topic',
+  'topic_overview',
+  'structure_and_main_points',
+  'key_points',
+  'key_takeaways'
+];
+
+function pullNarrative(o: unknown, out: string[]): void {
+  if (o == null) return;
+  if (typeof o === 'string') {
+    out.push(o);
+    return;
+  }
+  if (Array.isArray(o)) {
+    o.forEach((x) => pullNarrative(x, out));
+    return;
+  }
+  if (typeof o === 'object') {
+    const rec = o as Record<string, unknown>;
+    for (const k of NARRATIVE_KEYS) if (k in rec) pullNarrative(rec[k], out);
+    if (out.length === 0 && typeof rec.title === 'string') out.push(rec.title);
+  }
+}
+
+/**
+ * Some chunk text is a JSON-encoded summary object/array, e.g.
+ * `{"title":"…","summary":"…"}` or `{"summary":["…","…"]}`. Citation snippets
+ * must show the human prose — never the raw JSON braces/keys.
+ */
+function cleanSnippet(raw: string | undefined): string {
+  const s = (raw ?? '').trim();
+  if (!s || (s[0] !== '{' && s[0] !== '[')) return s;
+  try {
+    const out: string[] = [];
+    pullNarrative(JSON.parse(s), out);
+    const text = out.filter(Boolean).join(' ').replace(/\s+/g, ' ').trim();
+    if (text) return text;
+  } catch {
+    // Malformed JSON (some chunks carry trailing junk): pull the summary value.
+    const m = s.match(
+      /"(?:summary|summary_text|overall_topic)"\s*:\s*"((?:[^"\\]|\\.)*)"/
+    );
+    if (m)
+      return m[1]
+        .replace(/\\[nrt]/g, ' ')
+        .replace(/\\"/g, '"')
+        .replace(/\s+/g, ' ')
+        .trim();
+  }
+  return s;
+}
+
 /** Enrich one raw citation into the typed Citation (score, timestamp, jumpUrl). */
 function toCitation(c: RawCitation, byId: Map<string, MediaItem>): Citation {
   const m = byId.get(c.source_id);
@@ -121,7 +176,7 @@ function toCitation(c: RawCitation, byId: Map<string, MediaItem>): Citation {
     mediaName: c.source_name || m?.name || c.source_id,
     type: m?.type ?? 'document',
     locator,
-    snippet: c.snippet ?? '',
+    snippet: cleanSnippet(c.snippet),
     score,
     startSec,
     jumpUrl,
