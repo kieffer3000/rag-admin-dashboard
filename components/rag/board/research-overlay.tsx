@@ -364,7 +364,7 @@ export function ResearchOverlay({
                 onClick={() =>
                   updateBoardNodeData(brainId, { speed: 'detailed' })
                 }
-                title="Detailed — the full pipeline: query expansion, validation, and per-claim citations. Slower, more thorough."
+                title="Normal — the full pipeline: query expansion and per-claim citations. Slower, more thorough."
                 className={cn(
                   'flex items-center gap-1 rounded-full px-3 py-1 text-[12px] font-semibold uppercase tracking-wide transition-colors',
                   speed === 'detailed'
@@ -372,7 +372,7 @@ export function ResearchOverlay({
                     : 'text-muted-foreground/70 hover:text-foreground'
                 )}
               >
-                <Search className="h-3.5 w-3.5" /> Detailed
+                <Search className="h-3.5 w-3.5" /> Normal
               </button>
               <button
                 onClick={() =>

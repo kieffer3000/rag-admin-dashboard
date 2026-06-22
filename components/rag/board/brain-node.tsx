@@ -1167,8 +1167,8 @@ function BrainNodeInner({ id, data, selected }: NodeProps) {
             </DropdownMenu>
 
             {/* ⚡/🔍 speed: Fast = lightning (fewer round-trips, no extra LLM
-                passes); Detailed = full pipeline. Persists with the brain, so
-                it stays set across sessions. */}
+                passes); Normal = full pipeline (internal value stays 'detailed'
+                so the Make router still matches). Persists with the brain. */}
             <div
               role="group"
               aria-label="Answer speed"
@@ -1188,7 +1188,7 @@ function BrainNodeInner({ id, data, selected }: NodeProps) {
               </button>
               <button
                 onClick={() => updateBoardNodeData(id, { speed: 'detailed' })}
-                title="Detailed — the full pipeline: query expansion, validation, and per-claim citations. Slower, more thorough."
+                title="Normal — the full pipeline: query expansion and per-claim citations. Slower, more thorough."
                 className={cn(
                   'flex items-center gap-1 rounded-full px-2 py-0.5 text-[15px] font-semibold uppercase tracking-wide transition-colors',
                   speed === 'detailed'
@@ -1196,7 +1196,7 @@ function BrainNodeInner({ id, data, selected }: NodeProps) {
                     : 'text-muted-foreground/70 hover:text-foreground'
                 )}
               >
-                <Search className="h-[15px] w-[15px]" /> Detailed
+                <Search className="h-[15px] w-[15px]" /> Normal
               </button>
               <button
                 onClick={() => updateBoardNodeData(id, { speed: 'research' })}
