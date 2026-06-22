@@ -1,4 +1,6 @@
 import { auth } from '@clerk/nextjs/server';
+import { runUtilityLLM } from '@/lib/rag/utility-llm';
+import { fetchSummaries, wantsSummary } from '@/lib/rag/summary-core';
 
 // Proxies the Board's brain queries to the Make.com Query scenario.
 //
@@ -260,6 +262,56 @@ export async function POST(req: Request) {
     : research
       ? 'research'
       : 'detailed';
+
+  // ── Summary route ────────────────────────────────────────────────────────
+  // "Summarize this / what is this about" is a GLOBAL question that top-k
+  // retrieval under-covers (and the no-match gate can refuse). Answer it from
+  // the PRECOMPUTED per-source summaries instead (built once at ingest). This is
+  // NOT a phantom LLM: wantsSummary is a regex, fetchSummaries is a storage read,
+  // and the synthesis runs through runUtilityLLM → the Make utility webhook (the
+  // model lives in Make). Falls through to normal retrieval if no summaries exist.
+  if (wantsSummary(userQuestion)) {
+    const clusterIds: string[] = Array.isArray(body.cluster_ids)
+      ? body.cluster_ids.filter((s: unknown) => typeof s === 'string' && s)
+      : [];
+    const rollupIds =
+      body.everything === true && typeof body.project_id === 'string'
+        ? [body.project_id]
+        : clusterIds;
+    let summaries = rollupIds.length ? await fetchSummaries(rollupIds) : [];
+    if (!summaries.length) summaries = await fetchSummaries(sourceIds);
+    if (summaries.length) {
+      const ctx = summaries
+        .map((s, i) => `[${i + 1}] ${s.name}\n${s.text}`)
+        .join('\n\n');
+      const ans = await runUtilityLLM(
+        `${modeDirective(mode)}\n\nThe SUMMARIES below are pre-made overviews of the user's wired sources. Answer the QUESTION from them; if several are given, synthesize across them. Write in clean HTML (<p>, <strong>, <ul>/<li>). After a claim, cite the 1-based source number(s) like [1] or [2] where useful.\n\nSUMMARIES:\n${ctx}\n\nQUESTION: ${userQuestion}`,
+        { maxOutputTokens: 1400, temperature: 0.3 }
+      );
+      if (ans && ans.trim()) {
+        return Response.json({
+          answer: ans,
+          citations: [],
+          // Aggregator-shaped so the client's footnote pipeline links [n] → source.
+          raw_citations: JSON.stringify(
+            summaries.map((s) => ({
+              score: 1,
+              metadata: {
+                source_id: s.source_id,
+                source_name: s.name,
+                text: s.text
+              }
+            }))
+          ),
+          used_sources: null,
+          topScore: 1,
+          noMatch: false,
+          suggestedQuestions: []
+        });
+      }
+    }
+    // else: no summary indexed yet → fall through to normal retrieval.
+  }
 
   // Recent conversation, preformatted (deterministic — no LLM). Forwarded to
   // Make so its expander/answer modules can resolve follow-up references. Older
