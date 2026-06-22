@@ -2,8 +2,9 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { useRag } from '@/lib/rag/store';
-import { ChatMessage, ChatAttachment } from '@/lib/rag/types';
-import { generateMockAnswer, streamText } from '@/lib/rag/mock-answer';
+import { ChatMessage, ChatAttachment, Citation } from '@/lib/rag/types';
+import { streamText } from '@/lib/rag/mock-answer';
+import { askBrain } from '@/lib/rag/board/ask';
 import { SourcesPanel } from './sources-panel';
 import { StudioPanel } from './studio-panel';
 import { Composer } from './composer';
@@ -93,7 +94,7 @@ export function ChatView() {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
   }, [messages.length, streaming]);
 
-  function handleSend(text: string, attachment?: ChatAttachment) {
+  async function handleSend(text: string, attachment?: ChatAttachment) {
     // "Add to library" attachments also become permanent indexed sources.
     if (attachment?.mode === 'index') {
       addMedia({
@@ -117,31 +118,69 @@ export function ChatView() {
     addMessage(userMsg);
     setBusy(true);
 
-    const { content, citations } = generateMockAnswer(
-      text,
-      contextItems,
-      attachment
-    );
+    // Recent turns (plain text, last 30) → lets the server resolve follow-up
+    // references into a standalone retrieval query.
+    const history = messages
+      .filter((m) => m.content && m.content.trim())
+      .slice(-30)
+      .map((m) => ({
+        role: m.role,
+        content: m.content
+          .replace(/<sup[^>]*>[\s\S]*?<\/sup>/gi, '')
+          .replace(/\[\d+\](?:\s*\[\d+\])*/g, '')
+          .replace(/<[^>]+>/g, ' ')
+          .replace(/&[a-z]+;/gi, ' ')
+          .replace(/\s+/g, ' ')
+          .trim()
+      }));
 
-    setTimeout(() => {
-      const base: ChatMessage = {
-        id: newId(),
-        role: 'assistant',
-        content: '',
-        citations,
-        createdAt: new Date().toISOString()
-      };
-      setStreaming(base);
-      streamText(
-        content,
-        (soFar) => setStreaming({ ...base, content: soFar }),
-        () => {
-          addMessage({ ...base, content });
-          setStreaming(null);
-          setBusy(false);
-        }
+    // Live RAG against the selected context sources — NO mock answers.
+    let content: string;
+    let citations: Citation[] = [];
+    let noMatch = false;
+    let suggestedQuestions: string[] = [];
+    try {
+      const r = await askBrain(
+        text,
+        contextItems,
+        [],
+        undefined,
+        'cited',
+        [],
+        history,
+        '',
+        'detailed'
       );
-    }, 550);
+      content = r.answer;
+      citations = r.citations;
+      noMatch = r.noMatch;
+      suggestedQuestions = r.suggestedQuestions;
+    } catch {
+      // Honest failure — never fabricate a mock answer in a citation app.
+      content =
+        'The answer service is temporarily unreachable. Please try again in a moment.';
+      noMatch = true;
+    }
+
+    const base: ChatMessage = {
+      id: newId(),
+      role: 'assistant',
+      content: '',
+      citations,
+      noMatch,
+      suggestedQuestions,
+      createdAt: new Date().toISOString()
+    };
+    setStreaming(base);
+    streamText(
+      content,
+      (soFar) => setStreaming({ ...base, content: soFar }),
+      () => {
+        addMessage({ ...base, content });
+        setStreaming(null);
+        setBusy(false);
+      }
+    );
   }
 
   function handleGenerateImage(prompt: string, model: 'nanobanana' | 'kling') {
