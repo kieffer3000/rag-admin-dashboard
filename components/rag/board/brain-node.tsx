@@ -17,7 +17,7 @@ import { startHum, stopHum, playChime } from '@/lib/rag/board/sound';
 import { WavRecorder, transcribeAudio } from '@/lib/rag/board/dictation';
 import { ChatMessage } from '@/lib/rag/types';
 import { MediaIcon } from '@/components/rag/shared';
-import { MEDIA_TYPES } from '@/lib/rag/media-config';
+import { SourcesSheet } from '@/components/rag/board/sources-sheet';
 import {
   AnswerBody,
   splitGraphicBlocks,
@@ -63,8 +63,6 @@ import {
   Type as TypeIcon,
   AlertTriangle,
   CornerDownRight,
-  ExternalLink,
-  Clock,
   Archive,
   Zap,
   Search,
@@ -1572,64 +1570,18 @@ export function BrainMessage({
           </div>
         </div>
       )}
-      {sourcesOpen && m.citations && m.citations.length > 0 && (
-        // Sources list — revealed by the stacked "N sources" pill above. The
-        // inline [N] refs in the answer also open these directly.
-        <div className="mt-2 space-y-1.5 rounded-xl border border-[rgb(var(--hairline)/0.14)] bg-black/[0.015] p-2 dark:bg-white/[0.02]">
-          <div className="flex flex-wrap gap-1.5">
-            {m.citations.map((c, i) => {
-              const n = i + 1;
-              const isJump = !!c.jumpUrl;
-              const scoreLabel =
-                c.score !== undefined ? `${Math.round(c.score * 100)}%` : null;
-              const cleanSnippet = (c.snippet ?? '')
-                .replace(/\[\d+:\d{2}\]/g, '')
-                .replace(/\s+/g, ' ')
-                .trim()
-                .slice(0, 160);
-              const isTimestamp = c.type === 'youtube' || c.type === 'audio';
-              return (
-                // compact chip, content-width — several wrap per row
-                <button
-                  key={i}
-                  title={cleanSnippet || c.mediaName}
-                  onClick={() => onCitation(c, m.content)}
-                  onMouseEnter={() => onCiteHover(c.mediaId, true)}
-                  onMouseLeave={() => onCiteHover(c.mediaId, false)}
-                  className="group/cit relative flex items-center gap-1 overflow-hidden rounded-md bg-black/[0.03] py-1 pl-2 pr-2 text-[11.5px] font-medium transition-all hover:bg-black/[0.06] hover:shadow-sm dark:bg-white/[0.05] dark:hover:bg-white/[0.08]"
-                >
-                  <span className="shrink-0 font-bold tabular-nums text-accent">
-                    [{n}]
-                  </span>
-                  <span
-                    className={cn(
-                      'h-3.5 w-[2.5px] shrink-0 rounded-full',
-                      MEDIA_TYPES[c.type].solid
-                    )}
-                  />
-                  <MediaIcon type={c.type} size="sm" className="h-3 w-3 shrink-0 rounded" />
-                  <span className="max-w-[90px] truncate text-foreground/80">
-                    {c.mediaName}
-                  </span>
-                  {c.locator && (
-                    <span className="flex shrink-0 items-center gap-0.5 text-muted-foreground/60">
-                      {isTimestamp ? <Clock className="h-2.5 w-2.5 shrink-0" /> : null}
-                      {c.locator}
-                    </span>
-                  )}
-                  {scoreLabel && (
-                    <span className="shrink-0 rounded bg-accent/10 px-1 py-0.5 text-[10px] font-semibold text-accent">
-                      {scoreLabel}
-                    </span>
-                  )}
-                  {isJump && (
-                    <ExternalLink className="h-3 w-3 shrink-0 text-muted-foreground/40 transition-colors group-hover/cit:text-accent" />
-                  )}
-                </button>
-              );
-            })}
-          </div>
-        </div>
+      {m.citations && m.citations.length > 0 && (
+        // Slide-in sources panel (Perplexity-style), opened by the pill above.
+        // A row closes the sheet and opens that single source in the viewer.
+        <SourcesSheet
+          open={sourcesOpen}
+          onClose={() => setSourcesOpen(false)}
+          citations={m.citations}
+          onCitation={(c) => {
+            setSourcesOpen(false);
+            onCitation(c, m.content);
+          }}
+        />
       )}
       {m.suggestedQuestions && m.suggestedQuestions.length > 0 && onAsk && (
         // Follow-ups — Perplexity-style labelled section of divider rows.
