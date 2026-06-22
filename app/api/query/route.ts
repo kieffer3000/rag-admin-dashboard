@@ -1,31 +1,32 @@
 import { auth } from '@clerk/nextjs/server';
-import { runUtilityLLM } from '@/lib/rag/utility-llm';
-import { retrieveMemories } from '@/lib/rag/memory';
-import { fetchSummaries, wantsSummary } from '@/lib/rag/summary-core';
 
 // Proxies the Board's brain queries to the Make.com Query scenario.
-// The webhook contract is FROZEN (see BOARD_SPEC.md):
-//   request:  { question, source_ids[], filter_json, scope, namespace, model,
-//               answer_mode, guides }
-//   response: { answer, citations: [{ source_name, source_id, snippet, score }],
-//               suggestedQuestions? }
-// Webhook URL stays server-side — this repo is public.
 //
-// Corrective-RAG retry (the old AnswersDoc "search further" loop, in code):
-// if the first call comes back a no-match (weak/empty retrieval), we reformulate
-// the question with Gemini and call Make ONCE more, then keep the better result.
-// This needs no Make change — it just calls the existing webhook again. The
-// deeper retrieval levers (higher topK, full-chunk text) live INSIDE the Make
-// scenario and are specced separately.
+// ARCHITECTURE (2026-06-22): this route is a PURE RELAY. ALL "thinking" (the
+// follow-up rewrite/contextualize, multi-query expansion, corrective-retry,
+// answer-validation, and summary answering) lives in the Make scenario, where
+// it is visible and editable. The route only: auth-gates, gathers the request
+// (question + conversation + sources + filter), POSTs to Make, and does the
+// DETERMINISTIC response shaping the client footer needs (dedup/sort citations,
+// parse suggestedQuestions, read Make's validator verdict). No server-side LLM.
+//
+// Make owns conversation handling: it receives `conversation` (recent turns,
+// preformatted) + `summary` (rolling fold of older turns). Make's EXPANDER
+// resolves follow-up references for RETRIEVAL; Make's ANSWER model resolves them
+// for GENERATION (modern models do this natively given the history).
+//
+// Webhook contract (request): { question, query_text, conversation, summary,
+//   profile, source_ids[], filter_json, scope, answer_mode, guides, namespace,
+//   model, speed }
+// (response): { answer, citations[], raw_citations?, used_sources?,
+//   suggestedQuestions?, validation?, resolvedQuestion? }
+// Webhook URL stays server-side — this repo is public.
 
 export const runtime = 'nodejs';
 
 const NOMATCH_THRESHOLD = Number(process.env.RAG_NOMATCH_THRESHOLD ?? 0.45);
-const RETRY_ENABLED = process.env.RAG_CORRECTIVE_RETRY !== 'off';
-const VALIDATOR_ENABLED = process.env.RAG_VALIDATOR !== 'off';
-const MEMORY_ENABLED = process.env.RAG_MEMORY !== 'off';
 // Last 10 turns (≈5 Q + 5 A) sent verbatim, in FULL (no per-message truncation);
-// everything older is folded into the rolling summary.
+// everything older is folded into the rolling summary by the client.
 const HISTORY_MAX_MESSAGES = 10;
 
 interface RawCitation {
@@ -41,12 +42,14 @@ interface MakeResult {
   topScore: number | null;
   noMatch: boolean;
   suggestedQuestions: string[];
-  /** Verdict from a Make-side validator module (LLM in the Query scenario,
+  /** Verdict from the Make-side validator module (LLM in the Query scenario,
    *  model + prompt editable in the Make UI). "positive" | "negative" | null.
-   *  When present it is AUTHORITATIVE — the route does NOT run its own LLM
-   *  validator (Make sees the FULL retrieved context; the route only sees a
-   *  truncated subset, which is why the in-code one was naive). */
+   *  AUTHORITATIVE — the route runs NO validator of its own; Make sees the FULL
+   *  retrieved context. */
   validation: string | null;
+  /** If Make's expander resolved a follow-up into a standalone query, it may
+   *  echo it back for an optional "interpreted as …" UI hint. */
+  resolvedQuestion: string | null;
 }
 
 function modeDirective(mode: 'cited' | 'hybrid'): string {
@@ -55,7 +58,8 @@ function modeDirective(mode: 'cited' | 'hybrid'): string {
     : 'Answer ONLY from the provided sources and cite them. If the sources do not contain the answer, say so plainly rather than guessing.';
 }
 
-/** Wrap the raw user question with the mode directive, guides, and context. */
+/** Deterministic wrap of the raw user question with the mode directive, guides,
+ *  and any wired context. No LLM — pure string assembly. */
 function buildPrompt(
   question: string,
   mode: 'cited' | 'hybrid',
@@ -76,7 +80,8 @@ function buildPrompt(
   return parts.join('\n\n');
 }
 
-/** One call to the Make Query scenario; computes the no-match signal. */
+/** One call to the Make Query scenario; computes the no-match signal and shapes
+ *  the response. This is the only network hop. */
 async function callMake(
   url: string,
   promptedQuestion: string,
@@ -86,7 +91,9 @@ async function callMake(
   guides: string[],
   model: string,
   profile: string,
-  speed: 'fast' | 'detailed' | 'research'
+  speed: 'fast' | 'detailed' | 'research',
+  conversation: string,
+  summary: string
 ): Promise<MakeResult> {
   const res = await fetch(url, {
     method: 'POST',
@@ -94,26 +101,29 @@ async function callMake(
     body: JSON.stringify({
       question: promptedQuestion,
       // Subject profile / context for the faceted query expander to bias
-      // terminology toward the subject's domain/profession (the wired context
-      // notes + guides). Maps to {{2.profile}} in the expander prompt.
+      // terminology toward the subject's domain. Maps to {{2.profile}}.
       profile,
-      // raw question/query for the RETRIEVAL embedding + multi-query expander
-      // (embedding the wrapped prompt would dilute the search vector with the
-      // instruction boilerplate). Generation still uses `question`.
+      // Raw question for the RETRIEVAL embedding + multi-query expander (the
+      // wrapped prompt would dilute the search vector with instruction
+      // boilerplate). Generation uses `question`.
       query_text: queryText,
+      // Conversation context for Make to resolve follow-up references — in the
+      // EXPANDER (retrieval) and the ANSWER model (generation). Preformatted so
+      // Make just drops in {{2.conversation}} / {{2.summary}}.
+      conversation,
+      summary,
       source_ids: sourceIds,
-      // Pre-built Pinecone metadata filter. Make's Simple Filter UI only
-      // carries scalar values (multi-id arrays get string-coerced -> zero
-      // matches), so the scenario maps this verbatim instead.
+      // Pre-built Pinecone metadata filter. Make's Simple Filter UI only carries
+      // scalar values (multi-id arrays get string-coerced -> zero matches), so
+      // the scenario maps this verbatim instead.
       filter_json: JSON.stringify({ source_id: { $in: sourceIds } }),
       scope: 'selected',
       answer_mode: mode,
       guides,
       namespace: process.env.PINECONE_NAMESPACE ?? 'user_kieffer',
       model,
-      // Forwarded so the Make scenario can branch its own pipeline (e.g. skip
-      // the multi-query expander) in fast mode. Server-side stages are already
-      // skipped above regardless.
+      // Lets the Make scenario branch its pipeline (fast skips the expander;
+      // research uses the heavier answer model).
       speed
     })
   });
@@ -121,9 +131,8 @@ async function callMake(
 
   const data = await res.json();
 
-  // Prefer the full aggregator array (raw_citations: {{14.json}} from Make
-  // module 10 — ALL N retrieved chunks, not just the collapsed first item).
-  // Falls back to data.citations for backward compatibility.
+  // Prefer the full aggregator array (raw_citations: ALL N retrieved chunks);
+  // fall back to data.citations for backward compatibility.
   let allRaw: RawCitation[] = [];
   if (data.raw_citations) {
     try {
@@ -149,9 +158,7 @@ async function callMake(
     allRaw = data.citations ?? [];
   }
 
-  // Dedup server-side (same chunk from multiple query expansions) and sort
-  // by score. The client caps at 8 with its own dedup, but this prevents
-  // stale/cached clients from rendering 60+ chips.
+  // Dedup (same chunk from multiple query expansions) + sort by score.
   const seen = new Set<string>();
   const citations: RawCitation[] = allRaw
     .filter((c: RawCitation) => {
@@ -169,9 +176,8 @@ async function callMake(
     .filter((s) => Number.isFinite(s));
   const topScore = scores.length ? Math.max(...scores) : null;
 
-  // Make often hands this back as a JSON-encoded STRING (e.g. a Bedrock/Nova
-  // prompt module emits the array as text) — parse it so the follow-ups render
-  // without needing a Parse-JSON step in the scenario.
+  // Follow-ups: Make often hands these back as a JSON-encoded STRING (a
+  // Bedrock/OpenRouter prompt module emits the array as text) — parse it.
   let rawSuggested: unknown =
     data.suggestedQuestions ?? data.suggested_questions ?? [];
   if (typeof rawSuggested === 'string') {
@@ -190,87 +196,25 @@ async function callMake(
     .filter((s: string) => typeof s === 'string' && s.trim())
     .slice(0, 6);
 
-  // Make-side validator verdict, if the Query scenario includes a validator
-  // module (positive/negative). Accept a few shapes the model might emit.
-  const rawValidation =
-    data.validation ?? data.valid ?? data.verdict ?? null;
+  const rawValidation = data.validation ?? data.valid ?? data.verdict ?? null;
   const validation =
     typeof rawValidation === 'string' ? rawValidation : null;
+
+  const rawResolved = data.resolvedQuestion ?? data.resolved_question ?? null;
+  const resolvedQuestion =
+    typeof rawResolved === 'string' && rawResolved.trim() ? rawResolved : null;
 
   return {
     answer: data.answer ?? '',
     citations,
-    // Pass the full aggregated array through so ask.ts can dedupe+rank all chunks.
     raw_citations: data.raw_citations ?? null,
-    // Self-citation: 1-based indices of the chunks the answer actually used,
-    // from the Make attribution step. ask.ts maps these to the shown chips.
     used_sources: data.used_sources ?? null,
     topScore,
     noMatch: topScore === null || topScore < NOMATCH_THRESHOLD,
     suggestedQuestions,
-    validation
+    validation,
+    resolvedQuestion
   };
-}
-
-/** Reformulate a failed query for a second retrieval pass (Gemini). */
-async function reformulate(
-  question: string,
-  failedAnswer: string
-): Promise<string | null> {
-  const prompt = `A vector-database search for the query below did not retrieve relevant results. Rewrite it as ONE different search query that uses alternative terminology, synonyms, and a different angle to improve retrieval. Output ONLY the rewritten query — a single line, no quotes, no preamble.\n\nOriginal query: ${question}${
-    failedAnswer ? `\n\nThe unsuccessful response was: ${failedAnswer.slice(0, 400)}` : ''
-  }`;
-  const text = await runUtilityLLM(prompt, { temperature: 0.4, maxOutputTokens: 120 });
-  if (!text) return null;
-  const cleaned = text.split('\n')[0].replace(/^["']|["']$/g, '').trim();
-  return cleaned && cleaned.toLowerCase() !== question.toLowerCase() ? cleaned : null;
-}
-
-/** History-aware query rewrite: resolve a follow-up ("who else was born on his
- *  street?") into a standalone, self-contained retrieval query using the recent
- *  conversation. Returns the question unchanged when there's no history or the
- *  rewrite fails. We don't classify new-vs-old — we always contextualize. */
-async function contextualize(
-  question: string,
-  history: { role: string; content: string }[],
-  summary = ''
-): Promise<string> {
-  if (history.length === 0 && !summary.trim()) return question;
-  const convo = history
-    .map((h) => `${h.role === 'assistant' ? 'Assistant' : 'User'}: ${h.content}`)
-    .join('\n');
-  const earlier = summary.trim()
-    ? `Summary of earlier conversation:\n${summary.trim()}\n\n`
-    : '';
-  const prompt = `Given the conversation below, rewrite the user's LATEST question into a standalone, self-contained search query that resolves every pronoun and reference using the conversation and the earlier-conversation summary (e.g. "his street" → the actual street name discussed earlier). If the latest question is already self-contained, return it unchanged. Output ONLY the rewritten query — one line, no quotes, no preamble.\n\n${earlier}Recent conversation:\n${convo}\n\nLatest question: ${question}`;
-  const text = await runUtilityLLM(prompt, { temperature: 0.2, maxOutputTokens: 200 });
-  if (!text) return question;
-  const cleaned = text.split('\n')[0].replace(/^["']|["']$/g, '').trim();
-  return cleaned.length >= 3 ? cleaned : question;
-}
-
-/** LLM answer-validator: does the GENERATED ANSWER actually address the
- *  question's subject? We judge the ANSWER (not the retrieved snippets) because
- *  the supporting chunk is often NOT the top-scored one — judging a score-sorted
- *  snippet subset truncated the answer-bearing chunk out of view and vetoed
- *  correct answers (the reason RAG_VALIDATOR was disabled). The answer is short,
- *  on-topic when right, and is what the user sees — so it's the reliable signal.
- *  This still catches the real failure: an off-topic answer (e.g. a "budget"
- *  answer to an "atomic habits" question). true = addresses it; fails OPEN. */
-async function validateAnswer(
-  question: string,
-  answer: string
-): Promise<boolean> {
-  const plain = answer
-    .replace(/<[^>]+>/g, ' ')
-    .replace(/&[a-z]+;/gi, ' ')
-    .replace(/\s+/g, ' ')
-    .trim();
-  if (!plain) return false;
-  const prompt = `A retrieval system generated the ANSWER below for the QUESTION, using the user's own sources. Decide whether the answer genuinely addresses the SUBJECT of the question. Answer "negative" ONLY if the answer is about a clearly different subject, or is empty / a pure non-answer. If it addresses the question's subject at all (even partially, even if it says some details are missing), answer "positive". Reply with exactly one word.\n\nQUESTION: ${question}\n\nANSWER: ${plain.slice(0, 1800)}`;
-  const out = await runUtilityLLM(prompt, { temperature: 0, maxOutputTokens: 6 });
-  if (!out) return true; // fail-open
-  return !/negative/i.test(out);
 }
 
 export async function POST(req: Request) {
@@ -305,14 +249,7 @@ export async function POST(req: Request) {
     body.answer_mode === 'hybrid' ? 'hybrid' : 'cited';
   const model = body.model ?? 'gemini-2.5-flash';
   const userQuestion: string = body.question;
-  // ⚡ Fast = a lightning answer: skip the extra LLM round-trips (history
-  // rewrite, corrective retry, answer-validator) and just retrieve → answer.
-  // Long-term memory is kept (cheap embed+lookup). 🔍 Detailed (default) runs
-  // the full pipeline.
   const fast = body.speed === 'fast';
-  // 🔬 Research = the deepest tier. NOT fast (runs every server-side check),
-  // and forwarded to Make as 'research' so the Query scenario can serve its
-  // heavier answer model (GLM) instead of the fast GPT-OSS path.
   const research = body.speed === 'research';
   const speedParam: 'fast' | 'detailed' | 'research' = fast
     ? 'fast'
@@ -320,60 +257,10 @@ export async function POST(req: Request) {
       ? 'research'
       : 'detailed';
 
-  // ── Summary fast-path (the summary tree) ─────────────────────────────────
-  // "Summarize this / what is this about" is a GLOBAL question: top-k retrieval
-  // under-covers it and the no-match gate can even refuse it. Instead answer
-  // from the PRE-MADE per-source summaries (fetched by id, built once at ingest).
-  // Falls through to normal retrieval if no summaries exist yet.
-  if (wantsSummary(userQuestion)) {
-    // Prefer a PRECOMPUTED rollup when a box/everything-hub is wired (one fetch
-    // instead of re-synthesizing every member); fall back to the wired sources'
-    // own L1 summaries when no rollup exists yet.
-    const clusterIds: string[] = Array.isArray(body.cluster_ids)
-      ? body.cluster_ids.filter((s: unknown) => typeof s === 'string' && s)
-      : [];
-    const rollupIds =
-      body.everything === true && typeof body.project_id === 'string'
-        ? [body.project_id]
-        : clusterIds;
-    let summaries = rollupIds.length ? await fetchSummaries(rollupIds) : [];
-    if (!summaries.length) summaries = await fetchSummaries(sourceIds);
-    if (summaries.length) {
-      const ctx = summaries
-        .map((s, i) => `[${i + 1}] ${s.name}\n${s.text}`)
-        .join('\n\n');
-      const ans = await runUtilityLLM(
-        `${modeDirective(mode)}\n\nThe SUMMARIES below are pre-made overviews of the user's wired sources. Answer the QUESTION from them; if several are given, synthesize across them. Write in clean HTML (<p>, <strong>, <ul>/<li>). After a claim, cite the 1-based source number(s) like [1] or [2] where useful.\n\nSUMMARIES:\n${ctx}\n\nQUESTION: ${userQuestion}`,
-        { maxOutputTokens: 1400, temperature: 0.3 }
-      );
-      if (ans && ans.trim()) {
-        return Response.json({
-          answer: ans,
-          citations: [],
-          // Aggregator-shaped so the client's footnote pipeline links [n] → source.
-          raw_citations: JSON.stringify(
-            summaries.map((s) => ({
-              score: 1,
-              metadata: {
-                source_id: s.source_id,
-                source_name: s.name,
-                text: s.text
-              }
-            }))
-          ),
-          used_sources: null,
-          topScore: 1,
-          noMatch: false,
-          suggestedQuestions: []
-        });
-      }
-    }
-    // else: no summary indexed yet → fall through to normal retrieval.
-  }
-
-  // Conversation history (capped, plain text) → resolve follow-up references
-  // into a standalone query for retrieval AND generation. No history = no-op.
-  const history = (Array.isArray(body.history) ? body.history : [])
+  // Recent conversation, preformatted (deterministic — no LLM). Forwarded to
+  // Make so its expander/answer modules can resolve follow-up references. Older
+  // turns are folded into `summary` by the client.
+  const conversation = (Array.isArray(body.history) ? body.history : [])
     .filter(
       (h: unknown): h is { role: string; content: string } =>
         !!h &&
@@ -381,47 +268,35 @@ export async function POST(req: Request) {
         (h as { content: string }).content.trim().length > 0
     )
     .slice(-HISTORY_MAX_MESSAGES)
-    .map((h: { role: string; content: string }) => ({
-      role: h.role === 'assistant' ? 'assistant' : 'user',
-      content: h.content
-    }));
+    .map(
+      (h: { role: string; content: string }) =>
+        `${h.role === 'assistant' ? 'Assistant' : 'User'}: ${h.content}`
+    )
+    .join('\n');
   const summary = typeof body.summary === 'string' ? body.summary : '';
-  const rawQuestion = fast
-    ? userQuestion
-    : await contextualize(userQuestion, history, summary);
 
-  // Long-term memory: pull relevant past-conversation summaries and feed them in
-  // as context so the brain "remembers" across sessions. Kept ON even in fast
-  // mode — it's a single embed+vector lookup (no LLM generation), and recall is
-  // worth the small cost.
-  const memories = MEMORY_ENABLED ? await retrieveMemories(rawQuestion) : [];
-  const ctx = memories.length
-    ? [
-        ...contextTexts,
-        ...memories.map((m) => `(recalled from an earlier conversation) ${m}`)
-      ]
-    : contextTexts;
-
-  // Subject profile/context for the faceted expander — the wired context notes
-  // + guides bias query expansion toward the subject's domain/profession.
+  // Subject profile/context for the faceted expander (deterministic string).
   const profile = [...contextTexts, ...guides]
     .filter(Boolean)
     .join(' | ')
     .slice(0, 1200);
 
-  // First retrieval pass.
+  // Single retrieval pass. Corrective-retry now lives in the Make scenario
+  // (router loop off the validator verdict).
   let result: MakeResult;
   try {
     result = await callMake(
       url,
-      buildPrompt(rawQuestion, mode, guides, ctx),
-      rawQuestion,
+      buildPrompt(userQuestion, mode, guides, contextTexts),
+      userQuestion,
       sourceIds,
       mode,
       guides,
       model,
       profile,
-      speedParam
+      speedParam,
+      conversation,
+      summary
     );
   } catch (e) {
     return Response.json(
@@ -430,82 +305,32 @@ export async function POST(req: Request) {
     );
   }
 
-  // Corrective retry: weak/empty retrieval → reformulate once and try again,
-  // keep whichever pass retrieved better.
-  let retried = false;
-  if (RETRY_ENABLED && !fast && result.noMatch) {
-    const newQuery = await reformulate(rawQuestion, result.answer);
-    if (newQuery) {
-      try {
-        const second = await callMake(
-          url,
-          buildPrompt(newQuery, mode, guides, ctx),
-          newQuery,
-          sourceIds,
-          mode,
-          guides,
-          model,
-          profile,
-          speedParam
-        );
-        retried = true;
-        // prefer the pass that isn't a no-match; otherwise the higher score.
-        const better =
-          (!second.noMatch && result.noMatch) ||
-          (second.topScore ?? -1) > (result.topScore ?? -1);
-        if (better) result = second;
-      } catch {
-        /* keep the first result if the retry call fails */
-      }
-    }
-  }
-
-  // Answer-validator (cited mode): if the retrieved context doesn't actually
-  // address the question, don't present a confident off-topic answer — replace
-  // it with an honest "not in your sources". More reliable than the score gate.
-  let validated = true;
+  // Read Make's validator verdict (deterministic — no server LLM). The validator
+  // module runs INSIDE the Query scenario and sees the full retrieved context.
   if (
-    VALIDATOR_ENABLED &&
-    !fast &&
     mode === 'cited' &&
     !result.noMatch &&
-    result.citations.length > 0
+    result.citations.length > 0 &&
+    result.validation &&
+    /negative|no\b|false/i.test(result.validation)
   ) {
-    if (result.validation) {
-      // AUTHORITATIVE: a Make-side validator module ran inside the Query
-      // scenario (model + prompt live in the Make UI, and it sees the FULL
-      // retrieved context). Just read its verdict — no extra LLM call here.
-      validated = !/negative|no\b|false/i.test(result.validation);
-    } else {
-      // Fallback only when Make returns no `validation` field (validator
-      // module not wired yet): the in-code answer-vs-question check.
-      validated = await validateAnswer(userQuestion, result.answer);
-    }
-    if (!validated) {
-      result.answer =
-        "I couldn't find an answer to that in your wired sources. Try rephrasing, or wire a source that covers it.";
-      result.citations = [];
-      result.noMatch = true;
-    }
+    result.answer =
+      "I couldn't find an answer to that in your wired sources. Try rephrasing, or wire a source that covers it.";
+    result.citations = [];
+    result.noMatch = true;
   }
 
-  // If the validator blanked the answer, also drop the self-citation indices
-  // (they'd point at chunks for an answer we're no longer showing).
   const usedSources = result.noMatch ? null : result.used_sources;
 
   return Response.json({
     answer: result.answer,
     citations: result.citations,
-    // Full ordered aggregator array — the client maps used_sources indices into
-    // THIS (same order the attribution model saw), then renders the chips.
     raw_citations: result.raw_citations,
     used_sources: usedSources,
     topScore: result.topScore,
     noMatch: result.noMatch,
     suggestedQuestions: result.suggestedQuestions,
-    retried,
-    // present only when history-aware rewrite changed the query (for an
-    // optional "interpreted as …" hint in the UI)
-    resolvedQuestion: rawQuestion !== userQuestion ? rawQuestion : null
+    // present only when Make's expander rewrote the query (optional UI hint)
+    resolvedQuestion: result.resolvedQuestion
   });
 }
