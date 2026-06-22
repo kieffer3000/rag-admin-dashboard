@@ -1,4 +1,6 @@
 export default {
+  // Excalidraw ships untranspiled ESM/JSX — Next must transpile it.
+  transpilePackages: ['@excalidraw/excalidraw', '@excalidraw/mermaid-to-excalidraw'],
   images: {
     remotePatterns: [
       {

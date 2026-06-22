@@ -2,11 +2,14 @@
 
 import { useEffect, useRef, useState } from 'react';
 
-// Renders a Mermaid diagram (flowchart, sequence, gantt, pie, mindmap,
-// timeline, ER, …) from LLM-emitted mermaid source. mermaid.js is imported
-// lazily inside the effect so it never lands in the main bundle. On a parse
-// error we fall back to showing the source.
+// Renders an LLM-emitted mermaid diagram. PREFERRED path: convert the mermaid to
+// Excalidraw elements and export a static SVG — same hand-drawn look as the
+// Excalidraw whiteboard, but a lightweight static render (no editor mount).
+// mermaid-to-excalidraw only supports FLOWCHARTS, so anything else (sequence,
+// gantt, pie, ER, mindmap, …) falls back to mermaid.js. Both libs are imported
+// lazily so neither lands in the main bundle. Last resort: show the source.
 
+// --- mermaid.js (fallback renderer) ---
 let mermaidReady: Promise<typeof import('mermaid').default> | null = null;
 function getMermaid() {
   if (!mermaidReady) {
@@ -23,6 +26,47 @@ function getMermaid() {
   return mermaidReady;
 }
 
+// --- Excalidraw (preferred renderer) ---
+let excalidrawReady: Promise<{
+  parse: typeof import('@excalidraw/mermaid-to-excalidraw').parseMermaidToExcalidraw;
+  convert: typeof import('@excalidraw/excalidraw').convertToExcalidrawElements;
+  toSvg: typeof import('@excalidraw/excalidraw').exportToSvg;
+}> | null = null;
+function getExcalidraw() {
+  if (!excalidrawReady) {
+    excalidrawReady = Promise.all([
+      import('@excalidraw/mermaid-to-excalidraw'),
+      import('@excalidraw/excalidraw')
+    ]).then(([m2e, exc]) => ({
+      parse: m2e.parseMermaidToExcalidraw,
+      convert: exc.convertToExcalidrawElements,
+      toSvg: exc.exportToSvg
+    }));
+  }
+  return excalidrawReady;
+}
+
+async function renderViaExcalidraw(code: string): Promise<string> {
+  const { parse, convert, toSvg } = await getExcalidraw();
+  // Throws for non-flowchart diagrams → caller falls back to mermaid.js.
+  const { elements, files } = await parse(code.trim());
+  const full = convert(elements);
+  const svg = await toSvg({
+    elements: full,
+    files: files ?? null,
+    appState: {
+      exportBackground: false,
+      exportWithDarkMode: false,
+      exportPadding: 16
+    }
+  });
+  // Make it responsive: drop the fixed pixel size, keep the viewBox aspect.
+  svg.removeAttribute('width');
+  svg.removeAttribute('height');
+  svg.setAttribute('style', 'max-width:100%;height:auto;');
+  return svg.outerHTML;
+}
+
 let counter = 0;
 
 export function MermaidBlock({ code }: { code: string }) {
@@ -32,14 +76,25 @@ export function MermaidBlock({ code }: { code: string }) {
 
   useEffect(() => {
     let alive = true;
-    getMermaid()
-      .then((mermaid) => mermaid.render(idRef.current, code.trim()))
-      .then(({ svg }) => {
-        if (alive) setSvg(svg);
-      })
-      .catch(() => {
+    (async () => {
+      // 1) Excalidraw (flowcharts) → beautiful static SVG.
+      try {
+        const out = await renderViaExcalidraw(code);
+        if (alive) setSvg(out);
+        return;
+      } catch {
+        /* not a flowchart / parse issue → try mermaid.js */
+      }
+      // 2) mermaid.js (every other diagram type).
+      try {
+        const mermaid = await getMermaid();
+        const { svg: out } = await mermaid.render(idRef.current, code.trim());
+        if (alive) setSvg(out);
+        return;
+      } catch {
         if (alive) setFailed(true);
-      });
+      }
+    })();
     return () => {
       alive = false;
     };
@@ -57,10 +112,11 @@ export function MermaidBlock({ code }: { code: string }) {
       <div className="my-3 h-24 animate-pulse rounded-xl border border-[rgb(var(--hairline)/0.16)] bg-card" />
     );
   }
+  // Light "paper" surface so the dark diagram strokes read in any app theme.
   return (
     <figure
       data-graphic="mermaid"
-      className="my-3 flex justify-center overflow-auto rounded-xl border border-[rgb(var(--hairline)/0.16)] bg-card p-3 [&_svg]:max-w-full"
+      className="my-3 flex justify-center overflow-auto rounded-xl border border-[rgb(var(--hairline)/0.16)] bg-white p-3 [&_svg]:max-w-full"
       dangerouslySetInnerHTML={{ __html: svg }}
     />
   );
