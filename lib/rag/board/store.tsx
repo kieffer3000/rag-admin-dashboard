@@ -152,6 +152,9 @@ interface BoardCtxState {
   brainMessages: Record<string, ChatMessage[]>;
   addBrainMessage: (brainId: string, m: ChatMessage) => void;
   updateBrainMessage: (brainId: string, msgId: string, patch: Partial<ChatMessage>) => void;
+  /** Delete one message (and, for an assistant answer, the question that
+   *  prompted it) so a disliked turn leaves the list AND the model's history. */
+  removeBrainMessage: (brainId: string, msgId: string) => void;
   /** Wipe a brain's whole conversation. */
   clearBrainMessages: (brainId: string) => void;
   /** Resolve a brain's knowledge basis from graph connectivity. */
@@ -731,6 +734,25 @@ export function BoardProvider({ children }: { children: ReactNode }) {
     []
   );
 
+  const removeBrainMessage = useCallback((brainId: string, msgId: string) => {
+    setBrainMessages((prev) => {
+      const list = prev[brainId] ?? [];
+      const idx = list.findIndex((m) => m.id === msgId);
+      if (idx === -1) return prev;
+      const drop = new Set([msgId]);
+      // Deleting an assistant answer? Also drop the user question right before
+      // it, so the pair vanishes cleanly from the list and the history.
+      if (
+        list[idx].role === 'assistant' &&
+        idx > 0 &&
+        list[idx - 1].role === 'user'
+      ) {
+        drop.add(list[idx - 1].id);
+      }
+      return { ...prev, [brainId]: list.filter((m) => !drop.has(m.id)) };
+    });
+  }, []);
+
   const clearBrainMessages = useCallback((brainId: string) => {
     setBrainMessages((prev) => ({ ...prev, [brainId]: [] }));
   }, []);
@@ -830,6 +852,7 @@ export function BoardProvider({ children }: { children: ReactNode }) {
     brainMessages,
     addBrainMessage,
     updateBrainMessage,
+    removeBrainMessage,
     clearBrainMessages,
     resolveBrainScope,
     updateBoardNodeData,

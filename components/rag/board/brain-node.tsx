@@ -181,6 +181,7 @@ function BrainNodeInner({ id, data, selected }: NodeProps) {
     brainMessages,
     addBrainMessage,
     updateBrainMessage,
+    removeBrainMessage,
     clearBrainMessages,
     resolveBrainScope,
     updateBoardNodeData,
@@ -1060,6 +1061,7 @@ function BrainNodeInner({ id, data, selected }: NodeProps) {
                   }
                 : undefined
             }
+            onDelete={() => removeBrainMessage(id, m.id)}
             busy={busy}
           />
         ))}
@@ -1320,6 +1322,7 @@ export function BrainMessage({
   onEdit,
   onAsk,
   onRewrite,
+  onDelete,
   busy = false
 }: {
   m: ChatMessage;
@@ -1333,6 +1336,8 @@ export function BrainMessage({
   onAsk?: (q: string) => void;
   /** Re-ask the question that produced this answer (Perplexity "Rewrite"). */
   onRewrite?: () => void;
+  /** Delete this answer (and its question) from the conversation. */
+  onDelete?: () => void;
   busy?: boolean;
 }) {
   const bodyRef = useRef<HTMLDivElement>(null);
@@ -1569,6 +1574,18 @@ export function BrainMessage({
             >
               <ThumbsDown className="h-4 w-4" />
             </button>
+            {onDelete && (
+              <>
+                <span className="mx-0.5 h-4 w-px bg-[rgb(var(--hairline)/0.2)]" />
+                <button
+                  onClick={() => onDelete()}
+                  title="Delete this answer (and its question) from the conversation"
+                  className="nodrag flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground/70 transition-colors hover:bg-red-500/10 hover:text-red-500"
+                >
+                  <Trash2 className="h-4 w-4" />
+                </button>
+              </>
+            )}
           </div>
         </div>
       )}

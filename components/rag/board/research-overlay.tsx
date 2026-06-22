@@ -40,6 +40,7 @@ export function ResearchOverlay({
     resolveBrainScope,
     addBrainMessage,
     updateBrainMessage,
+    removeBrainMessage,
     setBrainBusy,
     setBoard,
     updateBoardNodeData,
@@ -293,6 +294,7 @@ export function ResearchOverlay({
                       }
                     : undefined
                 }
+                onDelete={() => removeBrainMessage(brainId, m.id)}
                 onVoiceover={handleVoiceover}
                 voicing={voicingId === m.id}
                 onEdit={handleEditInText}
