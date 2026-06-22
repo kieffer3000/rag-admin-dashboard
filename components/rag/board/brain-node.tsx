@@ -11,7 +11,7 @@ import {
 import { cn } from '@/lib/utils';
 import { useBoard } from '@/lib/rag/board/store';
 import { useRag } from '@/lib/rag/store';
-import { generateMockAnswer, streamText } from '@/lib/rag/mock-answer';
+import { streamText } from '@/lib/rag/mock-answer';
 import { askBrain } from '@/lib/rag/board/ask';
 import { startHum, stopHum, playChime } from '@/lib/rag/board/sound';
 import { WavRecorder, transcribeAudio } from '@/lib/rag/board/dictation';
@@ -514,7 +514,7 @@ function BrainNodeInner({ id, data, selected }: NodeProps) {
     // labelled mock if the webhook proxy is unreachable (e.g. local dev
     // without MAKE_QUERY_WEBHOOK_URL).
     let content: string;
-    let citations;
+    let citations: Awaited<ReturnType<typeof askBrain>>['citations'] = [];
     let noMatch = false;
     let suggestedQuestions: string[] = [];
     try {
@@ -555,9 +555,11 @@ function BrainNodeInner({ id, data, selected }: NodeProps) {
       noMatch = r.noMatch;
       suggestedQuestions = r.suggestedQuestions;
     } catch {
-      const mock = generateMockAnswer(q, scope.items);
-      content = `⚠︎ Live RAG unreachable — mock answer.\n\n${mock.content}`;
-      citations = mock.citations;
+      // Honest failure — NEVER fabricate a "mock answer" in a citation app.
+      content =
+        'The answer service is temporarily unreachable. Please try again in a moment.';
+      citations = [];
+      noMatch = true;
     }
 
     streamText(

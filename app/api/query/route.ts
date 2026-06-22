@@ -309,21 +309,14 @@ export async function POST(req: Request) {
     );
   }
 
-  // Read Make's validator verdict (deterministic — no server LLM). The validator
-  // module runs INSIDE the Query scenario and sees the full retrieved context.
-  if (
-    mode === 'cited' &&
-    !result.noMatch &&
-    result.citations.length > 0 &&
-    result.validation &&
-    /negative|no\b|false/i.test(result.validation)
-  ) {
-    result.answer =
-      "I couldn't find an answer to that in your wired sources. Try rephrasing, or wire a source that covers it.";
-    result.citations = [];
-    result.noMatch = true;
-  }
-
+  // NOTE: the Make validator verdict is ADVISORY ONLY — it NEVER blanks the
+  // answer. A single LLM should not get veto power over the whole pipeline's
+  // work (it once discarded a fully-grounded, 10-source, 0.75-score answer over
+  // one inferential sentence). The honest "found nothing" decision comes from
+  // RETRIEVAL SCORES (the no-match gate above, computed across many chunks),
+  // not from one model judging the answer. `validation` is passed through so the
+  // UI may optionally show a soft "unverified" hint — but the answer is always
+  // shown when retrieval succeeded.
   const usedSources = result.noMatch ? null : result.used_sources;
 
   return Response.json({
@@ -334,6 +327,8 @@ export async function POST(req: Request) {
     topScore: result.topScore,
     noMatch: result.noMatch,
     suggestedQuestions: result.suggestedQuestions,
+    // ADVISORY ONLY — never gates the answer; UI may show a soft "unverified" hint.
+    validation: result.validation,
     // present only when Make's expander rewrote the query (optional UI hint)
     resolvedQuestion: result.resolvedQuestion
   });

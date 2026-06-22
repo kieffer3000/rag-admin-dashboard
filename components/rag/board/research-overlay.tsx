@@ -5,7 +5,7 @@ import { cn } from '@/lib/utils';
 import { useBoard } from '@/lib/rag/board/store';
 import { useRag } from '@/lib/rag/store';
 import { askBrain } from '@/lib/rag/board/ask';
-import { generateMockAnswer, streamText } from '@/lib/rag/mock-answer';
+import { streamText } from '@/lib/rag/mock-answer';
 import { startHum, stopHum, playChime } from '@/lib/rag/board/sound';
 import { BrainMessage, nextMsgId } from '@/components/rag/board/brain-node';
 import { ChatMessage } from '@/lib/rag/types';
@@ -165,7 +165,7 @@ export function ResearchOverlay({
 
     const scope = resolveBrainScope(brainId);
     let content: string;
-    let citations;
+    let citations: Awaited<ReturnType<typeof askBrain>>['citations'] = [];
     let noMatch = false;
     let suggestedQuestions: string[] = [];
     try {
@@ -204,9 +204,11 @@ export function ResearchOverlay({
       noMatch = r.noMatch;
       suggestedQuestions = r.suggestedQuestions;
     } catch {
-      const mock = generateMockAnswer(q, scope.items);
-      content = `⚠︎ Live RAG unreachable — mock answer.\n\n${mock.content}`;
-      citations = mock.citations;
+      // Honest failure — NEVER fabricate a "mock answer" in a citation app.
+      content =
+        'The answer service is temporarily unreachable. Please try again in a moment.';
+      citations = [];
+      noMatch = true;
     }
 
     streamText(
