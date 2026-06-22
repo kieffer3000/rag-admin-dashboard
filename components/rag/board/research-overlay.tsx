@@ -272,7 +272,7 @@ export function ResearchOverlay({
               </p>
             </div>
           ) : (
-            messages.map((m) => (
+            messages.map((m, mi) => (
               <BrainMessage
                 key={m.id}
                 m={m}
@@ -281,6 +281,16 @@ export function ResearchOverlay({
                 onCitation={openViewer}
                 onCiteHover={() => {}}
                 onAsk={runQuery}
+                onRewrite={
+                  m.role === 'assistant'
+                    ? () => {
+                        const prev = [...messages.slice(0, mi)]
+                          .reverse()
+                          .find((x) => x.role === 'user');
+                        if (prev) runQuery(prev.content);
+                      }
+                    : undefined
+                }
                 onVoiceover={handleVoiceover}
                 voicing={voicingId === m.id}
                 onEdit={handleEditInText}

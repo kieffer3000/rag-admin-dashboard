@@ -68,7 +68,10 @@ import {
   Archive,
   Zap,
   Search,
-  Telescope
+  Telescope,
+  ThumbsUp,
+  ThumbsDown,
+  RefreshCw
 } from 'lucide-react';
 import type { BrainData } from '@/lib/rag/board/types';
 
@@ -1035,7 +1038,7 @@ function BrainNodeInner({ id, data, selected }: NodeProps) {
             </div>
           </div>
         )}
-        {messages.map((m) => (
+        {messages.map((m, mi) => (
           <BrainMessage
             key={m.id}
             m={m}
@@ -1047,6 +1050,16 @@ function BrainNodeInner({ id, data, selected }: NodeProps) {
             voicing={voicingId === m.id}
             onEdit={handleEditInText}
             onAsk={runQuery}
+            onRewrite={
+              m.role === 'assistant'
+                ? () => {
+                    const prev = [...messages.slice(0, mi)]
+                      .reverse()
+                      .find((x) => x.role === 'user');
+                    if (prev) runQuery(prev.content);
+                  }
+                : undefined
+            }
             busy={busy}
           />
         ))}
@@ -1306,6 +1319,7 @@ export function BrainMessage({
   voicing = false,
   onEdit,
   onAsk,
+  onRewrite,
   busy = false
 }: {
   m: ChatMessage;
@@ -1317,11 +1331,15 @@ export function BrainMessage({
   voicing?: boolean;
   onEdit?: (m: ChatMessage) => void;
   onAsk?: (q: string) => void;
+  /** Re-ask the question that produced this answer (Perplexity "Rewrite"). */
+  onRewrite?: () => void;
   busy?: boolean;
 }) {
   const bodyRef = useRef<HTMLDivElement>(null);
   const [copyMenu, setCopyMenu] = useState(false);
   const [copied, setCopied] = useState<'rich' | 'plain' | null>(null);
+  const [sourcesOpen, setSourcesOpen] = useState(false);
+  const [feedback, setFeedback] = useState<'up' | 'down' | null>(null);
 
   const copyRich = async () => {
     const el = bodyRef.current;
@@ -1411,12 +1429,46 @@ export function BrainMessage({
         </div>
       )}
       {m.content && (
-        // footer: model attribution + per-message actions (revealed on hover)
-        <div className="mt-1.5 flex items-center gap-2">
+        // footer: stacked sources pill + model attribution + per-message actions
+        <div className="mt-2 flex flex-wrap items-center gap-1.5">
+          {m.citations && m.citations.length > 0 && (
+            <button
+              onClick={() => setSourcesOpen((v) => !v)}
+              title={`${m.citations.length} source${m.citations.length === 1 ? '' : 's'} — click to ${sourcesOpen ? 'hide' : 'show'}`}
+              className={cn(
+                'nodrag flex items-center gap-1.5 rounded-full py-1 pl-1 pr-2.5 text-[12px] font-medium transition-colors',
+                sourcesOpen
+                  ? 'bg-accent/12 text-accent'
+                  : 'bg-black/[0.04] text-foreground/75 hover:bg-black/[0.07] dark:bg-white/[0.05] dark:hover:bg-white/[0.08]'
+              )}
+            >
+              <span className="flex -space-x-1.5">
+                {m.citations.slice(0, 3).map((c, i) => (
+                  <MediaIcon
+                    key={i}
+                    type={c.type}
+                    size="sm"
+                    className="h-4 w-4 rounded-full ring-2 ring-card"
+                  />
+                ))}
+              </span>
+              {m.citations.length} source{m.citations.length === 1 ? '' : 's'}
+            </button>
+          )}
           {modelLabel && (
             <span className="text-[11px] text-muted-foreground/55">{modelLabel}</span>
           )}
-          <div className="ml-auto flex items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100">
+          <div className="ml-auto flex items-center gap-0.5">
+            {onRewrite && (
+              <button
+                onClick={() => !busy && onRewrite()}
+                disabled={busy}
+                title="Rewrite — ask this question again"
+                className="nodrag flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground/70 transition-colors hover:bg-accent/10 hover:text-accent disabled:opacity-50"
+              >
+                <RefreshCw className="h-4 w-4" />
+              </button>
+            )}
             {onEdit && (
               <button
                 onClick={() => onEdit(m)}
@@ -1492,17 +1544,38 @@ export function BrainMessage({
                 </>
               )}
             </div>
+            <span className="mx-0.5 h-4 w-px bg-[rgb(var(--hairline)/0.2)]" />
+            <button
+              onClick={() => setFeedback((f) => (f === 'up' ? null : 'up'))}
+              title="Good answer"
+              className={cn(
+                'nodrag flex h-7 w-7 items-center justify-center rounded-md transition-colors',
+                feedback === 'up'
+                  ? 'text-emerald-500'
+                  : 'text-muted-foreground/70 hover:bg-accent/10 hover:text-accent'
+              )}
+            >
+              <ThumbsUp className="h-4 w-4" />
+            </button>
+            <button
+              onClick={() => setFeedback((f) => (f === 'down' ? null : 'down'))}
+              title="Needs work"
+              className={cn(
+                'nodrag flex h-7 w-7 items-center justify-center rounded-md transition-colors',
+                feedback === 'down'
+                  ? 'text-rose-500'
+                  : 'text-muted-foreground/70 hover:bg-accent/10 hover:text-accent'
+              )}
+            >
+              <ThumbsDown className="h-4 w-4" />
+            </button>
           </div>
         </div>
       )}
-      {m.citations && m.citations.length > 0 && (
-        // Footnotes — numbered like a book. The inline [N] refs in the answer
-        // map to these rows; click a row to read the cited passage, or use the
-        // jump link to open the source at its timestamp/page.
-        <div className="mt-3 space-y-1.5 border-t border-[rgb(var(--hairline)/0.12)] pt-2.5">
-          <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/45">
-            Footnotes
-          </p>
+      {sourcesOpen && m.citations && m.citations.length > 0 && (
+        // Sources list — revealed by the stacked "N sources" pill above. The
+        // inline [N] refs in the answer also open these directly.
+        <div className="mt-2 space-y-1.5 rounded-xl border border-[rgb(var(--hairline)/0.14)] bg-black/[0.015] p-2 dark:bg-white/[0.02]">
           <div className="flex flex-wrap gap-1.5">
             {m.citations.map((c, i) => {
               const n = i + 1;
@@ -1559,19 +1632,24 @@ export function BrainMessage({
         </div>
       )}
       {m.suggestedQuestions && m.suggestedQuestions.length > 0 && onAsk && (
-        // follow-up chips (questions generated by Make) — click to re-ask
-        <div className="mt-2.5 flex flex-col gap-1">
-          {m.suggestedQuestions.map((q, i) => (
-            <button
-              key={i}
-              onClick={() => !busy && onAsk(q)}
-              disabled={busy}
-              className="nodrag group/sg flex items-start gap-1.5 rounded-lg border border-[rgb(var(--hairline)/0.16)] bg-card px-2.5 py-1.5 text-left text-[12.5px] leading-snug text-foreground/80 transition-all hover:-translate-y-px hover:border-accent/40 hover:text-accent hover:shadow-sm disabled:opacity-50"
-            >
-              <CornerDownRight className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground/50 group-hover/sg:text-accent" />
-              <span>{q}</span>
-            </button>
-          ))}
+        // Follow-ups — Perplexity-style labelled section of divider rows.
+        <div className="mt-3 border-t border-[rgb(var(--hairline)/0.12)] pt-2">
+          <p className="mb-0.5 text-[13px] font-semibold text-foreground/85">
+            Follow-ups
+          </p>
+          <div className="flex flex-col">
+            {m.suggestedQuestions.map((q, i) => (
+              <button
+                key={i}
+                onClick={() => !busy && onAsk(q)}
+                disabled={busy}
+                className="nodrag group/sg flex items-start gap-2 border-t border-[rgb(var(--hairline)/0.08)] py-2 text-left text-[13.5px] leading-snug text-foreground/85 transition-colors first:border-t-0 hover:text-accent disabled:opacity-50"
+              >
+                <CornerDownRight className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground/45 group-hover/sg:text-accent" />
+                <span>{q}</span>
+              </button>
+            ))}
+          </div>
         </div>
       )}
     </div>
