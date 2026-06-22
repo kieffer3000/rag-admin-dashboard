@@ -156,10 +156,10 @@ export const nextMsgId = () => `bm_${MSG_SESSION}_${++msgCounter}`;
  * ephemeral prompt context. This is the visual face of the Query webhook.
  */
 /** Last-N verbatim window; older turns get folded into the rolling summary. */
-// Keep the last 10 turns (≈5 Q + 5 A) verbatim; fold everything older into the
+// Keep the last 30 turns (≈15 Q + 15 A) verbatim; fold everything older into the
 // rolling summary. Matches the server's HISTORY_MAX_MESSAGES so the verbatim
 // window and the summary boundary line up exactly (no gap, no overlap).
-const HISTORY_WINDOW = 10;
+const HISTORY_WINDOW = 30;
 /** Answers are HTML (charts/tables); the rewriter + summarizer only need words. */
 function toPlainText(s: string): string {
   return s

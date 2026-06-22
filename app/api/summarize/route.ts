@@ -29,8 +29,21 @@ export async function POST(req: Request) {
     .join('\n');
   if (!messagesText) return Response.json({ summary: prior });
 
-  const prompt = `You maintain a running summary of a conversation so its key facts survive after the raw messages scroll out of view. Fold the NEW messages into the summary so far, preserving every name, place, number, date, and established fact. Be factual and third-person. Keep the whole summary under 180 words. Output ONLY the updated summary, no preamble.\n\nSummary so far:\n${prior || '(none yet)'}\n\nNew messages to fold in:\n${messagesText}`;
+  const prompt = `You maintain a running WORKING-MEMORY summary of a conversation so its key facts survive after the raw messages scroll out of the verbatim window. This summary is later used to RESOLVE REFERENCES (e.g. "his house", "that tool", "she") in follow-up questions, so it MUST make every antecedent recoverable.
 
-  const next = await runUtilityLLM(prompt, { temperature: 0.2, maxOutputTokens: 400 });
+Fold the NEW messages into the summary so far. REQUIREMENTS:
+- Begin with a line "Current subject(s): <the person/thing/topic currently under discussion>" so pronouns in the next question can be resolved.
+- Preserve EVERY proper name, place, number, date, URL, and established fact. Never replace a name with a pronoun — write the actual name.
+- Note any entity a pronoun could later refer to (people, products, organizations, locations).
+- Be factual, third-person, no commentary.
+- Keep the whole summary under 220 words. Output ONLY the updated summary, no preamble.
+
+Summary so far:
+${prior || '(none yet)'}
+
+New messages to fold in:
+${messagesText}`;
+
+  const next = await runUtilityLLM(prompt, { temperature: 0.2, maxOutputTokens: 480 });
   return Response.json({ summary: next && next.trim() ? next.trim() : prior });
 }

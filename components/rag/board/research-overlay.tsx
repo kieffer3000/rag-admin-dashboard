@@ -169,11 +169,11 @@ export function ResearchOverlay({
     let noMatch = false;
     let suggestedQuestions: string[] = [];
     try {
-      // Last 10 turns (≈5 Q + 5 A) verbatim, in full; older turns ride in via
-      // the brain's rolling summary.
+      // Last 30 turns (≈15 Q + 15 A) verbatim, in full; older turns ride in via
+      // the brain's entity-preserving rolling summary. Matches HISTORY_WINDOW.
       const history = messages
         .filter((mm) => mm.content && mm.content.trim())
-        .slice(-10)
+        .slice(-30)
         .map((mm) => ({
           role: mm.role,
           content: mm.content

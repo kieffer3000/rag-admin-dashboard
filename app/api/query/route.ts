@@ -25,9 +25,13 @@ import { auth } from '@clerk/nextjs/server';
 export const runtime = 'nodejs';
 
 const NOMATCH_THRESHOLD = Number(process.env.RAG_NOMATCH_THRESHOLD ?? 0.45);
-// Last 10 turns (≈5 Q + 5 A) sent verbatim, in FULL (no per-message truncation);
-// everything older is folded into the rolling summary by the client.
-const HISTORY_MAX_MESSAGES = 10;
+// Last 30 turns (≈15 Q + 15 A) sent verbatim, in FULL (no per-message
+// truncation); everything older is folded into the entity-preserving rolling
+// summary by the client. Wider window = "his house" resolves to the subject
+// named up to ~15 exchanges ago without leaning on the summary. MUST stay in
+// sync with brain-node HISTORY_WINDOW + research-overlay slice (the fold
+// boundary) or the verbatim window and summary gap/overlap.
+const HISTORY_MAX_MESSAGES = 30;
 
 interface RawCitation {
   source_id?: string | null;
