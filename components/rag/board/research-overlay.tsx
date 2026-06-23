@@ -152,9 +152,15 @@ export function ResearchOverlay({
     el.style.height = Math.min(el.scrollHeight, 200) + 'px';
   }, [question]);
 
-  // keep the latest answer in view as it streams
+  // keep the latest answer in view as it streams. Pin INSTANTLY (no smooth) —
+  // smooth scroll fires ~60×/s during streaming, stacking animations that yank
+  // the viewport up and down ("earthquake"). Only follow when already near the
+  // bottom, so scrolling up to read isn't overridden.
   useEffect(() => {
-    endRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
+    const el = scrollRef.current;
+    if (!el) return;
+    const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 140;
+    if (nearBottom) el.scrollTop = el.scrollHeight;
   }, [messages.length, messages[messages.length - 1]?.content]);
 
   // Escape exits research mode

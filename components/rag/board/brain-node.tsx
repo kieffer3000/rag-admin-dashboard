@@ -479,7 +479,10 @@ function BrainNodeInner({ id, data, selected }: NodeProps) {
   useEffect(() => {
     const el = scrollRef.current;
     if (!el) return;
-    el.scrollTo({ top: el.scrollHeight });
+    // instant pin (no smooth) so streaming doesn't jitter; only follow when the
+    // user is already near the bottom, so scrolling up to read isn't overridden.
+    const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 140;
+    if (nearBottom) el.scrollTop = el.scrollHeight;
   }, [messages]);
 
   // never let the recording cap/warn timers fire after the card unmounts
