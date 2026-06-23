@@ -107,6 +107,9 @@ export interface ChatMessage {
   suggestedQuestions?: string[];
   /** Media ids that were in context when this message was sent. */
   contextIds?: string[];
+  /** Transient: true while this answer is still streaming in, so the renderer
+   *  holds heavy diagram/chart blocks until their fence closes. Not persisted. */
+  streaming?: boolean;
   attachment?: ChatAttachment;
   image?: GeneratedImage;
   createdAt: string;

@@ -565,12 +565,13 @@ function BrainNodeInner({ id, data, selected }: NodeProps) {
 
     streamText(
       content,
-      (soFar) => updateBrainMessage(id, asstId, { content: soFar }),
+      (soFar) => updateBrainMessage(id, asstId, { content: soFar, streaming: true }),
       () => {
         updateBrainMessage(id, asstId, {
           citations,
           noMatch,
-          suggestedQuestions
+          suggestedQuestions,
+          streaming: false
         });
         setBusy(false);
         setBrainBusy(id, false);
@@ -1392,7 +1393,7 @@ export function BrainMessage({
       {m.content ? (
         <div
           ref={bodyRef}
-          className="nodrag select-text answer-fade-in"
+          className="nodrag select-text"
           onClick={(e) => {
             // inline footnote ref clicked → open that footnote's source panel
             const ref = (e.target as HTMLElement).closest('.fn-ref');
@@ -1416,7 +1417,7 @@ export function BrainMessage({
             if (c) onCiteHover(c.mediaId, false);
           }}
         >
-          <AnswerBody content={m.content} large={large} />
+          <AnswerBody content={m.content} large={large} streaming={m.streaming} />
         </div>
       ) : (
         <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground/50" />

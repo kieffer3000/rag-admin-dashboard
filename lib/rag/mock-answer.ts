@@ -83,18 +83,21 @@ function cite(n: number) {
 }
 
 /**
- * Deliver a finished answer to the UI in ONE render, then signal completion.
+ * Reveal an answer like a real LLM — a smooth, continuous character flow
+ * (ChatGPT-style), not a word-by-word stutter.
  *
- * The answer arrives from the backend complete (Make returns it whole), so we
- * deliberately do NOT fake a per-frame typewriter. The rich renderer
- * (markdown + tables + a mermaid SVG layout via AnswerBody) is far too heavy to
- * re-run 60×/sec on a growing partial — that re-parse is what made the board
- * lurch a phrase at a time. Instead we set the full content once and let a
- * one-shot CSS fade (`.answer-fade-in` on the board, `animate-fade-up` in chat)
- * handle the reveal: GPU-composited, parsed exactly once, never janks. onDone is
- * deferred one frame so the content paints before citations/controls attach.
+ * Two things make it smooth rather than jittery:
+ *  1. CHARACTER reveal on a TIME-driven requestAnimationFrame loop — the visible
+ *     length is a function of elapsed wall-clock time, so it advances a few
+ *     characters per frame at the display's refresh rate instead of popping a
+ *     whole token per fixed tick. The rate scales with length so long answers
+ *     finish in bounded time without feeling slow.
+ *  2. The renderer (AnswerBody, when given `streaming`) holds back any heavy
+ *     diagram/chart block until its fence closes — so we never re-layout a
+ *     half-built mermaid SVG every frame, which is what actually choked the
+ *     board. Prose (HTML/markdown) is cheap to re-render per frame.
  *
- * Signature is unchanged so all callers (chat-view, brain-node, research-overlay)
+ * Signature unchanged — all callers (chat-view, brain-node, research-overlay)
  * work untouched.
  */
 export function streamText(
@@ -102,7 +105,27 @@ export function streamText(
   onChunk: (soFar: string) => void,
   onDone: () => void
 ): () => void {
-  onChunk(full);
-  const raf = requestAnimationFrame(() => onDone());
-  return () => cancelAnimationFrame(raf);
+  // chars/sec: short answers ~380, scaling up so a long one still wraps up in a
+  // few seconds. ~6–14 chars/frame at 60fps — small enough to read as a flow.
+  const rate = Math.min(900, Math.max(380, full.length / 4));
+  let raf = 0;
+  let start = 0;
+  let finished = false;
+
+  const step = (t: number) => {
+    if (!start) start = t;
+    const n = Math.min(full.length, Math.ceil(((t - start) / 1000) * rate));
+    onChunk(full.slice(0, n));
+    if (n >= full.length) {
+      finished = true;
+      onDone();
+      return;
+    }
+    raf = requestAnimationFrame(step);
+  };
+  raf = requestAnimationFrame(step);
+
+  return () => {
+    if (!finished) cancelAnimationFrame(raf);
+  };
 }

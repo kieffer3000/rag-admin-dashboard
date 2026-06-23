@@ -251,32 +251,6 @@ input[type='search']::-webkit-search-cancel-button {
   animation: fade-up 0.4s cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
-/* ---- Smooth answer reveal ----
-   Backend answers arrive complete, so we render them in ONE pass (no per-frame
-   markdown/mermaid re-parse — that was the board's stutter) and reveal with a
-   single GPU-composited fade: the whole answer materializes, drifting up and
-   sharpening from a soft blur over ~0.5s. See lib/rag/mock-answer streamText. */
-@keyframes answer-fade-in {
-  from {
-    opacity: 0;
-    transform: translateY(6px);
-    filter: blur(6px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-    filter: blur(0);
-  }
-}
-.answer-fade-in {
-  animation: answer-fade-in 0.5s cubic-bezier(0.16, 1, 0.3, 1) both;
-  will-change: opacity, transform, filter;
-}
-@media (prefers-reduced-motion: reduce) {
-  .answer-fade-in {
-    animation: none;
-  }
-}
 
 /* ---- Board: puzzle-stack physics & living wires ---- */
 

@@ -130,18 +130,85 @@ export function sanitizeHtml(html: string): string {
     .replace(/\*\*(?=\S)([\s\S]+?\S)\*\*/g, '<strong>$1</strong>');
 }
 
+/** While an answer is still streaming, hold back anything that would thrash if
+ *  re-rendered every frame against a growing partial: an unterminated trailing
+ *  ```mermaid / ```chart fence (re-laying-out a half-built diagram is what
+ *  janked the board), and a half-typed trailing HTML tag (which innerHTML would
+ *  garble). Returns the safe-to-render body + the kind of any pending graphic. */
+function clipStreaming(content: string): {
+  body: string;
+  pending: 'mermaid' | 'chart' | null;
+} {
+  let body = content;
+  let pending: 'mermaid' | 'chart' | null = null;
+
+  const fences = content.match(/```/g);
+  if (fences && fences.length % 2 === 1) {
+    // odd number of fences → the last one is still open (block not finished)
+    const idx = content.lastIndexOf('```');
+    const open = content.slice(idx + 3);
+    const tag = (open.split('\n', 1)[0] || '').trim().toLowerCase();
+    const firstBodyLine = open.split('\n').slice(1).find((l) => l.trim()) || '';
+    if (tag === 'chart') {
+      pending = 'chart';
+      body = content.slice(0, idx);
+    } else if (tag === 'mermaid' || MERMAID_FIRST.test(tag) || MERMAID_FIRST.test(firstBodyLine)) {
+      pending = 'mermaid';
+      body = content.slice(0, idx);
+    }
+    // an ordinary code fence is left in the body — it streams fine as a code block
+  }
+
+  // drop a dangling, half-typed trailing tag ("…<ta") so HTML doesn't render junk
+  const lt = body.lastIndexOf('<');
+  if (lt > body.lastIndexOf('>')) body = body.slice(0, lt);
+
+  return { body, pending };
+}
+
+/** Placeholder shown in place of a diagram/chart that hasn't finished streaming. */
+function GraphicSkeleton({ kind }: { kind: 'mermaid' | 'chart' }) {
+  return (
+    <div className="my-3 flex h-24 items-center gap-2 rounded-xl border border-[rgb(var(--hairline)/0.16)] bg-card px-4 text-[12.5px] text-muted-foreground">
+      <span className="h-2 w-2 animate-pulse rounded-full bg-accent" />
+      {kind === 'mermaid' ? 'Building diagram…' : 'Building chart…'}
+    </div>
+  );
+}
+
 /**
  * Renders an assistant answer. Splits out ```mermaid (diagrams) and ```chart
  * (data charts, JSON spec) blocks into rich renderers; the prose around them
- * renders as HTML (when Make returns HTML) or markdown.
+ * renders as HTML (when Make returns HTML) or markdown. While `streaming`, a
+ * not-yet-closed diagram/chart shows a placeholder instead of being re-laid-out
+ * each frame, so the prose can flow in smoothly.
  */
 export function AnswerBody({
   content,
-  large = false
+  large = false,
+  streaming = false
 }: {
   content: string;
   large?: boolean;
+  streaming?: boolean;
 }) {
+  if (streaming) {
+    const { body, pending } = clipStreaming(content);
+    const segs = splitGraphicBlocks(body); // only COMPLETE fences match
+    return (
+      <>
+        {segs.map((s, i) => {
+          if (s.type === 'mermaid') return <MermaidBlock key={i} code={s.text} />;
+          if (s.type === 'chart') return <ChartBlock key={i} code={s.text} />;
+          return s.text.trim() ? (
+            <Prose key={i} content={s.text} large={large} />
+          ) : null;
+        })}
+        {pending && <GraphicSkeleton kind={pending} />}
+      </>
+    );
+  }
+
   // Re-wrap a loosely-emitted diagram (no ```mermaid fence) so it renders.
   const coerced = coerceLooseMermaid(content);
   const segs = splitGraphicBlocks(coerced);

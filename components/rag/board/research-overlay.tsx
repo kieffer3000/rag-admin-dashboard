@@ -214,12 +214,13 @@ export function ResearchOverlay({
 
     streamText(
       content,
-      (soFar) => updateBrainMessage(brainId, asstId, { content: soFar }),
+      (soFar) => updateBrainMessage(brainId, asstId, { content: soFar, streaming: true }),
       () => {
         updateBrainMessage(brainId, asstId, {
           citations,
           noMatch,
-          suggestedQuestions
+          suggestedQuestions,
+          streaming: false
         });
         setBusy(false);
         setBrainBusy(brainId, false);
