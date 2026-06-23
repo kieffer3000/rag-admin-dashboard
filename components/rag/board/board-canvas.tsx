@@ -62,6 +62,7 @@ import { MindmapNode } from './mindmap-node';
 import { ScopeEdge } from './scope-edge';
 import { BoardToolbar } from './toolbar';
 import { BoardChest, CHEST_MIME } from './board-chest';
+import { transcribeAudio } from '@/lib/rag/board/dictation';
 
 const nodeTypes = {
   chip: ChipNode,
@@ -2104,6 +2105,52 @@ function BoardCanvasInner() {
                 error: e instanceof Error && e.message ? e.message : 'Indexing failed'
               })
             );
+        }}
+        onNewAudio={(name, file) => {
+          // Uploaded audio file → transcribe (MAI-Transcribe) → the transcript
+          // IS the embedded text. Optimistic chip now; status flips on index.
+          const id = addMedia(
+            {
+              type: 'audio',
+              name,
+              description: 'Uploaded audio (transcribed)',
+              date: new Date().toISOString().slice(0, 10),
+              content: name
+            },
+            { simulate: false }
+          );
+          pushNode({
+            id: nextBoardId('chip'),
+            type: 'chip',
+            position: centerPos(),
+            data: { mediaId: id }
+          });
+          (async () => {
+            try {
+              const transcript = await transcribeAudio(file);
+              const r = await fetch('/api/index', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  source_id: id,
+                  name,
+                  type: 'audio',
+                  text: transcript
+                })
+              });
+              if (!r.ok) throw new Error(`Indexing failed (HTTP ${r.status})`);
+              updateMedia(id, { status: 'indexed', content: transcript });
+            } catch (e: unknown) {
+              const status = (e as { status?: number })?.status;
+              const error =
+                status === 501 || status === 503
+                  ? 'High-accuracy transcription isn’t configured yet.'
+                  : e instanceof Error && e.message
+                    ? e.message
+                    : 'Indexing failed';
+              updateMedia(id, { status: 'failed', error });
+            }
+          })();
         }}
       />
 

@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { cn } from '@/lib/utils';
 import { useRag } from '@/lib/rag/store';
-import { MEDIA_TYPES, MEDIA_TYPE_ORDER } from '@/lib/rag/media-config';
+import { MEDIA_TYPES } from '@/lib/rag/media-config';
 import { MediaType } from '@/lib/rag/types';
 import { MediaIcon } from '@/components/rag/shared';
 import { WavRecorder, transcribeAudio } from '@/lib/rag/board/dictation';
@@ -27,7 +27,9 @@ import {
   Check,
   AlertCircle,
   RotateCcw,
-  Trash2
+  Trash2,
+  UploadCloud,
+  Film
 } from 'lucide-react';
 import {
   Dialog,
@@ -60,6 +62,8 @@ export interface BoardToolbarProps {
   onNewImage: (name: string, file: File) => string;
   /** Upload PDF/DOCX/TXT/… → extract text → chunk + index. Returns media ids. */
   onNewDocuments: (docs: { name: string; file: File }[]) => string[];
+  /** Upload an audio file → transcribe → index the transcript. */
+  onNewAudio: (name: string, file: File) => void;
   /** Existing boxes (clusters) on the board, for "add to an existing box". */
   boxes: { id: string; name: string }[];
   /** Gather freshly-imported media into a box — a NEW one ({name}) or an
@@ -124,6 +128,8 @@ export function BoardToolbar(p: BoardToolbarProps) {
   const [sound, setSound] = useState(true);
   useEffect(() => setSound(soundEnabled()), []);
   const [sourceType, setSourceType] = useState<MediaType | null>(null);
+  // The unified "Upload Files & Media" picker — one entry point, category tiles.
+  const [uploadOpen, setUploadOpen] = useState(false);
   const [hubOpen, setHubOpen] = useState(false);
   const [name, setName] = useState('');
   const [url, setUrl] = useState('');
@@ -273,6 +279,12 @@ export function BoardToolbar(p: BoardToolbarProps) {
           : [])
       ];
       maybeBox(ids);
+    } else if (sourceType === 'audio') {
+      // Audio: an uploaded file → transcribe → index. (Recording uses its own
+      // dialog + onNewRecording — this branch only fires when a file is chosen.)
+      if (!files.length) return;
+      const f = files[0];
+      p.onNewAudio(name.trim() || stripExt(f.name), f);
     } else if (URL_TYPES.includes(sourceType)) {
       // One or many links, one per line — each auto-titles itself. Keep the
       // dialog OPEN and show per-link progress so a piece is never "lost".
@@ -355,6 +367,24 @@ export function BoardToolbar(p: BoardToolbarProps) {
     setName('');
   }
 
+  /** Route a tile in the unified picker to the existing per-type Add dialog. */
+  function openType(t: MediaType) {
+    setUploadOpen(false);
+    setName('');
+    setUrl('');
+    setFiles([]);
+    setSourceType(t);
+  }
+
+  /** Open the voice-memo recorder (from the Audio tile's "record instead"). */
+  function openRecorder() {
+    setUploadOpen(false);
+    setRecName('');
+    setTranscript('');
+    setRecState('idle');
+    setRecOpen(true);
+  }
+
   return (
     <>
       {collapsed ? (
@@ -388,34 +418,11 @@ export function BoardToolbar(p: BoardToolbarProps) {
             onClick={p.onAddBrain}
           />
           <RailButton
-            label="Record voice memo"
-            desc="Capture audio, transcribe it, and index the transcript as a source you can query."
-            icon={<Mic className="h-[17px] w-[17px]" />}
-            onClick={() => {
-              setRecName('');
-              setTranscript('');
-              setRecState('idle');
-              setRecOpen(true);
-            }}
+            label="Upload Files & Media"
+            desc="Add anything to your knowledge base — documents, images, audio, YouTube, or websites. Atlas reads, watches, and listens to it."
+            icon={<UploadCloud className="h-[17px] w-[17px]" />}
+            onClick={() => setUploadOpen(true)}
           />
-          <RailDivider />
-          {MEDIA_TYPE_ORDER.map((t) => {
-            const meta = MEDIA_TYPES[t];
-            const Icon = meta.icon;
-            return (
-              <RailButton
-                key={t}
-                label={`Add ${meta.label}`}
-                desc={`Ingest a ${meta.label.toLowerCase()} into the knowledge base — it appears as a puzzle piece and turns Indexed when ready.`}
-                icon={<Icon className={cn('h-[17px] w-[17px]', meta.text)} />}
-                onClick={() => {
-                  setName('');
-                  setUrl('');
-                  setSourceType(t);
-                }}
-              />
-            );
-          })}
           <RailDivider />
           <Popover>
             <PopoverTrigger asChild>
@@ -767,7 +774,11 @@ export function BoardToolbar(p: BoardToolbarProps) {
                     <input
                       type="file"
                       multiple
-                      accept="image/png,image/jpeg,image/webp,image/gif,.pdf,.docx,.epub,.txt,.md,application/pdf,application/epub+zip,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain"
+                      accept={
+                        sourceType === 'image'
+                          ? 'image/png,image/jpeg,image/webp,image/gif'
+                          : '.pdf,.docx,.epub,.txt,.md,application/pdf,application/epub+zip,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain'
+                      }
                       onChange={(e) => setFiles(Array.from(e.target.files ?? []))}
                       className="block w-full cursor-pointer rounded-lg border border-input bg-card text-[13px] file:mr-3 file:cursor-pointer file:border-0 file:bg-accent/10 file:px-3 file:py-2 file:text-accent hover:border-accent/40"
                     />
@@ -781,14 +792,53 @@ export function BoardToolbar(p: BoardToolbarProps) {
                         {(files.reduce((s, f) => s + f.size, 0) / 1048576).toFixed(1)} MB
                         total — each becomes its own indexed source.
                       </p>
+                    ) : sourceType === 'image' ? (
+                      <p className="text-[11.5px] text-muted-foreground/55">
+                        Images (PNG/JPEG/WebP/GIF) — select as many as you like.
+                        Each is hosted, captioned, and indexed on its own.
+                      </p>
                     ) : (
                       <p className="text-[11.5px] text-muted-foreground/55">
-                        Images (PNG/JPEG/WebP/GIF) and documents (PDF, DOCX, EPUB,
-                        TXT, MD) — select as many as you like, any mix. Each is
-                        indexed on its own. (Scanned/image-only PDFs need OCR —
-                        coming soon.)
+                        Documents (PDF, DOCX, EPUB, TXT, MD) — select as many as
+                        you like. Each is extracted, chunked, and indexed on its
+                        own. (Scanned/image-only PDFs need OCR — coming soon.)
                       </p>
                     )}
+                  </div>
+                ) : sourceType === 'audio' ? (
+                  // Audio: upload a file (transcribed → indexed) OR jump to the
+                  // voice-memo recorder. Either way the transcript is the source.
+                  <div className="space-y-2.5">
+                    <div className="space-y-1.5">
+                      <Label>Audio file</Label>
+                      <input
+                        type="file"
+                        accept="audio/*,.mp3,.m4a,.wav,.aac,.flac,.ogg"
+                        onChange={(e) =>
+                          setFiles(Array.from(e.target.files ?? []).slice(0, 1))
+                        }
+                        className="block w-full cursor-pointer rounded-lg border border-input bg-card text-[13px] file:mr-3 file:cursor-pointer file:border-0 file:bg-accent/10 file:px-3 file:py-2 file:text-accent hover:border-accent/40"
+                      />
+                      {files.length === 1 ? (
+                        <p className="text-[11.5px] text-muted-foreground/70">
+                          {files[0].name} ·{' '}
+                          {(files[0].size / 1048576).toFixed(1)} MB — transcribed,
+                          then indexed.
+                        </p>
+                      ) : (
+                        <p className="text-[11.5px] text-muted-foreground/55">
+                          MP3, M4A, WAV, AAC, FLAC, or OGG. We transcribe it and
+                          index the transcript so you can query what was said.
+                        </p>
+                      )}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={openRecorder}
+                      className="flex w-full items-center justify-center gap-2 rounded-lg border border-dashed border-[rgb(var(--hairline)/0.3)] px-3 py-2 text-[12.5px] font-medium text-muted-foreground transition-colors hover:border-accent/40 hover:text-foreground"
+                    >
+                      <Mic className="h-4 w-4" /> Record a voice memo instead
+                    </button>
                   </div>
                 ) : URL_TYPES.includes(sourceType) ? (
                   <div className="space-y-1.5">
@@ -825,7 +875,9 @@ export function BoardToolbar(p: BoardToolbarProps) {
                 )}
 
                 {/* Add to a box — dock this whole import into a cluster (new or
-                    an existing one). */}
+                    an existing one). Audio uploads index on their own, so the
+                    box option doesn't apply there. */}
+                {sourceType !== 'audio' && (
                 <div className="space-y-2 rounded-lg border border-dashed border-[rgb(var(--hairline)/0.25)] p-2.5">
                   <label className="flex cursor-pointer items-center gap-2 text-[13px] font-medium">
                     <input
@@ -867,6 +919,7 @@ export function BoardToolbar(p: BoardToolbarProps) {
                     </>
                   )}
                 </div>
+                )}
               </div>
               <div className="flex justify-end gap-2 pt-1">
                 <Button variant="ghost" onClick={closeSource}>
@@ -876,7 +929,9 @@ export function BoardToolbar(p: BoardToolbarProps) {
                   variant="accent"
                   disabled={
                     (addToBox && boxTarget === 'new' && !boxName.trim()) ||
-                    (sourceType === 'image' || sourceType === 'document'
+                    (sourceType === 'image' ||
+                    sourceType === 'document' ||
+                    sourceType === 'audio'
                       ? files.length === 0
                       : URL_TYPES.includes(sourceType)
                         ? urls.trim().length === 0
@@ -890,6 +945,48 @@ export function BoardToolbar(p: BoardToolbarProps) {
             </>
             )
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* unified "Upload Files & Media" picker — one entry point, tiles route
+          to the per-type Add dialog above (audio adds a record-or-upload step). */}
+      <Dialog open={uploadOpen} onOpenChange={setUploadOpen}>
+        <DialogContent className="sm:max-w-xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-[17px]">
+              <UploadCloud className="h-[18px] w-[18px] text-accent" />
+              Upload Files &amp; Media
+            </DialogTitle>
+            <DialogDescription>
+              Add anything to your knowledge base — Atlas will read, watch, and
+              listen to it. Great for extracting insights and answers with
+              citations.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3">
+            <UploadTile meta={MEDIA_TYPES.document} onClick={() => openType('document')} />
+            <UploadTile meta={MEDIA_TYPES.image} onClick={() => openType('image')} />
+            <UploadTile meta={MEDIA_TYPES.audio} onClick={() => openType('audio')} />
+            <UploadTile
+              label="Video"
+              icon={Film}
+              text="text-muted-foreground"
+              tint="bg-[rgb(var(--hairline)/0.06)]"
+              comingSoon
+            />
+            <UploadTile meta={MEDIA_TYPES.youtube} onClick={() => openType('youtube')} />
+            <UploadTile meta={MEDIA_TYPES.website} onClick={() => openType('website')} />
+          </div>
+          <div className="mt-1.5 flex items-center justify-center">
+            <UploadTile
+              meta={MEDIA_TYPES.text}
+              onClick={() => openType('text')}
+              compact
+            />
+          </div>
+          <p className="mt-1 text-center text-[11.5px] text-muted-foreground/60">
+            Supported files: Documents · Audio · Images · YouTube · Websites
+          </p>
         </DialogContent>
       </Dialog>
 
@@ -1063,4 +1160,65 @@ function RailButton({
 
 function RailDivider() {
   return <div className="mx-2 my-1 h-px bg-[rgb(var(--hairline)/0.08)]" />;
+}
+
+/** A category tile in the unified upload picker. Pass `meta` for a known media
+ *  type, or an explicit label/icon/text/tint (e.g. the disabled Video tile). */
+function UploadTile({
+  meta,
+  label,
+  icon,
+  text,
+  tint,
+  onClick,
+  comingSoon,
+  compact
+}: {
+  meta?: (typeof MEDIA_TYPES)[MediaType];
+  label?: string;
+  icon?: React.ComponentType<{ className?: string }>;
+  text?: string;
+  tint?: string;
+  onClick?: () => void;
+  comingSoon?: boolean;
+  compact?: boolean;
+}) {
+  const Icon = meta?.icon ?? icon;
+  const tileLabel = meta?.label ?? label ?? '';
+  const tileText = meta?.text ?? text ?? 'text-foreground';
+  const tileTint = meta?.tint ?? tint ?? 'bg-[rgb(var(--hairline)/0.06)]';
+  return (
+    <button
+      type="button"
+      onClick={comingSoon ? undefined : onClick}
+      disabled={comingSoon}
+      className={cn(
+        'group relative flex flex-col items-center justify-center gap-2 rounded-2xl border border-[rgb(var(--hairline)/0.12)] bg-card text-center transition-all',
+        compact ? 'px-5 py-3' : 'px-3 py-5',
+        comingSoon
+          ? 'cursor-not-allowed opacity-55'
+          : 'cursor-pointer hover:-translate-y-0.5 hover:border-accent/30 hover:shadow-[0_4px_18px_rgb(0_0_0/0.08)]'
+      )}
+    >
+      {comingSoon && (
+        <span className="absolute right-2 top-2 rounded-full bg-[rgb(var(--hairline)/0.1)] px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-muted-foreground">
+          Coming soon
+        </span>
+      )}
+      {Icon && (
+        <span
+          className={cn(
+            'flex items-center justify-center rounded-xl',
+            tileTint,
+            compact ? 'h-8 w-8' : 'h-11 w-11'
+          )}
+        >
+          <Icon className={cn(compact ? 'h-4 w-4' : 'h-[22px] w-[22px]', tileText)} />
+        </span>
+      )}
+      <span className="text-[12.5px] font-semibold leading-tight text-foreground">
+        {tileLabel}
+      </span>
+    </button>
+  );
 }
