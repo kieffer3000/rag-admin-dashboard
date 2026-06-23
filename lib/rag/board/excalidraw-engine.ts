@@ -292,8 +292,7 @@ export async function renderMermaidViaEngine(
     files: null,
     appState: { exportBackground: false, exportWithDarkMode: dark, exportPadding: 16 }
   });
-  svg.removeAttribute('width');
-  svg.removeAttribute('height');
-  svg.setAttribute('style', 'max-width:100%;height:auto;');
+  // Keep the intrinsic width/height + viewBox; the caller sizes it responsively
+  // with CSS classes (an inline max-width fights zero-width flex/grid wrappers).
   return svg.outerHTML;
 }

@@ -78,10 +78,7 @@ async function renderViaExcalidraw(code: string, dark = false): Promise<string> 
       exportPadding: 16
     }
   });
-  // Make it responsive: drop the fixed pixel size, keep the viewBox aspect.
-  svg.removeAttribute('width');
-  svg.removeAttribute('height');
-  svg.setAttribute('style', 'max-width:100%;height:auto;');
+  // Keep intrinsic size + viewBox; sized responsively via CSS classes by caller.
   return svg.outerHTML;
 }
 
@@ -167,7 +164,7 @@ export function MermaidBlock({ code }: { code: string }) {
     <>
       <figure
         data-graphic="mermaid"
-        className="group relative my-3 flex justify-center overflow-auto rounded-xl border border-[rgb(var(--hairline)/0.16)] bg-white p-3 dark:bg-[#161618]"
+        className="group relative my-3 overflow-auto rounded-xl border border-[rgb(var(--hairline)/0.16)] bg-white p-3 dark:bg-[#161618]"
       >
         <button
           onClick={() => setExpanded(true)}
@@ -176,7 +173,10 @@ export function MermaidBlock({ code }: { code: string }) {
         >
           <Maximize2 className="h-4 w-4" />
         </button>
-        <div className="[&_svg]:max-w-full" dangerouslySetInnerHTML={{ __html: svg }} />
+        <div
+          className="w-full [&_svg]:mx-auto [&_svg]:block [&_svg]:h-auto [&_svg]:max-w-full"
+          dangerouslySetInnerHTML={{ __html: svg }}
+        />
       </figure>
 
       {expanded && (
@@ -196,7 +196,7 @@ export function MermaidBlock({ code }: { code: string }) {
               <X className="h-4 w-4" />
             </button>
             <div
-              className="[&_svg]:max-h-[86vh] [&_svg]:w-auto [&_svg]:max-w-[92vw]"
+              className="[&_svg]:mx-auto [&_svg]:block [&_svg]:h-auto [&_svg]:w-auto [&_svg]:max-h-[86vh] [&_svg]:max-w-[90vw]"
               dangerouslySetInnerHTML={{ __html: svg }}
             />
           </div>
