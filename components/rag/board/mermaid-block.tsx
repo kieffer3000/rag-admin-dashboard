@@ -164,7 +164,7 @@ export function MermaidBlock({ code }: { code: string }) {
     <>
       <figure
         data-graphic="mermaid"
-        className="group relative my-3 overflow-auto rounded-xl border border-[rgb(var(--hairline)/0.16)] bg-white p-3 dark:bg-[#161618]"
+        className="group relative my-3 max-h-[80vh] overflow-auto rounded-xl border border-[rgb(var(--hairline)/0.16)] bg-white p-3 dark:bg-[#161618]"
       >
         <button
           onClick={() => setExpanded(true)}
@@ -174,7 +174,7 @@ export function MermaidBlock({ code }: { code: string }) {
           <Maximize2 className="h-4 w-4" />
         </button>
         <div
-          className="w-full [&_svg]:mx-auto [&_svg]:block [&_svg]:h-auto [&_svg]:max-w-full"
+          className="w-full [&_svg]:mx-auto [&_svg]:block"
           dangerouslySetInnerHTML={{ __html: svg }}
         />
       </figure>
