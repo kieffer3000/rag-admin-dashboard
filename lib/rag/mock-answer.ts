@@ -82,24 +82,42 @@ function cite(n: number) {
   return `[${n}]`;
 }
 
-/** Stream a string token-by-token via a callback, returning a cancel fn. */
+/**
+ * Reveal a string smoothly via a callback, returning a cancel fn.
+ *
+ * Time-driven on requestAnimationFrame (not a fixed setInterval), so the text
+ * flows at the display's refresh rate instead of popping one word per tick.
+ * Reveal is by CHARACTER for a continuous "materialize" feel; the soft fade
+ * mask on `.streaming-body` hides any half-formed `**`/`[n]` token at the
+ * frontier. `cps` = characters per second; the rate eases up for long answers
+ * so they never drag.
+ */
 export function streamText(
   full: string,
   onChunk: (soFar: string) => void,
   onDone: () => void,
-  speed = 12
+  cps = 620
 ): () => void {
-  const tokens = full.split(/(\s+)/);
-  let i = 0;
-  let acc = '';
-  const timer = setInterval(() => {
-    if (i >= tokens.length) {
-      clearInterval(timer);
+  // longer answers reveal a touch faster so a big table doesn't crawl
+  const rate = Math.min(1600, cps * (1 + Math.min(full.length, 4000) / 4000));
+  let raf = 0;
+  let start = 0;
+  let finished = false;
+
+  const step = (t: number) => {
+    if (!start) start = t;
+    const n = Math.min(full.length, Math.ceil(((t - start) / 1000) * rate));
+    onChunk(full.slice(0, n));
+    if (n >= full.length) {
+      finished = true;
       onDone();
       return;
     }
-    acc += tokens[i++];
-    onChunk(acc);
-  }, speed);
-  return () => clearInterval(timer);
+    raf = requestAnimationFrame(step);
+  };
+  raf = requestAnimationFrame(step);
+
+  return () => {
+    if (!finished) cancelAnimationFrame(raf);
+  };
 }
