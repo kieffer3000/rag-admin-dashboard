@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import { renderMermaidViaEngine } from '@/lib/rag/board/excalidraw-engine';
 
 // Renders an LLM-emitted mermaid diagram. PREFERRED path: convert the mermaid to
 // Excalidraw elements and export a static SVG — same hand-drawn look as the
@@ -93,7 +94,16 @@ export function MermaidBlock({ code }: { code: string }) {
   useEffect(() => {
     let alive = true;
     (async () => {
-      // 1) Excalidraw (flowcharts) → beautiful static SVG.
+      // 0) Our deterministic engine: ELK layout + role-colored boxes + bound
+      //    elbow arrows (Madison-agent design language). Best layout + styling.
+      try {
+        const out = await renderMermaidViaEngine(normalizeMermaid(code.trim()));
+        if (alive) setSvg(out);
+        return;
+      } catch {
+        /* non-flowchart / parse issue → try the stock converter */
+      }
+      // 1) mermaid-to-excalidraw (stock converter) → hand-drawn SVG.
       try {
         const out = await renderViaExcalidraw(code);
         if (alive) setSvg(out);
