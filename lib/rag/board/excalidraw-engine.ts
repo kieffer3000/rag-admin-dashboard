@@ -144,10 +144,15 @@ function nodeSize(label: string): { w: number; h: number } {
   return { w, h };
 }
 
-/** Build the styled Excalidraw skeleton from a laid-out graph. */
+type Pt = { x: number; y: number };
+
+/** Build the styled Excalidraw skeleton from a laid-out graph. Arrows are drawn
+ *  from ELK's routed polyline (explicit points) — auto-binding alone collapses
+ *  them to the origin. */
 function toSkeleton(
   g: Graph,
-  pos: Map<string, { x: number; y: number; w: number; h: number }>
+  pos: Map<string, { x: number; y: number; w: number; h: number }>,
+  routes: (Pt[] | null)[]
 ): Record<string, unknown>[] {
   const out: Record<string, unknown>[] = [];
   for (const n of g.nodes.values()) {
@@ -171,18 +176,34 @@ function toSkeleton(
   }
   for (let i = 0; i < g.edges.length; i++) {
     const e = g.edges[i];
-    if (!pos.has(e.from) || !pos.has(e.to)) continue;
+    const a = pos.get(e.from);
+    const b = pos.get(e.to);
+    if (!a || !b) continue;
+    // ELK routed polyline if available, else straight center→center.
+    let abs: Pt[] = routes[i] ?? [];
+    if (abs.length < 2) {
+      abs = [
+        { x: a.x + a.w / 2, y: a.y + a.h / 2 },
+        { x: b.x + b.w / 2, y: b.y + b.h / 2 }
+      ];
+    }
+    const ox = abs[0].x;
+    const oy = abs[0].y;
+    const points = abs.map((p) => [p.x - ox, p.y - oy]);
+    const xs = points.map((p) => p[0]);
+    const ys = points.map((p) => p[1]);
     out.push({
       type: 'arrow',
       id: `edge-${i}`,
-      x: 0,
-      y: 0,
+      x: ox,
+      y: oy,
+      width: Math.max(...xs) - Math.min(...xs),
+      height: Math.max(...ys) - Math.min(...ys),
+      points,
       strokeColor: EDGE_COLOR,
       strokeWidth: 2,
       strokeStyle: e.dashed ? 'dashed' : 'solid',
       roughness: 1,
-      start: { id: e.from },
-      end: { id: e.to },
       startArrowhead: e.bidir ? 'arrow' : null,
       endArrowhead: 'arrow',
       ...(e.label ? { label: { text: e.label, fontSize: 13 } } : {})
@@ -218,9 +239,9 @@ export async function renderMermaidViaEngine(code: string): Promise<string> {
       'elk.direction': g.dir,
       'elk.spacing.nodeNode': '55',
       'elk.layered.spacing.nodeNodeBetweenLayers': '95',
-      'elk.spacing.edgeNode': '30',
+      'elk.spacing.edgeNode': '35',
       'elk.layered.spacing.edgeEdgeBetweenLayers': '20',
-      'elk.edgeRouting': 'POLYLINE',
+      'elk.edgeRouting': 'ORTHOGONAL',
       'elk.layered.crossingMinimization.strategy': 'LAYER_SWEEP'
     },
     children: [...g.nodes.values()].map((n) => ({
@@ -236,6 +257,10 @@ export async function renderMermaidViaEngine(code: string): Promise<string> {
   };
   const laid = (await elk.layout(elkGraph)) as {
     children?: { id: string; x: number; y: number; width: number; height: number }[];
+    edges?: {
+      id: string;
+      sections?: { startPoint: Pt; endPoint: Pt; bendPoints?: Pt[] }[];
+    }[];
   };
   const pos = new Map<string, { x: number; y: number; w: number; h: number }>();
   for (const c of laid.children ?? []) {
@@ -243,7 +268,15 @@ export async function renderMermaidViaEngine(code: string): Promise<string> {
   }
   if (pos.size === 0) throw new Error('layout produced no nodes');
 
-  const skeleton = toSkeleton(g, pos);
+  // Pull ELK's routed polyline for each edge (start + bends + end).
+  const routes: (Pt[] | null)[] = g.edges.map((_, i) => {
+    const ed = (laid.edges ?? []).find((x) => x.id === `e${i}`);
+    const sec = ed?.sections?.[0];
+    if (!sec) return null;
+    return [sec.startPoint, ...(sec.bendPoints ?? []), sec.endPoint];
+  });
+
+  const skeleton = toSkeleton(g, pos, routes);
 
   // Convert skeleton → full elements (auto-binds arrows + text) → SVG.
   const exc = await import('@excalidraw/excalidraw');
