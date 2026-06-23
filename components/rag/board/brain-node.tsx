@@ -12,6 +12,7 @@ import { cn } from '@/lib/utils';
 import { useBoard } from '@/lib/rag/board/store';
 import { useRag } from '@/lib/rag/store';
 import { streamText } from '@/lib/rag/mock-answer';
+import { useScrollStyle } from '@/lib/rag/scroll-style';
 import { askBrain } from '@/lib/rag/board/ask';
 import { startHum, stopHum, playChime } from '@/lib/rag/board/sound';
 import { WavRecorder, transcribeAudio } from '@/lib/rag/board/dictation';
@@ -193,6 +194,7 @@ function BrainNodeInner({ id, data, selected }: NodeProps) {
   } = useBoard();
   const { openViewer, activeProjectId } = useRag();
   const { getViewport, fitView } = useReactFlow();
+  const scrollStyle = useScrollStyle();
   const [question, setQuestion] = useState('');
   const [busy, setBusy] = useState(false);
   const [renaming, setRenaming] = useState(false);
@@ -479,11 +481,14 @@ function BrainNodeInner({ id, data, selected }: NodeProps) {
   useEffect(() => {
     const el = scrollRef.current;
     if (!el) return;
-    // instant pin (no smooth) so streaming doesn't jitter; only follow when the
-    // user is already near the bottom, so scrolling up to read isn't overridden.
-    const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 140;
-    if (nearBottom) el.scrollTop = el.scrollHeight;
-  }, [messages]);
+    if (scrollStyle === 'smooth') {
+      el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' });
+    } else {
+      // pin: only follow when already near the bottom, instant (no streaming jitter)
+      const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 140;
+      if (nearBottom) el.scrollTo({ top: el.scrollHeight });
+    }
+  }, [messages, scrollStyle]);
 
   // never let the recording cap/warn timers fire after the card unmounts
   useEffect(

@@ -6,6 +6,7 @@ import { useBoard } from '@/lib/rag/board/store';
 import { useRag } from '@/lib/rag/store';
 import { askBrain } from '@/lib/rag/board/ask';
 import { streamText } from '@/lib/rag/mock-answer';
+import { useScrollStyle } from '@/lib/rag/scroll-style';
 import { startHum, stopHum, playChime } from '@/lib/rag/board/sound';
 import { WavRecorder, transcribeAudio } from '@/lib/rag/board/dictation';
 import { BrainMessage, nextMsgId } from '@/components/rag/board/brain-node';
@@ -143,6 +144,7 @@ export function ResearchOverlay({
   }
   const scrollRef = useRef<HTMLDivElement>(null);
   const endRef = useRef<HTMLDivElement>(null);
+  const scrollStyle = useScrollStyle();
 
   // auto-grow the composer
   useEffect(() => {
@@ -152,16 +154,18 @@ export function ResearchOverlay({
     el.style.height = Math.min(el.scrollHeight, 200) + 'px';
   }, [question]);
 
-  // keep the latest answer in view as it streams. Pin INSTANTLY (no smooth) —
-  // smooth scroll fires ~60×/s during streaming, stacking animations that yank
-  // the viewport up and down ("earthquake"). Only follow when already near the
-  // bottom, so scrolling up to read isn't overridden.
+  // keep the latest answer in view as it streams (behavior is user-toggleable)
   useEffect(() => {
-    const el = scrollRef.current;
-    if (!el) return;
-    const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 140;
-    if (nearBottom) el.scrollTop = el.scrollHeight;
-  }, [messages.length, messages[messages.length - 1]?.content]);
+    if (scrollStyle === 'smooth') {
+      endRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
+    } else {
+      // pin: only follow when already near the bottom, instant (no streaming jitter)
+      const el = scrollRef.current;
+      if (!el) return;
+      const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 140;
+      if (nearBottom) el.scrollTo({ top: el.scrollHeight });
+    }
+  }, [messages.length, messages[messages.length - 1]?.content, scrollStyle]);
 
   // Escape exits research mode
   useEffect(() => {
@@ -415,7 +419,7 @@ export function ResearchOverlay({
 
       {/* messages — a "document page" floating on a desk (Word/Docs feel) */}
       <div ref={scrollRef} className="scroll-brain min-h-0 flex-1 overflow-y-auto px-4 py-8">
-        <div className="mx-auto flex w-full max-w-[1100px] flex-col gap-7 rounded-2xl border border-[rgb(var(--hairline)/0.1)] bg-card px-8 py-12 shadow-[0_10px_44px_rgb(0_0_0/0.13)] sm:px-16 sm:py-14 [&_.rag-html]:font-serif [&_.rag-html]:text-[16.5px] [&_.rag-html]:leading-[1.85]">
+        <div className="mx-auto flex w-full max-w-[820px] flex-col gap-6 rounded-2xl border border-[rgb(var(--hairline)/0.1)] bg-card px-6 py-9 shadow-[0_10px_44px_rgb(0_0_0/0.13)] sm:px-12 sm:py-11 [&_.rag-html]:font-serif [&_.rag-html]:text-[16.5px] [&_.rag-html]:leading-[1.7]">
           {messages.length === 0 ? (
             <div className="flex flex-col items-center justify-center pt-24 text-center">
               <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-accent/10">
@@ -462,9 +466,9 @@ export function ResearchOverlay({
         </div>
       </div>
 
-      {/* composer — floating, centered */}
+      {/* composer — floating, centered (matches the reading column width) */}
       <div className="shrink-0 px-5 pb-6">
-        <div className="mx-auto w-full max-w-[1100px]">
+        <div className="mx-auto w-full max-w-[820px]">
           <div className="flex items-end gap-2 rounded-[22px] border border-[rgb(var(--hairline)/0.18)] bg-card px-4 py-3 shadow-[0_4px_24px_rgb(0_0_0/0.08)] transition-shadow focus-within:shadow-[0_6px_30px_rgb(0_0_0/0.12)] focus-within:ring-2 focus-within:ring-accent/30">
             <textarea
               ref={taRef}
