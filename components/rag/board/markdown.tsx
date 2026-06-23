@@ -195,8 +195,11 @@ export function AnswerBody({
   if (streaming) {
     const { body, pending } = clipStreaming(content);
     const segs = splitGraphicBlocks(body); // only COMPLETE fences match
+    // `stream-fade`: a soft gradient mask on the leading edge so the newest text
+    // materializes (Claude-style) and sharpens as more arrives. Dropped the
+    // instant streaming ends, so the final answer is fully crisp.
     return (
-      <>
+      <div className="stream-fade">
         {segs.map((s, i) => {
           if (s.type === 'mermaid') return <MermaidBlock key={i} code={s.text} />;
           if (s.type === 'chart') return <ChartBlock key={i} code={s.text} />;
@@ -205,7 +208,7 @@ export function AnswerBody({
           ) : null;
         })}
         {pending && <GraphicSkeleton kind={pending} />}
-      </>
+      </div>
     );
   }
 
