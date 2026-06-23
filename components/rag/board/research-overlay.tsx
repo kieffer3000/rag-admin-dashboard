@@ -7,6 +7,7 @@ import { useRag } from '@/lib/rag/store';
 import { askBrain } from '@/lib/rag/board/ask';
 import { streamText } from '@/lib/rag/mock-answer';
 import { startHum, stopHum, playChime } from '@/lib/rag/board/sound';
+import { WavRecorder, transcribeAudio } from '@/lib/rag/board/dictation';
 import { BrainMessage, nextMsgId } from '@/components/rag/board/brain-node';
 import { ChatMessage } from '@/lib/rag/types';
 import {
@@ -16,7 +17,8 @@ import {
   Brain,
   Zap,
   Search,
-  Telescope
+  Telescope,
+  Mic
 } from 'lucide-react';
 
 /**
@@ -68,6 +70,14 @@ export function ResearchOverlay({
   const [busy, setBusy] = useState(false);
   const [voicingId, setVoicingId] = useState<string | null>(null);
   const taRef = useRef<HTMLTextAreaElement>(null);
+  // Dictation — mirrors the brain card: MAI-Transcribe (record WAV → accurate
+  // transcript biased to wired source names) with a Web Speech API fallback.
+  const [listening, setListening] = useState(false);
+  const [transcribing, setTranscribing] = useState(false);
+  const [maiMode, setMaiMode] = useState(true);
+  const recRef = useRef<any>(null);
+  const wavRef = useRef<WavRecorder | null>(null);
+  const dictBaseRef = useRef('');
 
   // Per-message actions — the same ones the brain card offers, so research mode
   // isn't a downgrade. Voiceover: ephemeral synth + play (regenerable). Edit:
@@ -137,6 +147,93 @@ export function ResearchOverlay({
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [onExit]);
+
+  // stop any live recording when research mode unmounts (release the mic)
+  useEffect(
+    () => () => {
+      try {
+        recRef.current?.stop?.();
+      } catch {}
+      void wavRef.current?.stop?.().catch(() => {});
+    },
+    []
+  );
+
+  function appendToComposer(text: string) {
+    if (!text) return;
+    setQuestion((q) => (q ? q.trimEnd() + ' ' : '') + text);
+  }
+
+  /**
+   * Mic: MAI-Transcribe (record WAV → accurate transcript biased toward wired
+   * source names) when available; auto-falls back to the browser Web Speech API.
+   * Identical behaviour to the brain card so dictation feels the same everywhere.
+   */
+  async function toggleMic() {
+    if (transcribing) return;
+    if (!maiMode) return toggleWebSpeech();
+
+    if (listening) {
+      setListening(false);
+      setTranscribing(true);
+      try {
+        const blob = await wavRef.current!.stop();
+        const phrases = resolveBrainScope(brainId).items.map((i) => i.name);
+        appendToComposer(await transcribeAudio(blob, phrases));
+      } catch (e: any) {
+        if (e?.status === 503 || e?.status === 501) {
+          setMaiMode(false);
+          window.alert(
+            'High-accuracy transcription isn’t configured yet — using browser dictation. Tap the mic again.'
+          );
+        } else {
+          window.alert(e?.message ?? 'Transcription failed.');
+        }
+      } finally {
+        setTranscribing(false);
+      }
+      return;
+    }
+
+    try {
+      const rec = new WavRecorder();
+      await rec.start();
+      wavRef.current = rec;
+      setListening(true);
+    } catch {
+      window.alert('Microphone permission is needed to dictate.');
+    }
+  }
+
+  /** Free browser dictation (Web Speech API) — fallback engine. */
+  function toggleWebSpeech() {
+    if (listening) {
+      recRef.current?.stop();
+      return;
+    }
+    const SR =
+      (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (!SR) {
+      window.alert('Dictation needs Chrome/Edge/Safari, or configure MAI-Transcribe.');
+      return;
+    }
+    const rec = new SR();
+    rec.continuous = true;
+    rec.interimResults = true;
+    rec.lang = navigator.language || 'en-US';
+    dictBaseRef.current = question ? question.trimEnd() + ' ' : '';
+    rec.onresult = (e: any) => {
+      let transcript = '';
+      for (let i = 0; i < e.results.length; i++)
+        transcript += e.results[i][0].transcript;
+      setQuestion(dictBaseRef.current + transcript);
+    };
+    rec.onend = () => setListening(false);
+    rec.onerror = () => setListening(false);
+    recRef.current = rec;
+    setListening(true);
+    rec.start();
+  }
 
   function send() {
     const q = question.trim();
@@ -323,9 +420,38 @@ export function ResearchOverlay({
                 }
               }}
               rows={1}
-              placeholder="Ask your wired sources…"
+              placeholder={
+                transcribing
+                  ? 'Transcribing…'
+                  : listening
+                    ? 'Listening…'
+                    : 'Ask your wired sources…'
+              }
               className="max-h-52 min-h-[28px] flex-1 resize-none bg-transparent py-1 text-[15px] leading-relaxed outline-none placeholder:text-muted-foreground/50"
             />
+            <button
+              onClick={toggleMic}
+              disabled={transcribing}
+              title={
+                listening
+                  ? 'Stop & transcribe'
+                  : maiMode
+                    ? 'Dictate (MAI-Transcribe)'
+                    : 'Dictate your question'
+              }
+              className={cn(
+                'flex h-9 w-9 shrink-0 items-center justify-center rounded-full transition-all',
+                listening
+                  ? 'animate-pulse bg-red-500 text-white shadow-[0_2px_10px_rgb(239_68_68/0.5)]'
+                  : 'text-muted-foreground/60 hover:bg-black/[0.05] hover:text-foreground dark:hover:bg-white/[0.06]'
+              )}
+            >
+              {transcribing ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Mic className="h-4 w-4" />
+              )}
+            </button>
             <button
               onClick={send}
               disabled={!question.trim() || busy}
