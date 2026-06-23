@@ -138,9 +138,9 @@ function nodeSize(label: string): { w: number; h: number } {
   const longest = label
     .split(/\s+/)
     .reduce((a, b) => Math.max(a, b.length), label.length > 24 ? 24 : label.length);
-  const w = Math.min(400, Math.max(200, longest * 13 + 44));
-  const lines = Math.ceil(label.length / (w / 13));
-  const h = Math.max(84, 34 + lines * 34);
+  const w = Math.min(300, Math.max(165, longest * 10 + 38));
+  const lines = Math.ceil(label.length / (w / 10));
+  const h = Math.max(66, 28 + lines * 28);
   return { w, h };
 }
 
@@ -172,7 +172,7 @@ function toSkeleton(
       strokeWidth: 2,
       roughness: 1, // hand-drawn
       roundness: n.shape === 'rect' ? { type: 3 } : undefined,
-      label: { text: n.label, fontSize: 25, strokeColor: '#1e1e1e' }
+      label: { text: n.label, fontSize: 20, strokeColor: '#1e1e1e' }
     });
   }
   for (let i = 0; i < g.edges.length; i++) {
@@ -227,7 +227,7 @@ function toSkeleton(
       strokeWidth: 1,
       roughness: 0,
       roundness: { type: 3 },
-      label: { text: e.label, fontSize: 19, strokeColor: '#1e1e1e' }
+      label: { text: e.label, fontSize: 15, strokeColor: '#1e1e1e' }
     });
   }
   return out;
@@ -259,8 +259,8 @@ export async function renderMermaidViaEngine(
   for (const n of g.nodes.values()) sizes.set(n.id, nodeSize(n.label));
   // Size each edge label so ELK can reserve space + place it without overlap.
   const labelSize = (t: string) => ({
-    width: Math.max(46, Math.round(t.length * 10.5 + 26)),
-    height: 34
+    width: Math.max(38, Math.round(t.length * 8.2 + 22)),
+    height: 28
   });
   const elkGraph = {
     id: 'root',
@@ -270,11 +270,11 @@ export async function renderMermaidViaEngine(
       // Compact spacing: keep the diagram small enough to read at column width
       // without zooming. ELK already places labels collision-free, so big gaps
       // are no longer needed.
-      'elk.spacing.nodeNode': '58',
-      'elk.layered.spacing.nodeNodeBetweenLayers': '95',
-      'elk.spacing.edgeNode': '32',
-      'elk.spacing.edgeEdge': '18',
-      'elk.layered.spacing.edgeEdgeBetweenLayers': '18',
+      'elk.spacing.nodeNode': '46',
+      'elk.layered.spacing.nodeNodeBetweenLayers': '72',
+      'elk.spacing.edgeNode': '24',
+      'elk.spacing.edgeEdge': '15',
+      'elk.layered.spacing.edgeEdgeBetweenLayers': '15',
       'elk.edgeRouting': 'ORTHOGONAL',
       'elk.edgeLabels.placement': 'CENTER',
       'elk.spacing.edgeLabel': '8',

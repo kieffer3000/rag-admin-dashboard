@@ -174,7 +174,7 @@ export function MermaidBlock({ code }: { code: string }) {
           <Maximize2 className="h-4 w-4" />
         </button>
         <div
-          className="w-full [&_svg]:mx-auto [&_svg]:block"
+          className="w-full [&_svg]:mx-auto [&_svg]:block [&_svg]:h-auto [&_svg]:max-w-full"
           dangerouslySetInnerHTML={{ __html: svg }}
         />
       </figure>
