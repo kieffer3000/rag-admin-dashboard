@@ -78,6 +78,9 @@ export function ResearchOverlay({
   const recRef = useRef<any>(null);
   const wavRef = useRef<WavRecorder | null>(null);
   const dictBaseRef = useRef('');
+  // hard cap a single recording so the mic never runs forever (and the WAV/MP3
+  // never grows unbounded). Auto-stops + transcribes what was captured.
+  const maxTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Per-message actions — the same ones the brain card offers, so research mode
   // isn't a downgrade. Voiceover: ephemeral synth + play (regenerable). Edit:
@@ -151,6 +154,7 @@ export function ResearchOverlay({
   // stop any live recording when research mode unmounts (release the mic)
   useEffect(
     () => () => {
+      if (maxTimerRef.current) clearTimeout(maxTimerRef.current);
       try {
         recRef.current?.stop?.();
       } catch {}
@@ -169,37 +173,54 @@ export function ResearchOverlay({
    * source names) when available; auto-falls back to the browser Web Speech API.
    * Identical behaviour to the brain card so dictation feels the same everywhere.
    */
+  /** Stop the active recording and transcribe what was captured. Idempotent —
+   *  claims `wavRef` up front so the 2-min timer and a manual tap can't double-run.
+   *  `auto` = stopped by the cap (we then nudge the user to record again). */
+  async function finishMaiRecording(auto = false) {
+    const rec = wavRef.current;
+    if (!rec) return;
+    wavRef.current = null;
+    if (maxTimerRef.current) {
+      clearTimeout(maxTimerRef.current);
+      maxTimerRef.current = null;
+    }
+    setListening(false);
+    setTranscribing(true);
+    try {
+      const blob = await rec.stop();
+      const phrases = resolveBrainScope(brainId).items.map((i) => i.name);
+      appendToComposer(await transcribeAudio(blob, phrases));
+      if (auto) {
+        window.alert(
+          'Reached the 2-minute recording limit — I stopped and saved what you said. Tap the mic to record more and keep transcribing.'
+        );
+      }
+    } catch (e: any) {
+      if (e?.status === 503 || e?.status === 501) {
+        setMaiMode(false);
+        window.alert(
+          'High-accuracy transcription isn’t configured yet — using browser dictation. Tap the mic again.'
+        );
+      } else {
+        window.alert(e?.message ?? 'Transcription failed.');
+      }
+    } finally {
+      setTranscribing(false);
+    }
+  }
+
   async function toggleMic() {
     if (transcribing) return;
     if (!maiMode) return toggleWebSpeech();
-
-    if (listening) {
-      setListening(false);
-      setTranscribing(true);
-      try {
-        const blob = await wavRef.current!.stop();
-        const phrases = resolveBrainScope(brainId).items.map((i) => i.name);
-        appendToComposer(await transcribeAudio(blob, phrases));
-      } catch (e: any) {
-        if (e?.status === 503 || e?.status === 501) {
-          setMaiMode(false);
-          window.alert(
-            'High-accuracy transcription isn’t configured yet — using browser dictation. Tap the mic again.'
-          );
-        } else {
-          window.alert(e?.message ?? 'Transcription failed.');
-        }
-      } finally {
-        setTranscribing(false);
-      }
-      return;
-    }
+    if (wavRef.current) return finishMaiRecording(false);
 
     try {
       const rec = new WavRecorder();
       await rec.start();
       wavRef.current = rec;
       setListening(true);
+      // 2-minute hard cap: auto-stop + transcribe so nothing is lost.
+      maxTimerRef.current = setTimeout(() => void finishMaiRecording(true), 120_000);
     } catch {
       window.alert('Microphone permission is needed to dictate.');
     }
@@ -228,11 +249,31 @@ export function ResearchOverlay({
         transcript += e.results[i][0].transcript;
       setQuestion(dictBaseRef.current + transcript);
     };
-    rec.onend = () => setListening(false);
-    rec.onerror = () => setListening(false);
+    const clearCap = () => {
+      if (maxTimerRef.current) {
+        clearTimeout(maxTimerRef.current);
+        maxTimerRef.current = null;
+      }
+    };
+    rec.onend = () => {
+      setListening(false);
+      clearCap();
+    };
+    rec.onerror = () => {
+      setListening(false);
+      clearCap();
+    };
     recRef.current = rec;
     setListening(true);
     rec.start();
+    // 2-minute hard cap. Web Speech appends live, so the text is already saved;
+    // we just stop and nudge the user to record again.
+    maxTimerRef.current = setTimeout(() => {
+      recRef.current?.stop();
+      window.alert(
+        'Reached the 2-minute recording limit — your words were saved. Tap the mic to keep dictating.'
+      );
+    }, 120_000);
   }
 
   function send() {

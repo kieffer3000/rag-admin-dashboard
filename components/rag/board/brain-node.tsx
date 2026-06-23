@@ -209,6 +209,9 @@ function BrainNodeInner({ id, data, selected }: NodeProps) {
   const taRef = useRef<HTMLTextAreaElement>(null);
   const recRef = useRef<any>(null);
   const wavRef = useRef<WavRecorder | null>(null);
+  // hard cap a single recording so the mic never runs forever; auto-stops +
+  // transcribes what was captured.
+  const maxTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   /** Message id currently being voiced (spinner on its 🔈 button). */
   const [voicingId, setVoicingId] = useState<string | null>(null);
   /** Composer text at the moment dictation started — interim results append to it. */
@@ -358,33 +361,47 @@ function BrainNodeInner({ id, data, selected }: NodeProps) {
    * biased toward wired source names) when available; auto-falls back to the
    * browser's Web Speech API if MAI isn't configured.
    */
+  /** Stop the active recording and transcribe what was captured. Idempotent —
+   *  claims `wavRef` up front so the 2-min cap and a manual tap can't double-run.
+   *  `auto` = stopped by the cap (we then nudge the user to record again). */
+  async function finishMaiRecording(auto = false) {
+    const rec = wavRef.current;
+    if (!rec) return;
+    wavRef.current = null;
+    if (maxTimerRef.current) {
+      clearTimeout(maxTimerRef.current);
+      maxTimerRef.current = null;
+    }
+    setListening(false);
+    setTranscribing(true);
+    try {
+      const blob = await rec.stop();
+      const phrases = scope.items.map((i) => i.name);
+      appendToComposer(await transcribeAudio(blob, phrases));
+      if (auto) {
+        window.alert(
+          'Reached the 2-minute recording limit — I stopped and saved what you said. Tap the mic to record more and keep transcribing.'
+        );
+      }
+    } catch (e: any) {
+      if (e?.status === 503 || e?.status === 501) {
+        // Not configured yet — drop to free browser dictation for the session.
+        setMaiMode(false);
+        window.alert(
+          'High-accuracy transcription isn’t configured yet — using browser dictation. Tap the mic again.'
+        );
+      } else {
+        window.alert(e?.message ?? 'Transcription failed.');
+      }
+    } finally {
+      setTranscribing(false);
+    }
+  }
+
   async function toggleMic() {
     if (transcribing) return;
     if (!maiMode) return toggleWebSpeech();
-
-    if (listening) {
-      // Stop recording → transcribe.
-      setListening(false);
-      setTranscribing(true);
-      try {
-        const blob = await wavRef.current!.stop();
-        const phrases = scope.items.map((i) => i.name);
-        appendToComposer(await transcribeAudio(blob, phrases));
-      } catch (e: any) {
-        if (e?.status === 503 || e?.status === 501) {
-          // Not configured yet — drop to free browser dictation for the session.
-          setMaiMode(false);
-          window.alert(
-            'High-accuracy transcription isn’t configured yet — using browser dictation. Tap the mic again.'
-          );
-        } else {
-          window.alert(e?.message ?? 'Transcription failed.');
-        }
-      } finally {
-        setTranscribing(false);
-      }
-      return;
-    }
+    if (wavRef.current) return finishMaiRecording(false);
 
     // Start recording.
     try {
@@ -392,6 +409,8 @@ function BrainNodeInner({ id, data, selected }: NodeProps) {
       await rec.start();
       wavRef.current = rec;
       setListening(true);
+      // 2-minute hard cap: auto-stop + transcribe so nothing is lost.
+      maxTimerRef.current = setTimeout(() => void finishMaiRecording(true), 120_000);
     } catch {
       window.alert('Microphone permission is needed to dictate.');
     }
@@ -420,11 +439,31 @@ function BrainNodeInner({ id, data, selected }: NodeProps) {
         transcript += e.results[i][0].transcript;
       setQuestion(dictBaseRef.current + transcript);
     };
-    rec.onend = () => setListening(false);
-    rec.onerror = () => setListening(false);
+    const clearCap = () => {
+      if (maxTimerRef.current) {
+        clearTimeout(maxTimerRef.current);
+        maxTimerRef.current = null;
+      }
+    };
+    rec.onend = () => {
+      setListening(false);
+      clearCap();
+    };
+    rec.onerror = () => {
+      setListening(false);
+      clearCap();
+    };
     recRef.current = rec;
     setListening(true);
     rec.start();
+    // 2-minute hard cap. Web Speech appends live, so the text is already saved;
+    // we just stop and nudge the user to record again.
+    maxTimerRef.current = setTimeout(() => {
+      recRef.current?.stop();
+      window.alert(
+        'Reached the 2-minute recording limit — your words were saved. Tap the mic to keep dictating.'
+      );
+    }, 120_000);
   }
 
   useEffect(() => {
@@ -432,6 +471,14 @@ function BrainNodeInner({ id, data, selected }: NodeProps) {
     if (!el) return;
     el.scrollTo({ top: el.scrollHeight });
   }, [messages]);
+
+  // never let the recording cap timer fire after the card unmounts
+  useEffect(
+    () => () => {
+      if (maxTimerRef.current) clearTimeout(maxTimerRef.current);
+    },
+    []
+  );
 
   // Wheel over the brain: pinch / ctrl-wheel ALWAYS zooms the canvas (we don't
   // touch it); a plain wheel scrolls the chat ONLY when there's overflow, and
