@@ -222,9 +222,13 @@ async function getElk() {
   return elkSingleton;
 }
 
-/** Full pipeline: mermaid string → rendered Excalidraw SVG string. Throws on
+/** Full pipeline: mermaid string → rendered Excalidraw SVG string. `dark`
+ *  renders in Excalidraw's dark theme to match the app's mode. Throws on
  *  non-flowchart / parse failure so the caller can fall back. */
-export async function renderMermaidViaEngine(code: string): Promise<string> {
+export async function renderMermaidViaEngine(
+  code: string,
+  dark = false
+): Promise<string> {
   const g = parseFlowchart(code);
   if (!g) throw new Error('not a parseable flowchart');
 
@@ -286,7 +290,7 @@ export async function renderMermaidViaEngine(code: string): Promise<string> {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     elements: elements as any,
     files: null,
-    appState: { exportBackground: false, exportWithDarkMode: false, exportPadding: 16 }
+    appState: { exportBackground: false, exportWithDarkMode: dark, exportPadding: 16 }
   });
   svg.removeAttribute('width');
   svg.removeAttribute('height');

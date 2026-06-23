@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { renderMermaidViaEngine } from '@/lib/rag/board/excalidraw-engine';
 
 // Renders an LLM-emitted mermaid diagram. PREFERRED path: convert the mermaid to
@@ -63,7 +63,7 @@ function normalizeMermaid(code: string): string {
   );
 }
 
-async function renderViaExcalidraw(code: string): Promise<string> {
+async function renderViaExcalidraw(code: string, dark = false): Promise<string> {
   const { parse, convert, toSvg } = await getExcalidraw();
   // Throws for non-flowchart diagrams → caller falls back to mermaid.js.
   const { elements, files } = await parse(normalizeMermaid(code.trim()));
@@ -73,7 +73,7 @@ async function renderViaExcalidraw(code: string): Promise<string> {
     files: files ?? null,
     appState: {
       exportBackground: false,
-      exportWithDarkMode: false,
+      exportWithDarkMode: dark,
       exportPadding: 16
     }
   });
@@ -89,7 +89,18 @@ let counter = 0;
 export function MermaidBlock({ code }: { code: string }) {
   const [svg, setSvg] = useState<string | null>(null);
   const [failed, setFailed] = useState(false);
-  const idRef = useRef(`mmd-${(counter += 1)}`);
+  const [isDark, setIsDark] = useState(false);
+
+  // Track the app's theme (toggles the `dark` class on <html>) so the diagram
+  // re-renders in the matching mode when the user flips dark/light.
+  useEffect(() => {
+    const root = document.documentElement;
+    const read = () => setIsDark(root.classList.contains('dark'));
+    read();
+    const obs = new MutationObserver(read);
+    obs.observe(root, { attributes: true, attributeFilter: ['class'] });
+    return () => obs.disconnect();
+  }, []);
 
   useEffect(() => {
     let alive = true;
@@ -97,7 +108,7 @@ export function MermaidBlock({ code }: { code: string }) {
       // 0) Our deterministic engine: ELK layout + role-colored boxes + bound
       //    elbow arrows (Madison-agent design language). Best layout + styling.
       try {
-        const out = await renderMermaidViaEngine(normalizeMermaid(code.trim()));
+        const out = await renderMermaidViaEngine(normalizeMermaid(code.trim()), isDark);
         if (alive) setSvg(out);
         return;
       } catch {
@@ -105,7 +116,7 @@ export function MermaidBlock({ code }: { code: string }) {
       }
       // 1) mermaid-to-excalidraw (stock converter) → hand-drawn SVG.
       try {
-        const out = await renderViaExcalidraw(code);
+        const out = await renderViaExcalidraw(code, isDark);
         if (alive) setSvg(out);
         return;
       } catch {
@@ -114,10 +125,9 @@ export function MermaidBlock({ code }: { code: string }) {
       // 2) mermaid.js (every other diagram type).
       try {
         const mermaid = await getMermaid();
-        const { svg: out } = await mermaid.render(
-          idRef.current,
-          normalizeMermaid(code.trim())
-        );
+        const src = normalizeMermaid(code.trim());
+        const themed = isDark ? `%%{init: {"theme":"dark"}}%%\n${src}` : src;
+        const { svg: out } = await mermaid.render(`mmd-${(counter += 1)}`, themed);
         if (alive) setSvg(out);
         return;
       } catch {
@@ -127,7 +137,7 @@ export function MermaidBlock({ code }: { code: string }) {
     return () => {
       alive = false;
     };
-  }, [code]);
+  }, [code, isDark]);
 
   if (failed) {
     return (
@@ -141,11 +151,12 @@ export function MermaidBlock({ code }: { code: string }) {
       <div className="my-3 h-24 animate-pulse rounded-xl border border-[rgb(var(--hairline)/0.16)] bg-card" />
     );
   }
-  // Light "paper" surface so the dark diagram strokes read in any app theme.
+  // Surface matches the app theme: light "paper" in light mode, dark canvas in
+  // dark mode (the SVG itself is rendered in the matching Excalidraw theme).
   return (
     <figure
       data-graphic="mermaid"
-      className="my-3 flex justify-center overflow-auto rounded-xl border border-[rgb(var(--hairline)/0.16)] bg-white p-3 [&_svg]:max-w-full"
+      className="my-3 flex justify-center overflow-auto rounded-xl border border-[rgb(var(--hairline)/0.16)] bg-white p-3 [&_svg]:max-w-full dark:bg-[#161618]"
       dangerouslySetInnerHTML={{ __html: svg }}
     />
   );
