@@ -34,6 +34,17 @@ export async function POST(req: Request) {
   if (!(audio instanceof File)) {
     return Response.json({ error: 'audio file is required' }, { status: 400 });
   }
+  // A bare WAV header is 44 bytes — anything near that captured no audio (mic
+  // permission race, AudioContext suspended, or a tap-too-fast recording).
+  if (audio.size < 2048) {
+    return Response.json(
+      {
+        error:
+          'That recording was empty — no audio was captured. Check the mic is allowed, then hold the recording a moment longer.'
+      },
+      { status: 400 }
+    );
+  }
 
   let phrases: string[] = [];
   const raw = inForm.get('phrases');
@@ -47,7 +58,15 @@ export async function POST(req: Request) {
   }
 
   const model = process.env.MAI_TRANSCRIBE_MODEL ?? 'mai-transcribe-1.5';
+  // The Foundry fast-transcription envelope requires `locales`; omitting it is a
+  // common cause of a 400. Default en-US; override via MAI_TRANSCRIBE_LOCALES
+  // (comma-separated, e.g. "en-US,es-ES").
+  const locales = (process.env.MAI_TRANSCRIBE_LOCALES ?? 'en-US')
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean);
   const definition: Record<string, unknown> = {
+    locales,
     enhancedMode: { enabled: true, model }
   };
   // phraseList only supported on mai-transcribe-1.5
@@ -77,8 +96,17 @@ export async function POST(req: Request) {
 
   if (!res.ok) {
     const detail = await res.text().catch(() => '');
+    // Surface Azure's actual reason in the message (not just the status) so the
+    // client alert tells us WHY — a bare "returned 400" hides the real cause.
+    const trimmed = detail.replace(/\s+/g, ' ').trim().slice(0, 240);
+    console.error(`[transcribe] upstream ${res.status}: ${trimmed}`);
     return Response.json(
-      { error: `Transcription service returned ${res.status}`, detail: detail.slice(0, 300) },
+      {
+        error: trimmed
+          ? `Transcription service returned ${res.status}: ${trimmed}`
+          : `Transcription service returned ${res.status}`,
+        detail: trimmed
+      },
       { status: 502 }
     );
   }
