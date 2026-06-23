@@ -1163,7 +1163,7 @@ function RailButton({
           className={cn(
             'flex h-9 w-9 items-center justify-center rounded-[12px] transition-all',
             accent
-              ? 'bg-gradient-to-br from-indigo-500 to-violet-600 text-white shadow-[0_2px_10px_hsl(var(--accent)/0.4)] hover:brightness-110'
+              ? 'bg-gradient-to-br from-[#84923F] to-[#525C20] text-white shadow-[0_2px_10px_hsl(var(--accent)/0.4)] hover:brightness-110'
               : 'text-muted-foreground hover:bg-[rgb(var(--hairline)/0.06)] hover:text-foreground'
           )}
         >

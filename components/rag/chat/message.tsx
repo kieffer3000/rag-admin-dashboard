@@ -137,7 +137,7 @@ export function Message({ msg }: { msg: ChatMessage }) {
             'flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[12px] font-semibold',
             isUser
               ? 'bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900'
-              : 'bg-gradient-to-br from-indigo-500 to-violet-600 text-white'
+              : 'bg-gradient-to-br from-[#84923F] to-[#525C20] text-white'
           )}
         >
           {isUser ? 'You' : <Boxes className="h-4 w-4" />}
@@ -278,7 +278,7 @@ export function TypingIndicator() {
   return (
     <div className="px-4 py-5 sm:px-8">
       <div className="mx-auto flex max-w-3xl gap-4">
-        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-indigo-500 to-violet-600 text-white">
+        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-[#84923F] to-[#525C20] text-white">
           <Boxes className="h-4 w-4" />
         </div>
         <div className="flex items-center gap-1 pt-2.5">

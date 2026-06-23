@@ -49,18 +49,18 @@ function PromptNodeInner({ id, data, selected, parentId }: NodeProps) {
         style={{ width: CHIP_W, height: CHIP_H }}
         title={text || 'Prompt'}
         className={cn(
-          'relative flex items-center gap-2 overflow-hidden rounded-[11px] bg-indigo-50 px-3 ring-1 ring-indigo-200/60 dark:bg-indigo-500/[0.10] dark:ring-indigo-400/20',
+          'relative flex items-center gap-2 overflow-hidden rounded-[11px] bg-accent/[0.08] px-3 ring-1 ring-accent/60 dark:bg-accent/[0.10] dark:ring-accent/20',
           'shadow-[0_1px_2px_rgb(0_0_0/0.10)]',
-          selected && 'ring-2 ring-indigo-400/70'
+          selected && 'ring-2 ring-accent/70'
         )}
       >
-        <span className="pointer-events-none absolute bottom-0 left-0 top-0 w-[3px] rounded-l-[11px] bg-indigo-500" />
-        <MessageSquareQuote className="h-3.5 w-3.5 shrink-0 text-indigo-500" />
+        <span className="pointer-events-none absolute bottom-0 left-0 top-0 w-[3px] rounded-l-[11px] bg-accent" />
+        <MessageSquareQuote className="h-3.5 w-3.5 shrink-0 text-accent" />
         <span className="min-w-0 flex-1 leading-tight">
-          <span className="block text-[10px] font-bold uppercase tracking-wide text-indigo-500/80">
+          <span className="block text-[10px] font-bold uppercase tracking-wide text-accent/80">
             Prompt
           </span>
-          <span className="block truncate text-[11px] font-medium text-indigo-900/80 dark:text-indigo-200/80">
+          <span className="block truncate text-[11px] font-medium text-foreground/80 dark:text-foreground/80">
             {text.trim() || 'click ✎ to write'}
           </span>
         </span>
@@ -90,32 +90,32 @@ function PromptNodeInner({ id, data, selected, parentId }: NodeProps) {
       {/* puzzle body — indigo so it reads as an instruction, not a source */}
       <div
         style={{ width: CHIP_W, height: CHIP_H + CHIP_TAB, clipPath: CHIP_CLIP }}
-        className="absolute inset-0 bg-indigo-50 dark:bg-[hsl(243_35%_16%)]"
+        className="absolute inset-0 bg-accent/[0.08] dark:bg-accent/[0.12]"
       />
       <div
         style={{ clipPath: CHIP_CLIP, width: CHIP_W, height: CHIP_H + CHIP_TAB }}
         className="pointer-events-none absolute inset-0"
       >
-        <div className="absolute bottom-0 left-0 top-0 w-[5px] bg-indigo-500" />
-        <div className="absolute inset-0 bg-indigo-500 opacity-[0.04]" />
+        <div className="absolute bottom-0 left-0 top-0 w-[5px] bg-accent" />
+        <div className="absolute inset-0 bg-accent opacity-[0.04]" />
       </div>
       <div
         style={{ height: CHIP_H }}
         className="relative flex items-center gap-2 px-2.5 pt-1"
       >
-        <MessageSquareQuote className="h-4 w-4 shrink-0 text-indigo-500" />
+        <MessageSquareQuote className="h-4 w-4 shrink-0 text-accent" />
         <div className="min-w-0 flex-1 leading-tight">
-          <div className="text-[9px] font-bold uppercase tracking-wide text-indigo-500/80">
+          <div className="text-[9px] font-bold uppercase tracking-wide text-accent/80">
             Prompt
           </div>
-          <div className="line-clamp-2 text-[11.5px] font-medium leading-[1.18] text-indigo-900/85 dark:text-indigo-100/85">
+          <div className="line-clamp-2 text-[11.5px] font-medium leading-[1.18] text-foreground/85 dark:text-foreground/85">
             {text.trim() || 'click ✎ to write an instruction'}
           </div>
         </div>
         <button
           onClick={edit}
           title="Edit instruction"
-          className="nodrag flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-white/70 text-indigo-500 opacity-0 shadow-sm transition-opacity group-hover:opacity-100 dark:bg-white/10"
+          className="nodrag flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-white/70 text-accent opacity-0 shadow-sm transition-opacity group-hover:opacity-100 dark:bg-white/10"
         >
           <Pencil className="h-3 w-3" />
         </button>
@@ -135,7 +135,7 @@ function PromptNodeInner({ id, data, selected, parentId }: NodeProps) {
       <Handle
         type="source"
         position={Position.Right}
-        className="!h-2.5 !w-2.5 !border-2 !border-card !bg-indigo-500"
+        className="!h-2.5 !w-2.5 !border-2 !border-card !bg-accent"
       />
     </div>
   );

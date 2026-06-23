@@ -4,42 +4,44 @@
 
 @layer base {
   :root {
-    /* Light — airy, premium */
-    --background: 225 22% 96.5%; /* #F4F5F8 — cool 2% indigo whisper, makes white panels pop */
-    --foreground: 240 4% 12%; /* rich off-black ~#1D1D1F, not pure black */
+    /* Light — Olive & Parchment (earthy, scholarly). Warm parchment canvas +
+       olive/moss accent + warm ink. Distinct from Anthropic's coral and from
+       the old Apple indigo. */
+    --background: 45 30% 92.5%; /* #F2EFE6 — warm parchment */
+    --foreground: 42 18% 11%; /* #211E17 — warm near-black ink */
 
-    --card: 0 0% 100%;
-    --card-foreground: 240 6% 9%;
+    --card: 46 33% 97.5%; /* #FBFAF5 — ivory panel */
+    --card-foreground: 40 20% 10%;
 
-    --popover: 0 0% 100%;
-    --popover-foreground: 240 6% 9%;
+    --popover: 46 33% 97.5%;
+    --popover-foreground: 40 20% 10%;
 
-    --primary: 240 6% 9%;
-    --primary-foreground: 0 0% 100%;
+    --primary: 40 20% 10%; /* warm near-black (dark buttons) */
+    --primary-foreground: 46 30% 97%;
 
-    --secondary: 240 10% 95.5%;
-    --secondary-foreground: 240 6% 9%;
+    --secondary: 44 26% 92%;
+    --secondary-foreground: 40 20% 10%;
 
-    --muted: 240 10% 95.5%;
-    --muted-foreground: 240 3% 57%; /* Apple system gray ~#8E8E93 */
+    --muted: 44 26% 91%;
+    --muted-foreground: 40 10% 46%; /* warm gray */
 
-    --accent: 241 73% 63%; /* #5E5CE6 — Apple system indigo, THE brand thread */
-    --accent-foreground: 0 0% 100%;
+    --accent: 68 39% 33%; /* #6B7333 — olive / moss, THE brand thread */
+    --accent-foreground: 46 33% 97%;
 
-    --destructive: 4 90% 58%;
-    --destructive-foreground: 0 0% 100%;
+    --destructive: 12 56% 45%; /* #B0492F — brick (answersDoc heritage red, earthier) */
+    --destructive-foreground: 46 33% 97%;
 
-    --border: 240 8% 90%;
-    --input: 240 8% 88%;
-    --ring: 241 73% 63%;
+    --border: 42 18% 86%;
+    --input: 42 18% 84%;
+    --ring: 68 39% 33%;
 
     --radius: 1rem;
 
-    /* Glass material (light) */
-    --glass-bg: 255 255 255;
+    /* Glass material (light) — warm ivory */
+    --glass-bg: 250 248 240;
     --glass-alpha: 0.66;
-    --hairline: 0 0 0;
-    --hairline-alpha: 0.05;
+    --hairline: 40 33 26; /* warm brown hairline */
+    --hairline-alpha: 0.06;
     --highlight-alpha: 0.6;
 
     --m-youtube: 0 84% 62%;
@@ -51,39 +53,39 @@
   }
 
   .dark {
-    /* Deep midnight */
-    --background: 240 24% 4%;
-    --foreground: 0 0% 100%;
+    /* Warm espresso — the dark side of Olive & Parchment */
+    --background: 42 16% 7.5%; /* warm espresso, not cool midnight */
+    --foreground: 44 22% 92%; /* warm off-white */
 
-    --card: 240 12% 9%;
-    --card-foreground: 0 0% 100%;
+    --card: 40 14% 11%;
+    --card-foreground: 44 22% 92%;
 
-    --popover: 240 14% 8%;
-    --popover-foreground: 0 0% 100%;
+    --popover: 40 16% 10%;
+    --popover-foreground: 44 22% 92%;
 
-    --primary: 0 0% 100%;
-    --primary-foreground: 240 10% 6%;
+    --primary: 44 22% 92%;
+    --primary-foreground: 42 16% 8%;
 
-    --secondary: 240 8% 14%;
-    --secondary-foreground: 0 0% 98%;
+    --secondary: 40 12% 15%;
+    --secondary-foreground: 44 20% 96%;
 
-    --muted: 240 8% 13%;
-    --muted-foreground: 0 0% 62%;
+    --muted: 40 12% 14%;
+    --muted-foreground: 40 8% 60%;
 
-    --accent: 241 80% 68%; /* system indigo, lifted for dark */
-    --accent-foreground: 0 0% 100%;
+    --accent: 68 40% 46%; /* olive, lifted for dark */
+    --accent-foreground: 46 30% 97%;
 
-    --destructive: 4 90% 60%;
-    --destructive-foreground: 0 0% 100%;
+    --destructive: 12 56% 51%; /* brick, lifted for dark */
+    --destructive-foreground: 46 33% 97%;
 
-    --border: 240 10% 18%;
-    --input: 240 10% 20%;
-    --ring: 241 80% 68%;
+    --border: 40 12% 20%;
+    --input: 40 12% 22%;
+    --ring: 68 40% 46%;
 
-    /* Glass material (dark) — frosted near-black */
-    --glass-bg: 20 20 24;
+    /* Glass material (dark) — frosted warm near-black */
+    --glass-bg: 26 23 18;
     --glass-alpha: 0.6;
-    --hairline: 255 255 255;
+    --hairline: 232 224 208;
     --hairline-alpha: 0.06;
     --highlight-alpha: 0.05;
   }

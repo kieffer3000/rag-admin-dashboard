@@ -21,7 +21,7 @@ export function MobileNav() {
       </SheetTrigger>
       <SheetContent side="left" className="w-64 p-4">
         <Link href="/" className="mb-5 flex items-center gap-2.5">
-          <div className="flex h-8 w-8 items-center justify-center rounded-[10px] bg-gradient-to-br from-indigo-500 to-violet-600 text-white">
+          <div className="flex h-8 w-8 items-center justify-center rounded-[10px] bg-gradient-to-br from-[#84923F] to-[#525C20] text-white">
             <Boxes className="h-[18px] w-[18px]" />
           </div>
           <span className="text-[15px] font-semibold">Atlas</span>

@@ -232,7 +232,7 @@ export function Sidebar() {
         )}
       >
         <Link href="/" className="flex items-center gap-2.5">
-          <div className="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-[12px] bg-gradient-to-br from-indigo-500 to-violet-600 text-white shadow-[0_4px_16px_hsl(var(--accent)/0.4)]">
+          <div className="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-[12px] bg-gradient-to-br from-[#84923F] to-[#525C20] text-white shadow-[0_4px_16px_hsl(var(--accent)/0.4)]">
             <Boxes className="h-[19px] w-[19px]" />
           </div>
           {!collapsed && (

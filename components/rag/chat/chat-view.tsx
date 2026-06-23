@@ -525,7 +525,7 @@ function EmptyState({
     <div className="flex h-full flex-col items-center justify-center px-6 pb-24">
       <div className="relative mb-6">
         <div className="absolute inset-0 -z-10 rounded-[28px] bg-accent/30 blur-2xl" />
-        <div className="flex h-16 w-16 items-center justify-center rounded-[22px] bg-gradient-to-br from-indigo-500 to-violet-600 text-white shadow-float">
+        <div className="flex h-16 w-16 items-center justify-center rounded-[22px] bg-gradient-to-br from-[#84923F] to-[#525C20] text-white shadow-float">
           <Boxes className="h-8 w-8" />
         </div>
       </div>
