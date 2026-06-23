@@ -237,7 +237,7 @@ export function ResearchOverlay({
   }
 
   return (
-    <div className="fixed inset-0 z-40 flex flex-col bg-background">
+    <div className="fixed inset-0 z-40 flex flex-col bg-[#efece4] dark:bg-[#0c0c0e]">
       {/* minimal top bar */}
       <header className="flex h-14 shrink-0 items-center gap-2 px-5">
         <div className="flex items-center gap-2 text-[14px] font-semibold">
@@ -257,9 +257,9 @@ export function ResearchOverlay({
         </button>
       </header>
 
-      {/* messages — centered reading column, generous whitespace */}
-      <div ref={scrollRef} className="scroll-brain min-h-0 flex-1 overflow-y-auto">
-        <div className="mx-auto flex w-full max-w-3xl flex-col gap-7 px-5 py-10">
+      {/* messages — a "document page" floating on a desk (Word/Docs feel) */}
+      <div ref={scrollRef} className="scroll-brain min-h-0 flex-1 overflow-y-auto px-4 py-8">
+        <div className="mx-auto flex w-full max-w-[760px] flex-col gap-7 rounded-2xl border border-[rgb(var(--hairline)/0.1)] bg-card px-8 py-12 shadow-[0_10px_44px_rgb(0_0_0/0.13)] sm:px-14 sm:py-14 [&_.rag-html]:font-serif [&_.rag-html]:text-[16.5px] [&_.rag-html]:leading-[1.85]">
           {messages.length === 0 ? (
             <div className="flex flex-col items-center justify-center pt-24 text-center">
               <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-accent/10">

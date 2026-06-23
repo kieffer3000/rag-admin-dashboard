@@ -208,6 +208,8 @@ export function BoardProvider({ children }: { children: ReactNode }) {
   const [hydratedProject, setHydratedProject] = useState<string | null>(null);
   /** Brain in full-screen Research Mode (distraction-free). */
   const [researchBrainId, setResearchBrainId] = useState<string | null>(null);
+  /** Which project's research-mode state we've restored from localStorage. */
+  const researchRestored = useRef<string | null>(null);
   /** Projects whose saved state we've already loaded (don't reload/overwrite). */
   const hydrated = useRef<Set<string>>(new Set());
   /** Projects the user has edited this session — never let a late DB load
@@ -223,6 +225,46 @@ export function BoardProvider({ children }: { children: ReactNode }) {
     // projectMedia only matters for the first seed of a project's board.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [boards, activeProjectId]);
+
+  // ---- Research Mode persistence (survive a refresh) -----------------------
+  // Restore the full-screen research view after the board hydrates, if the saved
+  // brain still exists. Runs once per project so it never fights user toggles.
+  useEffect(() => {
+    if (hydratedProject !== activeProjectId) return;
+    if (researchRestored.current === activeProjectId) return;
+    researchRestored.current = activeProjectId;
+    try {
+      const raw = localStorage.getItem('cf_research');
+      if (raw) {
+        const saved = JSON.parse(raw);
+        if (
+          saved?.pid === activeProjectId &&
+          (boards[activeProjectId]?.nodes ?? []).some(
+            (n: BoardNode) => n.id === saved.id
+          )
+        ) {
+          setResearchBrainId(saved.id);
+        }
+      }
+    } catch {
+      /* ignore */
+    }
+  }, [hydratedProject, activeProjectId, boards]);
+  // Persist open/closed research state (only after restore, so we never clobber
+  // the saved value with the initial null on mount).
+  useEffect(() => {
+    if (researchRestored.current !== activeProjectId) return;
+    try {
+      if (researchBrainId)
+        localStorage.setItem(
+          'cf_research',
+          JSON.stringify({ pid: activeProjectId, id: researchBrainId })
+        );
+      else localStorage.removeItem('cf_research');
+    } catch {
+      /* ignore */
+    }
+  }, [researchBrainId, activeProjectId]);
 
   // ---- LOAD persisted board on project mount/switch (Neon via /api/board) ----
   useEffect(() => {

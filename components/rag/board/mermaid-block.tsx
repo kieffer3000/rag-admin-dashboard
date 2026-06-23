@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { Maximize2, X } from 'lucide-react';
 import { renderMermaidViaEngine } from '@/lib/rag/board/excalidraw-engine';
 
 // Renders an LLM-emitted mermaid diagram. PREFERRED path: convert the mermaid to
@@ -90,6 +91,15 @@ export function MermaidBlock({ code }: { code: string }) {
   const [svg, setSvg] = useState<string | null>(null);
   const [failed, setFailed] = useState(false);
   const [isDark, setIsDark] = useState(false);
+  const [expanded, setExpanded] = useState(false);
+
+  // Esc closes the full-screen diagram view.
+  useEffect(() => {
+    if (!expanded) return;
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && setExpanded(false);
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [expanded]);
 
   // Track the app's theme (toggles the `dark` class on <html>) so the diagram
   // re-renders in the matching mode when the user flips dark/light.
@@ -154,11 +164,45 @@ export function MermaidBlock({ code }: { code: string }) {
   // Surface matches the app theme: light "paper" in light mode, dark canvas in
   // dark mode (the SVG itself is rendered in the matching Excalidraw theme).
   return (
-    <figure
-      data-graphic="mermaid"
-      className="my-3 flex justify-center overflow-auto rounded-xl border border-[rgb(var(--hairline)/0.16)] bg-white p-3 [&_svg]:max-w-full dark:bg-[#161618]"
-      dangerouslySetInnerHTML={{ __html: svg }}
-    />
+    <>
+      <figure
+        data-graphic="mermaid"
+        className="group relative my-3 flex justify-center overflow-auto rounded-xl border border-[rgb(var(--hairline)/0.16)] bg-white p-3 dark:bg-[#161618]"
+      >
+        <button
+          onClick={() => setExpanded(true)}
+          title="Expand to full screen"
+          className="absolute right-2 top-2 z-10 flex h-7 w-7 items-center justify-center rounded-lg bg-black/[0.06] text-foreground/60 opacity-0 transition-opacity hover:bg-black/[0.12] hover:text-foreground group-hover:opacity-100 dark:bg-white/[0.1] dark:hover:bg-white/[0.18]"
+        >
+          <Maximize2 className="h-4 w-4" />
+        </button>
+        <div className="[&_svg]:max-w-full" dangerouslySetInnerHTML={{ __html: svg }} />
+      </figure>
+
+      {expanded && (
+        <div
+          className="fixed inset-0 z-[60] flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm sm:p-8"
+          onClick={() => setExpanded(false)}
+        >
+          <div
+            className="relative max-h-[94vh] max-w-[96vw] overflow-auto rounded-2xl bg-white p-6 shadow-2xl dark:bg-[#161618]"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              onClick={() => setExpanded(false)}
+              title="Close (Esc)"
+              className="absolute right-3 top-3 z-10 flex h-8 w-8 items-center justify-center rounded-lg bg-black/[0.06] text-foreground/70 transition-colors hover:bg-black/[0.12] hover:text-foreground dark:bg-white/[0.1] dark:hover:bg-white/[0.18]"
+            >
+              <X className="h-4 w-4" />
+            </button>
+            <div
+              className="[&_svg]:max-h-[86vh] [&_svg]:w-auto [&_svg]:max-w-[92vw]"
+              dangerouslySetInnerHTML={{ __html: svg }}
+            />
+          </div>
+        </div>
+      )}
+    </>
   );
 }
 
