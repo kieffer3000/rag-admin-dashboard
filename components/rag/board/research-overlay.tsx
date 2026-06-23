@@ -259,7 +259,7 @@ export function ResearchOverlay({
 
       {/* messages — a "document page" floating on a desk (Word/Docs feel) */}
       <div ref={scrollRef} className="scroll-brain min-h-0 flex-1 overflow-y-auto px-4 py-8">
-        <div className="mx-auto flex w-full max-w-[760px] flex-col gap-7 rounded-2xl border border-[rgb(var(--hairline)/0.1)] bg-card px-8 py-12 shadow-[0_10px_44px_rgb(0_0_0/0.13)] sm:px-14 sm:py-14 [&_.rag-html]:font-serif [&_.rag-html]:text-[16.5px] [&_.rag-html]:leading-[1.85]">
+        <div className="mx-auto flex w-full max-w-[1100px] flex-col gap-7 rounded-2xl border border-[rgb(var(--hairline)/0.1)] bg-card px-8 py-12 shadow-[0_10px_44px_rgb(0_0_0/0.13)] sm:px-16 sm:py-14 [&_.rag-html]:font-serif [&_.rag-html]:text-[16.5px] [&_.rag-html]:leading-[1.85]">
           {messages.length === 0 ? (
             <div className="flex flex-col items-center justify-center pt-24 text-center">
               <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-accent/10">
@@ -308,7 +308,7 @@ export function ResearchOverlay({
 
       {/* composer — floating, centered */}
       <div className="shrink-0 px-5 pb-6">
-        <div className="mx-auto w-full max-w-3xl">
+        <div className="mx-auto w-full max-w-[1100px]">
           <div className="flex items-end gap-2 rounded-[22px] border border-[rgb(var(--hairline)/0.18)] bg-card px-4 py-3 shadow-[0_4px_24px_rgb(0_0_0/0.08)] transition-shadow focus-within:shadow-[0_6px_30px_rgb(0_0_0/0.12)] focus-within:ring-2 focus-within:ring-accent/30">
             <textarea
               ref={taRef}

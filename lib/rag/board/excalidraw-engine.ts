@@ -152,7 +152,8 @@ type Pt = { x: number; y: number };
 function toSkeleton(
   g: Graph,
   pos: Map<string, { x: number; y: number; w: number; h: number }>,
-  routes: (Pt[] | null)[]
+  routes: (Pt[] | null)[],
+  labels: ({ x: number; y: number; w: number; h: number } | null)[]
 ): Record<string, unknown>[] {
   const out: Record<string, unknown>[] = [];
   for (const n of g.nodes.values()) {
@@ -205,8 +206,28 @@ function toSkeleton(
       strokeStyle: e.dashed ? 'dashed' : 'solid',
       roughness: 1,
       startArrowhead: e.bidir ? 'arrow' : null,
-      endArrowhead: 'arrow',
-      ...(e.label ? { label: { text: e.label, fontSize: 13 } } : {})
+      endArrowhead: 'arrow'
+    });
+  }
+  // Edge labels as filled "pills" placed by ELK — pushed LAST so they paint ON
+  // TOP of the arrows (masking the line behind them) and never overlap.
+  for (let i = 0; i < g.edges.length; i++) {
+    const e = g.edges[i];
+    const lp = labels[i];
+    if (!e.label || !lp) continue;
+    out.push({
+      type: 'rectangle',
+      id: `lbl-${i}`,
+      x: lp.x,
+      y: lp.y,
+      width: lp.w,
+      height: lp.h,
+      backgroundColor: '#ffffff', // dark-mode export inverts this to the canvas
+      strokeColor: '#ffffff',
+      strokeWidth: 1,
+      roughness: 0,
+      roundness: { type: 3 },
+      label: { text: e.label, fontSize: 12, strokeColor: '#1e1e1e' }
     });
   }
   return out;
@@ -236,16 +257,25 @@ export async function renderMermaidViaEngine(
   const elk = await getElk();
   const sizes = new Map<string, { w: number; h: number }>();
   for (const n of g.nodes.values()) sizes.set(n.id, nodeSize(n.label));
+  // Size each edge label so ELK can reserve space + place it without overlap.
+  const labelSize = (t: string) => ({
+    width: Math.max(30, Math.round(t.length * 7 + 16)),
+    height: 22
+  });
   const elkGraph = {
     id: 'root',
     layoutOptions: {
       'elk.algorithm': 'layered',
       'elk.direction': g.dir,
-      'elk.spacing.nodeNode': '55',
-      'elk.layered.spacing.nodeNodeBetweenLayers': '95',
-      'elk.spacing.edgeNode': '35',
-      'elk.layered.spacing.edgeEdgeBetweenLayers': '20',
+      // Generous spacing so dense graphs (and their labels) breathe.
+      'elk.spacing.nodeNode': '80',
+      'elk.layered.spacing.nodeNodeBetweenLayers': '150',
+      'elk.spacing.edgeNode': '45',
+      'elk.spacing.edgeEdge': '25',
+      'elk.layered.spacing.edgeEdgeBetweenLayers': '25',
       'elk.edgeRouting': 'ORTHOGONAL',
+      'elk.edgeLabels.placement': 'CENTER',
+      'elk.spacing.edgeLabel': '8',
       'elk.layered.crossingMinimization.strategy': 'LAYER_SWEEP'
     },
     children: [...g.nodes.values()].map((n) => ({
@@ -256,7 +286,8 @@ export async function renderMermaidViaEngine(
     edges: g.edges.map((e, i) => ({
       id: `e${i}`,
       sources: [e.from],
-      targets: [e.to]
+      targets: [e.to],
+      ...(e.label ? { labels: [{ text: e.label, ...labelSize(e.label) }] } : {})
     }))
   };
   const laid = (await elk.layout(elkGraph)) as {
@@ -264,6 +295,7 @@ export async function renderMermaidViaEngine(
     edges?: {
       id: string;
       sections?: { startPoint: Pt; endPoint: Pt; bendPoints?: Pt[] }[];
+      labels?: { x: number; y: number; width: number; height: number }[];
     }[];
   };
   const pos = new Map<string, { x: number; y: number; w: number; h: number }>();
@@ -272,15 +304,18 @@ export async function renderMermaidViaEngine(
   }
   if (pos.size === 0) throw new Error('layout produced no nodes');
 
-  // Pull ELK's routed polyline for each edge (start + bends + end).
-  const routes: (Pt[] | null)[] = g.edges.map((_, i) => {
+  // Pull ELK's routed polyline + placed label box for each edge.
+  const routes: (Pt[] | null)[] = [];
+  const labelBoxes: ({ x: number; y: number; w: number; h: number } | null)[] = [];
+  g.edges.forEach((_, i) => {
     const ed = (laid.edges ?? []).find((x) => x.id === `e${i}`);
     const sec = ed?.sections?.[0];
-    if (!sec) return null;
-    return [sec.startPoint, ...(sec.bendPoints ?? []), sec.endPoint];
+    routes.push(sec ? [sec.startPoint, ...(sec.bendPoints ?? []), sec.endPoint] : null);
+    const l = ed?.labels?.[0];
+    labelBoxes.push(l ? { x: l.x, y: l.y, w: l.width, h: l.height } : null);
   });
 
-  const skeleton = toSkeleton(g, pos, routes);
+  const skeleton = toSkeleton(g, pos, routes, labelBoxes);
 
   // Convert skeleton → full elements (auto-binds arrows + text) → SVG.
   const exc = await import('@excalidraw/excalidraw');
