@@ -111,15 +111,27 @@ export function streamText(
   let raf = 0;
   let start = 0;
   let finished = false;
+  let prevN = 0;
 
   const step = (t: number) => {
     if (!start) start = t;
-    const n = Math.min(full.length, Math.ceil(((t - start) / 1000) * rate));
-    onChunk(full.slice(0, n));
-    if (n >= full.length) {
+    const target = Math.min(full.length, Math.ceil(((t - start) / 1000) * rate));
+    if (target >= full.length) {
+      onChunk(full);
       finished = true;
       onDone();
       return;
+    }
+    // Reveal WHOLE WORDS only: drop the trailing partial word so a word never
+    // appears half-typed. The reveal still advances on the time-driven clock —
+    // a word surfaces once the clock moves past it into the next word. This
+    // gives both reveal styles a word cadence (the per-word fade needs it; the
+    // mask reads cleaner too) without changing the callback contract.
+    const trailingWordStart = full.slice(0, target).search(/\S+$/);
+    const n = trailingWordStart > prevN ? trailingWordStart : prevN;
+    if (n > prevN) {
+      prevN = n;
+      onChunk(full.slice(0, n));
     }
     raf = requestAnimationFrame(step);
   };

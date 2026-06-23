@@ -251,26 +251,57 @@ input[type='search']::-webkit-search-cancel-button {
   animation: fade-up 0.4s cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
-/* Streaming reveal: the newest line fades in (Claude-style) via a soft gradient
-   mask on the leading edge — text materializes faint and sharpens as more lines
-   push it up. Content-agnostic (works with HTML, tables, lists). Dropped the
-   moment streaming completes (the non-streaming render carries no mask). */
+/* Streaming reveal — 'mask' style: the newest lines materialize via a soft
+   gradient mask on the leading edge. Widened to ~2.4em and a fainter floor so
+   several trailing words shimmer in together as a gentle wave (paired with the
+   word-cadence reveal in streamText). Content-agnostic (HTML, tables, lists).
+   Dropped the moment streaming completes (the non-streaming render has no mask). */
 .stream-fade {
   -webkit-mask-image: linear-gradient(
     to bottom,
-    #000 calc(100% - 1.35em),
-    rgba(0, 0, 0, 0.28) 100%
+    #000 calc(100% - 2.4em),
+    rgba(0, 0, 0, 0.55) calc(100% - 1.1em),
+    rgba(0, 0, 0, 0.12) 100%
   );
   mask-image: linear-gradient(
     to bottom,
-    #000 calc(100% - 1.35em),
-    rgba(0, 0, 0, 0.28) 100%
+    #000 calc(100% - 2.4em),
+    rgba(0, 0, 0, 0.55) calc(100% - 1.1em),
+    rgba(0, 0, 0, 0.12) 100%
   );
 }
 @media (prefers-reduced-motion: reduce) {
   .stream-fade {
     -webkit-mask-image: none;
     mask-image: none;
+  }
+}
+
+/* Streaming reveal — 'word' style (Anthropic-like): every newly revealed word
+   fades in once, on arrival. opacity + a faint de-blur reads as a gentle
+   "materialize"; the word-boundary reveal cadence (streamText) staggers the
+   words into an overlapping wave (each fade outlasts the gap between words).
+   pre-wrap keeps the line breaks toPlainWords inserts for block tags. */
+.word-fade {
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.word-fade .wf-word {
+  animation: word-fade var(--word-fade-dur, 0.55s) ease-out both;
+}
+@keyframes word-fade {
+  from {
+    opacity: 0;
+    filter: blur(4px);
+  }
+  to {
+    opacity: 1;
+    filter: blur(0);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .word-fade .wf-word {
+    animation: none;
   }
 }
 

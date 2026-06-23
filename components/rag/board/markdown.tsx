@@ -1,9 +1,11 @@
 'use client';
 
+import { useMemo } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import dynamic from 'next/dynamic';
 import { cn } from '@/lib/utils';
+import { useStreamStyle } from '@/lib/rag/stream-style';
 
 // Lazy-loaded so mermaid.js / recharts never land in the main bundle — they
 // load only when an answer actually contains a diagram or chart block.
@@ -193,23 +195,7 @@ export function AnswerBody({
   streaming?: boolean;
 }) {
   if (streaming) {
-    const { body, pending } = clipStreaming(content);
-    const segs = splitGraphicBlocks(body); // only COMPLETE fences match
-    // `stream-fade`: a soft gradient mask on the leading edge so the newest text
-    // materializes (Claude-style) and sharpens as more arrives. Dropped the
-    // instant streaming ends, so the final answer is fully crisp.
-    return (
-      <div className="stream-fade">
-        {segs.map((s, i) => {
-          if (s.type === 'mermaid') return <MermaidBlock key={i} code={s.text} />;
-          if (s.type === 'chart') return <ChartBlock key={i} code={s.text} />;
-          return s.text.trim() ? (
-            <Prose key={i} content={s.text} large={large} />
-          ) : null;
-        })}
-        {pending && <GraphicSkeleton kind={pending} />}
-      </div>
-    );
+    return <StreamingBody content={content} large={large} />;
   }
 
   // Re-wrap a loosely-emitted diagram (no ```mermaid fence) so it renders.
@@ -229,6 +215,94 @@ export function AnswerBody({
       })}
     </>
   );
+}
+
+/**
+ * The streaming view of an answer. Honors the reader's reveal style (per-word
+ * fade vs leading-edge mask — see lib/rag/stream-style). In BOTH styles a
+ * not-yet-closed diagram/chart is held back (clipStreaming) so a half-built
+ * graphic never re-lays-out each frame.
+ */
+function StreamingBody({
+  content,
+  large
+}: {
+  content: string;
+  large?: boolean;
+}) {
+  const style = useStreamStyle();
+  const { body, pending } = clipStreaming(content);
+  const segs = splitGraphicBlocks(body); // only COMPLETE fences match
+
+  const blocks = segs.map((s, i) => {
+    if (s.type === 'mermaid') return <MermaidBlock key={i} code={s.text} />;
+    if (s.type === 'chart') return <ChartBlock key={i} code={s.text} />;
+    if (!s.text.trim()) return null;
+    // 'word' → per-word fade over plain text (formatting snaps in on completion);
+    // 'mask' → live formatted HTML/markdown, softened by the edge gradient.
+    return style === 'word' ? (
+      <WordFade key={i} text={s.text} large={large} />
+    ) : (
+      <Prose key={i} content={s.text} large={large} />
+    );
+  });
+
+  return (
+    <div className={style === 'mask' ? 'stream-fade' : undefined}>
+      {blocks}
+      {pending && <GraphicSkeleton kind={pending} />}
+    </div>
+  );
+}
+
+/**
+ * Per-word reveal (Anthropic-style). Each word is its own <span>; React keys by
+ * index and streamText only ever feeds a growing PREFIX, so an existing word
+ * never remounts — its fade plays exactly once, on arrival. The word-boundary
+ * reveal cadence staggers them into a gentle materializing wave. Whitespace
+ * (incl. the line breaks toPlainWords inserts for block tags) is preserved via
+ * white-space:pre-wrap so paragraphs stay readable while streaming; the crisp
+ * formatted render takes over the instant streaming ends.
+ */
+function WordFade({ text, large }: { text: string; large?: boolean }) {
+  const tokens = useMemo(() => toPlainWords(text).split(/(\s+)/), [text]);
+  return (
+    <div
+      className={cn(
+        'word-fade text-foreground/90',
+        large ? 'text-[16.5px] leading-[1.72]' : 'text-[15px] leading-[1.6]'
+      )}
+    >
+      {tokens.map((tok, i) =>
+        tok === '' ? null : (
+          <span key={i} className={/^\s+$/.test(tok) ? undefined : 'wf-word'}>
+            {tok}
+          </span>
+        )
+      )}
+    </div>
+  );
+}
+
+/** Flatten HTML-ish answer text to readable plain text for the per-word reveal:
+ *  block tags → line breaks, list items → bullets, then strip remaining tags and
+ *  decode the few entities the model emits. Markdown passes through mostly as-is
+ *  (its symbols briefly show, then the formatted render replaces them on done). */
+function toPlainWords(s: string): string {
+  return s
+    .replace(/<\s*br\s*\/?>/gi, '\n')
+    .replace(/<\s*li[^>]*>/gi, '\n• ')
+    .replace(/<\/\s*(p|div|h[1-6]|li|tr|ul|ol|blockquote)\s*>/gi, '\n')
+    .replace(/<[^>]+>/g, '')
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/&amp;/gi, '&')
+    .replace(/&lt;/gi, '<')
+    .replace(/&gt;/gi, '>')
+    .replace(/&#39;|&apos;/gi, "'")
+    .replace(/&quot;/gi, '"')
+    .replace(/\n{3,}/g, '\n\n')
+    .replace(/[ \t]+/g, ' ')
+    .trimStart();
 }
 
 /** Prose body — HTML when Make returns HTML (for richer layouts), else markdown. */
