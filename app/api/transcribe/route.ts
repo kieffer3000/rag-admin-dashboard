@@ -69,9 +69,15 @@ export async function POST(req: Request) {
     locales,
     enhancedMode: { enabled: true, model }
   };
-  // phraseList only supported on mai-transcribe-1.5
+  // phraseList only supported on mai-transcribe-1.5. Azure rejects (400) any
+  // context keyword longer than 50 chars — our source names (YouTube titles,
+  // long doc names) routinely exceed that — so trim each to 50, drop empties,
+  // de-dupe, and cap at 50 entries.
   if (phrases.length && model === 'mai-transcribe-1.5') {
-    definition.phraseList = { phrases: phrases.slice(0, 50) };
+    const cleaned = Array.from(
+      new Set(phrases.map((p) => p.trim().slice(0, 50)).filter(Boolean))
+    ).slice(0, 50);
+    if (cleaned.length) definition.phraseList = { phrases: cleaned };
   }
 
   const apiVersion = process.env.MAI_TRANSCRIBE_API_VERSION ?? '2025-10-15';

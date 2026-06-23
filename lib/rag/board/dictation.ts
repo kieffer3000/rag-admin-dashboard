@@ -1,7 +1,9 @@
-// Browser mic → 16 kHz mono 16-bit WAV. MAI-Transcribe accepts WAV/MP3/FLAC
-// only; MediaRecorder emits WebM/Opus, so we capture PCM via AudioContext and
-// encode the WAV ourselves. Used for high-accuracy question dictation and
-// (later) voice-memos-as-sources.
+// Browser mic → 16 kHz mono MP3 (WAV fallback). MAI-Transcribe accepts
+// WAV/MP3/FLAC only; MediaRecorder emits WebM/Opus, so we capture raw PCM via
+// AudioContext and encode it ourselves. We ship MP3 (~48 kbps mono ≈ 0.36 MB/min)
+// rather than WAV (~1.9 MB/min) so a recording stays well under Vercel's ~4.5 MB
+// request-body cap — lifting the practical limit from ~2.3 min to ~12 min.
+// Used for high-accuracy question dictation and voice-memos-as-sources.
 
 export class WavRecorder {
   private ctx?: AudioContext;
@@ -36,7 +38,12 @@ export class WavRecorder {
     this.stream?.getTracks().forEach((t) => t.stop());
     const pcm = downsample(merge(this.chunks), this.inputRate, this.target);
     await this.ctx?.close();
-    return encodeWav(pcm, this.target);
+    // Prefer MP3 (small); fall back to WAV if the encoder can't load.
+    try {
+      return await encodeMp3(pcm, this.target);
+    } catch {
+      return encodeWav(pcm, this.target);
+    }
   }
 }
 
@@ -69,6 +76,36 @@ function downsample(buf: Float32Array, from: number, to: number): Float32Array {
     i = next;
   }
   return out;
+}
+
+/** Encode mono PCM → MP3 (MPEG-2 at 16 kHz) via lamejs, loaded lazily so it
+ *  never lands in the SSR/main bundle. ~48 kbps mono is ample for speech STT. */
+async function encodeMp3(
+  samples: Float32Array,
+  rate: number,
+  kbps = 48
+): Promise<Blob> {
+  const lame: any = await import('@breezystack/lamejs');
+  const Mp3Encoder = lame.Mp3Encoder ?? lame.default?.Mp3Encoder;
+  const enc = new Mp3Encoder(1, rate, kbps);
+
+  // Float32 [-1,1] → Int16 PCM.
+  const pcm16 = new Int16Array(samples.length);
+  for (let i = 0; i < samples.length; i++) {
+    const s = Math.max(-1, Math.min(1, samples[i]));
+    pcm16[i] = s < 0 ? s * 0x8000 : s * 0x7fff;
+  }
+
+  const blockSize = 1152; // one MP3 frame's worth of samples
+  const parts: Uint8Array[] = [];
+  for (let i = 0; i < pcm16.length; i += blockSize) {
+    const buf = enc.encodeBuffer(pcm16.subarray(i, i + blockSize));
+    if (buf.length) parts.push(new Uint8Array(buf));
+  }
+  const tail = enc.flush();
+  if (tail.length) parts.push(new Uint8Array(tail));
+
+  return new Blob(parts as BlobPart[], { type: 'audio/mpeg' });
 }
 
 function encodeWav(samples: Float32Array, rate: number): Blob {
@@ -105,7 +142,9 @@ export async function transcribeAudio(
   phrases: string[] = []
 ): Promise<string> {
   const fd = new FormData();
-  fd.append('audio', blob, 'dictation.wav');
+  // name by actual container so Azure/our route detect the format correctly
+  const ext = blob.type.includes('mpeg') || blob.type.includes('mp3') ? 'mp3' : 'wav';
+  fd.append('audio', blob, `dictation.${ext}`);
   if (phrases.length) fd.append('phrases', JSON.stringify(phrases.slice(0, 50)));
   const res = await fetch('/api/transcribe', { method: 'POST', body: fd });
   if (!res.ok) {
