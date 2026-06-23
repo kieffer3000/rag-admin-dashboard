@@ -46,10 +46,26 @@ function getExcalidraw() {
   return excalidrawReady;
 }
 
+// Mermaid fails to parse special characters (parentheses, #, &, <, >) inside an
+// unquoted node label — e.g. `A[Commercial Target (Money) Page]`. Models forget
+// the quotes constantly, which silently kills the whole diagram. Auto-wrap any
+// bracket label that contains a breaker in double quotes (quoting is always
+// valid mermaid). Leaves already-quoted labels and plain labels untouched.
+function normalizeMermaid(code: string): string {
+  return code.replace(
+    /([A-Za-z0-9_])\[([^\]\n]*[()#&<>][^\]\n]*)\]/g,
+    (full, lead: string, label: string) => {
+      const t = label.trim();
+      if (t.startsWith('"') && t.endsWith('"')) return full; // already quoted
+      return `${lead}["${label.replace(/"/g, "'")}"]`;
+    }
+  );
+}
+
 async function renderViaExcalidraw(code: string): Promise<string> {
   const { parse, convert, toSvg } = await getExcalidraw();
   // Throws for non-flowchart diagrams → caller falls back to mermaid.js.
-  const { elements, files } = await parse(code.trim());
+  const { elements, files } = await parse(normalizeMermaid(code.trim()));
   const full = convert(elements);
   const svg = await toSvg({
     elements: full,
@@ -88,7 +104,10 @@ export function MermaidBlock({ code }: { code: string }) {
       // 2) mermaid.js (every other diagram type).
       try {
         const mermaid = await getMermaid();
-        const { svg: out } = await mermaid.render(idRef.current, code.trim());
+        const { svg: out } = await mermaid.render(
+          idRef.current,
+          normalizeMermaid(code.trim())
+        );
         if (alive) setSvg(out);
         return;
       } catch {
