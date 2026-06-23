@@ -224,6 +224,17 @@ export function BoardToolbar(p: BoardToolbarProps) {
     setRecName('');
   }
 
+  // Hard 2-minute cap: auto-stop + transcribe so a memo left running forever
+  // can't grow past the upload limit. The transcript still lands in review.
+  useEffect(() => {
+    if (recState === 'recording' && elapsed >= 120) {
+      void stopRec();
+      window.alert(
+        'Reached the 2-minute recording limit — stopping and transcribing. Record another memo to keep going.'
+      );
+    }
+  }, [recState, elapsed]);
+
   const unplaced = projectMedia.filter((m) => !p.placedIds.has(m.id));
 
   function closeSource() {
@@ -1052,15 +1063,29 @@ export function BoardToolbar(p: BoardToolbarProps) {
             <div className="flex flex-col items-center gap-4 py-4">
               <button
                 onClick={stopRec}
-                className="flex h-16 w-16 animate-pulse items-center justify-center rounded-full bg-red-500 text-white shadow-[0_4px_16px_rgb(239_68_68/0.5)]"
+                className={cn(
+                  'flex h-16 w-16 items-center justify-center rounded-full text-white',
+                  elapsed >= 110
+                    ? 'recording-warn'
+                    : 'animate-pulse bg-red-500 shadow-[0_4px_16px_rgb(239_68_68/0.5)]'
+                )}
               >
                 <Square className="h-6 w-6 fill-white" />
               </button>
-              <p className="font-mono text-[15px] tabular-nums">
+              <p
+                className={cn(
+                  'font-mono text-[15px] tabular-nums',
+                  elapsed >= 110 && 'font-semibold text-red-500'
+                )}
+              >
                 {String(Math.floor(elapsed / 60)).padStart(2, '0')}:
                 {String(elapsed % 60).padStart(2, '0')}
               </p>
-              <p className="text-[12.5px] text-muted-foreground">Tap to stop</p>
+              <p className="text-[12.5px] text-muted-foreground">
+                {elapsed >= 110
+                  ? `${120 - elapsed}s left — stops at 2:00`
+                  : 'Tap to stop · 2 min max'}
+              </p>
             </div>
           )}
 

@@ -81,6 +81,21 @@ export function ResearchOverlay({
   // hard cap a single recording so the mic never runs forever (and the WAV/MP3
   // never grows unbounded). Auto-stops + transcribes what was captured.
   const maxTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // mic flashes red in the final ~10s before the 2-min cap
+  const warnTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [recWarn, setRecWarn] = useState(false);
+
+  function clearRecTimers() {
+    if (maxTimerRef.current) {
+      clearTimeout(maxTimerRef.current);
+      maxTimerRef.current = null;
+    }
+    if (warnTimerRef.current) {
+      clearTimeout(warnTimerRef.current);
+      warnTimerRef.current = null;
+    }
+    setRecWarn(false);
+  }
 
   // Per-message actions — the same ones the brain card offers, so research mode
   // isn't a downgrade. Voiceover: ephemeral synth + play (regenerable). Edit:
@@ -155,6 +170,7 @@ export function ResearchOverlay({
   useEffect(
     () => () => {
       if (maxTimerRef.current) clearTimeout(maxTimerRef.current);
+      if (warnTimerRef.current) clearTimeout(warnTimerRef.current);
       try {
         recRef.current?.stop?.();
       } catch {}
@@ -180,10 +196,7 @@ export function ResearchOverlay({
     const rec = wavRef.current;
     if (!rec) return;
     wavRef.current = null;
-    if (maxTimerRef.current) {
-      clearTimeout(maxTimerRef.current);
-      maxTimerRef.current = null;
-    }
+    clearRecTimers();
     setListening(false);
     setTranscribing(true);
     try {
@@ -218,8 +231,10 @@ export function ResearchOverlay({
       const rec = new WavRecorder();
       await rec.start();
       wavRef.current = rec;
+      setRecWarn(false);
       setListening(true);
-      // 2-minute hard cap: auto-stop + transcribe so nothing is lost.
+      // flash red in the last ~10s, then hard-stop + transcribe at 2 min.
+      warnTimerRef.current = setTimeout(() => setRecWarn(true), 110_000);
       maxTimerRef.current = setTimeout(() => void finishMaiRecording(true), 120_000);
     } catch {
       window.alert('Microphone permission is needed to dictate.');
@@ -249,25 +264,21 @@ export function ResearchOverlay({
         transcript += e.results[i][0].transcript;
       setQuestion(dictBaseRef.current + transcript);
     };
-    const clearCap = () => {
-      if (maxTimerRef.current) {
-        clearTimeout(maxTimerRef.current);
-        maxTimerRef.current = null;
-      }
-    };
     rec.onend = () => {
       setListening(false);
-      clearCap();
+      clearRecTimers();
     };
     rec.onerror = () => {
       setListening(false);
-      clearCap();
+      clearRecTimers();
     };
     recRef.current = rec;
+    setRecWarn(false);
     setListening(true);
     rec.start();
-    // 2-minute hard cap. Web Speech appends live, so the text is already saved;
-    // we just stop and nudge the user to record again.
+    // flash in the final ~10s, then hard-stop at 2 min. Web Speech appends live,
+    // so the text is already saved; we just stop and nudge them to record again.
+    warnTimerRef.current = setTimeout(() => setRecWarn(true), 110_000);
     maxTimerRef.current = setTimeout(() => {
       recRef.current?.stop();
       window.alert(
@@ -483,7 +494,9 @@ export function ResearchOverlay({
               className={cn(
                 'flex h-9 w-9 shrink-0 items-center justify-center rounded-full transition-all',
                 listening
-                  ? 'animate-pulse bg-red-500 text-white shadow-[0_2px_10px_rgb(239_68_68/0.5)]'
+                  ? recWarn
+                    ? 'recording-warn text-white'
+                    : 'animate-pulse bg-red-500 text-white shadow-[0_2px_10px_rgb(239_68_68/0.5)]'
                   : 'text-muted-foreground/60 hover:bg-black/[0.05] hover:text-foreground dark:hover:bg-white/[0.06]'
               )}
             >

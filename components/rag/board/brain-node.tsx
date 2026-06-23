@@ -212,6 +212,21 @@ function BrainNodeInner({ id, data, selected }: NodeProps) {
   // hard cap a single recording so the mic never runs forever; auto-stops +
   // transcribes what was captured.
   const maxTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // mic flashes red in the final ~10s before the 2-min cap
+  const warnTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [recWarn, setRecWarn] = useState(false);
+
+  function clearRecTimers() {
+    if (maxTimerRef.current) {
+      clearTimeout(maxTimerRef.current);
+      maxTimerRef.current = null;
+    }
+    if (warnTimerRef.current) {
+      clearTimeout(warnTimerRef.current);
+      warnTimerRef.current = null;
+    }
+    setRecWarn(false);
+  }
   /** Message id currently being voiced (spinner on its 🔈 button). */
   const [voicingId, setVoicingId] = useState<string | null>(null);
   /** Composer text at the moment dictation started — interim results append to it. */
@@ -368,10 +383,7 @@ function BrainNodeInner({ id, data, selected }: NodeProps) {
     const rec = wavRef.current;
     if (!rec) return;
     wavRef.current = null;
-    if (maxTimerRef.current) {
-      clearTimeout(maxTimerRef.current);
-      maxTimerRef.current = null;
-    }
+    clearRecTimers();
     setListening(false);
     setTranscribing(true);
     try {
@@ -408,8 +420,10 @@ function BrainNodeInner({ id, data, selected }: NodeProps) {
       const rec = new WavRecorder();
       await rec.start();
       wavRef.current = rec;
+      setRecWarn(false);
       setListening(true);
-      // 2-minute hard cap: auto-stop + transcribe so nothing is lost.
+      // flash red in the last ~10s, then hard-stop + transcribe at 2 min.
+      warnTimerRef.current = setTimeout(() => setRecWarn(true), 110_000);
       maxTimerRef.current = setTimeout(() => void finishMaiRecording(true), 120_000);
     } catch {
       window.alert('Microphone permission is needed to dictate.');
@@ -439,25 +453,21 @@ function BrainNodeInner({ id, data, selected }: NodeProps) {
         transcript += e.results[i][0].transcript;
       setQuestion(dictBaseRef.current + transcript);
     };
-    const clearCap = () => {
-      if (maxTimerRef.current) {
-        clearTimeout(maxTimerRef.current);
-        maxTimerRef.current = null;
-      }
-    };
     rec.onend = () => {
       setListening(false);
-      clearCap();
+      clearRecTimers();
     };
     rec.onerror = () => {
       setListening(false);
-      clearCap();
+      clearRecTimers();
     };
     recRef.current = rec;
+    setRecWarn(false);
     setListening(true);
     rec.start();
-    // 2-minute hard cap. Web Speech appends live, so the text is already saved;
-    // we just stop and nudge the user to record again.
+    // flash in the final ~10s, then hard-stop at 2 min. Web Speech appends live,
+    // so the text is already saved; we just stop and nudge them to record again.
+    warnTimerRef.current = setTimeout(() => setRecWarn(true), 110_000);
     maxTimerRef.current = setTimeout(() => {
       recRef.current?.stop();
       window.alert(
@@ -472,10 +482,11 @@ function BrainNodeInner({ id, data, selected }: NodeProps) {
     el.scrollTo({ top: el.scrollHeight });
   }, [messages]);
 
-  // never let the recording cap timer fire after the card unmounts
+  // never let the recording cap/warn timers fire after the card unmounts
   useEffect(
     () => () => {
       if (maxTimerRef.current) clearTimeout(maxTimerRef.current);
+      if (warnTimerRef.current) clearTimeout(warnTimerRef.current);
     },
     []
   );
@@ -1152,7 +1163,9 @@ function BrainNodeInner({ id, data, selected }: NodeProps) {
             className={cn(
               'flex h-7 w-7 shrink-0 items-center justify-center rounded-[10px] transition-all',
               listening
-                ? 'bg-red-500 text-white shadow-[0_2px_10px_rgb(239_68_68/0.5)] animate-pulse'
+                ? recWarn
+                  ? 'recording-warn text-white'
+                  : 'bg-red-500 text-white shadow-[0_2px_10px_rgb(239_68_68/0.5)] animate-pulse'
                 : 'text-muted-foreground/60 hover:bg-black/[0.05] hover:text-foreground dark:hover:bg-white/[0.06]'
             )}
           >
