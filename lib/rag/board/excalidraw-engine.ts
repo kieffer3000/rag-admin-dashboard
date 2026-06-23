@@ -137,10 +137,10 @@ export function parseFlowchart(code: string): Graph | null {
 function nodeSize(label: string): { w: number; h: number } {
   const longest = label
     .split(/\s+/)
-    .reduce((a, b) => Math.max(a, b.length), label.length > 22 ? 22 : label.length);
-  const w = Math.min(260, Math.max(130, longest * 8.6 + 36));
-  const lines = Math.ceil(label.length / (w / 8.6));
-  const h = Math.max(56, 22 + lines * 22);
+    .reduce((a, b) => Math.max(a, b.length), label.length > 24 ? 24 : label.length);
+  const w = Math.min(300, Math.max(150, longest * 9.6 + 40));
+  const lines = Math.ceil(label.length / (w / 9.6));
+  const h = Math.max(62, 26 + lines * 26);
   return { w, h };
 }
 
@@ -172,7 +172,7 @@ function toSkeleton(
       strokeWidth: 2,
       roughness: 1, // hand-drawn
       roundness: n.shape === 'rect' ? { type: 3 } : undefined,
-      label: { text: n.label, fontSize: 16, strokeColor: '#1e1e1e' }
+      label: { text: n.label, fontSize: 18, strokeColor: '#1e1e1e' }
     });
   }
   for (let i = 0; i < g.edges.length; i++) {
@@ -227,7 +227,7 @@ function toSkeleton(
       strokeWidth: 1,
       roughness: 0,
       roundness: { type: 3 },
-      label: { text: e.label, fontSize: 12, strokeColor: '#1e1e1e' }
+      label: { text: e.label, fontSize: 14, strokeColor: '#1e1e1e' }
     });
   }
   return out;
@@ -259,20 +259,22 @@ export async function renderMermaidViaEngine(
   for (const n of g.nodes.values()) sizes.set(n.id, nodeSize(n.label));
   // Size each edge label so ELK can reserve space + place it without overlap.
   const labelSize = (t: string) => ({
-    width: Math.max(30, Math.round(t.length * 7 + 16)),
-    height: 22
+    width: Math.max(34, Math.round(t.length * 7.8 + 20)),
+    height: 26
   });
   const elkGraph = {
     id: 'root',
     layoutOptions: {
       'elk.algorithm': 'layered',
       'elk.direction': g.dir,
-      // Generous spacing so dense graphs (and their labels) breathe.
-      'elk.spacing.nodeNode': '80',
-      'elk.layered.spacing.nodeNodeBetweenLayers': '150',
-      'elk.spacing.edgeNode': '45',
-      'elk.spacing.edgeEdge': '25',
-      'elk.layered.spacing.edgeEdgeBetweenLayers': '25',
+      // Compact spacing: keep the diagram small enough to read at column width
+      // without zooming. ELK already places labels collision-free, so big gaps
+      // are no longer needed.
+      'elk.spacing.nodeNode': '48',
+      'elk.layered.spacing.nodeNodeBetweenLayers': '80',
+      'elk.spacing.edgeNode': '26',
+      'elk.spacing.edgeEdge': '16',
+      'elk.layered.spacing.edgeEdgeBetweenLayers': '16',
       'elk.edgeRouting': 'ORTHOGONAL',
       'elk.edgeLabels.placement': 'CENTER',
       'elk.spacing.edgeLabel': '8',
