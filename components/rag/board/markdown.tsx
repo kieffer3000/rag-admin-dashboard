@@ -58,6 +58,54 @@ export function splitGraphicBlocks(
   return out;
 }
 
+/** Strip a single line's per-line wrapping — surrounding backticks and inline
+ *  <code>/<p>/<span>/<li> tags — so we can test if it belongs to a diagram. */
+function unwrapDiagramLine(line: string): string {
+  let s = line.replace(/<\/?(code|p|span|li|strong|em)[^>]*>/gi, '').trim();
+  if (s.startsWith('`') && s.endsWith('`') && s.length > 1) s = s.slice(1, -1).trim();
+  return s;
+}
+
+// A line that belongs to a mermaid diagram body (edges, nodes, subgraph/end).
+const MERMAID_BODY_LINE = /-->|---|<--|==>|-\.->|\.->|\bsubgraph\b|^end$|[[\]{}()]|\|/;
+
+/** Models sometimes emit a diagram WITHOUT a ```mermaid fence — each line wrapped
+ *  in backticks or <code>, or left as bare lines — so it renders as raw code
+ *  pills instead of a diagram. Detect such a loose diagram (a line naming a
+ *  mermaid type followed by diagram-looking lines) and re-wrap it in a
+ *  ```mermaid fence so splitGraphicBlocks renders it. */
+export function coerceLooseMermaid(content: string): string {
+  if (/```\s*mermaid/i.test(content)) return content; // already properly fenced
+  const lines = content.split('\n');
+  let start = -1;
+  for (let i = 0; i < lines.length; i++) {
+    if (MERMAID_FIRST.test(unwrapDiagramLine(lines[i]))) {
+      start = i;
+      break;
+    }
+  }
+  if (start === -1) return content;
+  let end = start;
+  for (let j = start + 1; j < lines.length; j++) {
+    const u = unwrapDiagramLine(lines[j]);
+    if (!u) break; // blank line ends the diagram
+    if (MERMAID_BODY_LINE.test(u) || MERMAID_FIRST.test(u)) end = j;
+    else break;
+  }
+  if (end === start) return content; // lone keyword line — not a real diagram
+  const body = lines
+    .slice(start, end + 1)
+    .map(unwrapDiagramLine)
+    .join('\n');
+  return (
+    lines.slice(0, start).join('\n') +
+    '\n\n```mermaid\n' +
+    body +
+    '\n```\n\n' +
+    lines.slice(end + 1).join('\n')
+  );
+}
+
 /** Looks like an HTML answer (Make returns HTML; we also inject <sup> footnote
  *  refs). Detect a block/inline tag ANYWHERE — answers often open with plain
  *  text ("Yes, …") before the first <mark>/<p>, and footnote <sup> refs must
@@ -94,9 +142,11 @@ export function AnswerBody({
   content: string;
   large?: boolean;
 }) {
-  const segs = splitGraphicBlocks(content);
+  // Re-wrap a loosely-emitted diagram (no ```mermaid fence) so it renders.
+  const coerced = coerceLooseMermaid(content);
+  const segs = splitGraphicBlocks(coerced);
   if (segs.length === 1 && segs[0].type === 'prose') {
-    return <Prose content={content} large={large} />;
+    return <Prose content={coerced} large={large} />;
   }
   return (
     <>
