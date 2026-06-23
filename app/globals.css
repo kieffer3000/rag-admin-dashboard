@@ -251,45 +251,31 @@ input[type='search']::-webkit-search-cancel-button {
   animation: fade-up 0.4s cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
-/* ---- Smooth streaming reveal ----
-   Text flows in character-by-character (see lib/rag/mock-answer streamText).
-   A soft gradient mask on the newest line makes incoming text materialize
-   instead of popping, and conveniently blurs any half-formed **/[n] token at
-   the reveal frontier. The mask is dropped the instant streaming completes so
-   the final answer is fully crisp. */
-.streaming-body {
-  -webkit-mask-image: linear-gradient(
-    to bottom,
-    #000 calc(100% - 1.5em),
-    rgba(0, 0, 0, 0.35) calc(100% - 0.4em),
-    transparent 100%
-  );
-  mask-image: linear-gradient(
-    to bottom,
-    #000 calc(100% - 1.5em),
-    rgba(0, 0, 0, 0.35) calc(100% - 0.4em),
-    transparent 100%
-  );
+/* ---- Smooth answer reveal ----
+   Backend answers arrive complete, so we render them in ONE pass (no per-frame
+   markdown/mermaid re-parse — that was the board's stutter) and reveal with a
+   single GPU-composited fade: the whole answer materializes, drifting up and
+   sharpening from a soft blur over ~0.5s. See lib/rag/mock-answer streamText. */
+@keyframes answer-fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+    filter: blur(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+    filter: blur(0);
+  }
 }
-
-.stream-caret {
-  display: inline-block;
-  width: 2px;
-  height: 1.05em;
-  margin-left: 2px;
-  vertical-align: -0.16em;
-  border-radius: 2px;
-  background: linear-gradient(to bottom, hsl(252 80% 62%), hsl(270 75% 58%));
-  animation: caret-pulse 1.1s ease-in-out infinite;
+.answer-fade-in {
+  animation: answer-fade-in 0.5s cubic-bezier(0.16, 1, 0.3, 1) both;
+  will-change: opacity, transform, filter;
 }
-@keyframes caret-pulse {
-  0%, 100% { opacity: 0.12; }
-  50% { opacity: 0.85; }
-}
-
 @media (prefers-reduced-motion: reduce) {
-  .streaming-body { -webkit-mask-image: none; mask-image: none; }
-  .stream-caret { animation: none; opacity: 0.4; }
+  .answer-fade-in {
+    animation: none;
+  }
 }
 
 /* ---- Board: puzzle-stack physics & living wires ---- */

@@ -83,41 +83,26 @@ function cite(n: number) {
 }
 
 /**
- * Reveal a string smoothly via a callback, returning a cancel fn.
+ * Deliver a finished answer to the UI in ONE render, then signal completion.
  *
- * Time-driven on requestAnimationFrame (not a fixed setInterval), so the text
- * flows at the display's refresh rate instead of popping one word per tick.
- * Reveal is by CHARACTER for a continuous "materialize" feel; the soft fade
- * mask on `.streaming-body` hides any half-formed `**`/`[n]` token at the
- * frontier. `cps` = characters per second; the rate eases up for long answers
- * so they never drag.
+ * The answer arrives from the backend complete (Make returns it whole), so we
+ * deliberately do NOT fake a per-frame typewriter. The rich renderer
+ * (markdown + tables + a mermaid SVG layout via AnswerBody) is far too heavy to
+ * re-run 60×/sec on a growing partial — that re-parse is what made the board
+ * lurch a phrase at a time. Instead we set the full content once and let a
+ * one-shot CSS fade (`.answer-fade-in` on the board, `animate-fade-up` in chat)
+ * handle the reveal: GPU-composited, parsed exactly once, never janks. onDone is
+ * deferred one frame so the content paints before citations/controls attach.
+ *
+ * Signature is unchanged so all callers (chat-view, brain-node, research-overlay)
+ * work untouched.
  */
 export function streamText(
   full: string,
   onChunk: (soFar: string) => void,
-  onDone: () => void,
-  cps = 620
+  onDone: () => void
 ): () => void {
-  // longer answers reveal a touch faster so a big table doesn't crawl
-  const rate = Math.min(1600, cps * (1 + Math.min(full.length, 4000) / 4000));
-  let raf = 0;
-  let start = 0;
-  let finished = false;
-
-  const step = (t: number) => {
-    if (!start) start = t;
-    const n = Math.min(full.length, Math.ceil(((t - start) / 1000) * rate));
-    onChunk(full.slice(0, n));
-    if (n >= full.length) {
-      finished = true;
-      onDone();
-      return;
-    }
-    raf = requestAnimationFrame(step);
-  };
-  raf = requestAnimationFrame(step);
-
-  return () => {
-    if (!finished) cancelAnimationFrame(raf);
-  };
+  onChunk(full);
+  const raf = requestAnimationFrame(() => onDone());
+  return () => cancelAnimationFrame(raf);
 }

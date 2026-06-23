@@ -109,7 +109,7 @@ function RenderWithCitations({ msg }: { msg: ChatMessage }) {
   );
 }
 
-export function Message({ msg, streaming = false }: { msg: ChatMessage; streaming?: boolean }) {
+export function Message({ msg }: { msg: ChatMessage }) {
   const isUser = msg.role === 'user';
   const { addNote, openViewer } = useRag();
   const [pinned, setPinned] = useState(false);
@@ -230,14 +230,8 @@ export function Message({ msg, streaming = false }: { msg: ChatMessage; streamin
             </div>
           )}
 
-          <div
-            className={cn(
-              'whitespace-pre-wrap text-[15px] leading-relaxed text-foreground/90',
-              streaming && !isUser && 'streaming-body'
-            )}
-          >
+          <div className="whitespace-pre-wrap text-[15px] leading-relaxed text-foreground/90">
             {isUser ? msg.content : <RenderWithCitations msg={msg} />}
-            {streaming && !isUser && <span className="stream-caret" aria-hidden />}
           </div>
 
           {/* References */}

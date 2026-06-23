@@ -327,11 +327,7 @@ export function ChatView() {
                 <Message key={m.id} msg={m} />
               ))}
               {streaming &&
-                (streaming.content ? (
-                  <Message msg={streaming} streaming />
-                ) : (
-                  <TypingIndicator />
-                ))}
+                (streaming.content ? <Message msg={streaming} /> : <TypingIndicator />)}
             </div>
           )}
         </div>

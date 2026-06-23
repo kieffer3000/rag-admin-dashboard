@@ -1392,7 +1392,7 @@ export function BrainMessage({
       {m.content ? (
         <div
           ref={bodyRef}
-          className="nodrag select-text"
+          className="nodrag select-text answer-fade-in"
           onClick={(e) => {
             // inline footnote ref clicked → open that footnote's source panel
             const ref = (e.target as HTMLElement).closest('.fn-ref');
