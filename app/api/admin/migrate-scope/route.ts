@@ -40,12 +40,15 @@ export async function POST(req: Request) {
   }
   if (!sql) return Response.json({ error: 'no database' }, { status: 503 });
 
-  const { from, to } = await req.json().catch(() => ({}));
-  if (!from || !to) {
-    return Response.json({ error: 'from and to (Clerk user ids) required' }, { status: 400 });
+  const body = await req.json().catch(() => ({}));
+  const fromScope = body.fromScope ?? (body.from ? `user:${body.from}` : null);
+  const toScope = body.toScope ?? (body.to ? `user:${body.to}` : null);
+  if (!fromScope || !toScope) {
+    return Response.json(
+      { error: 'from/to (user ids) or fromScope/toScope (raw) required' },
+      { status: 400 }
+    );
   }
-  const fromScope = `user:${from}`;
-  const toScope = `user:${to}`;
 
   await ensureBoardSchema();
   await ensureAgentsSchema();
@@ -61,23 +64,23 @@ export async function POST(req: Request) {
   // board_state: one row per project
   const board = await sql`
     INSERT INTO board_state (scope, project_id, user_id, data, updated_at)
-    SELECT ${toScope}, project_id, ${to}, data, now() FROM board_state WHERE scope=${fromScope}
+    SELECT ${toScope}, project_id, user_id, data, now() FROM board_state WHERE scope=${fromScope}
     ON CONFLICT (scope, project_id)
     DO UPDATE SET data=EXCLUDED.data, user_id=EXCLUDED.user_id, updated_at=now()
     RETURNING project_id`;
   const agents = await sql`
     INSERT INTO agents_state (scope, user_id, data, updated_at)
-    SELECT ${toScope}, ${to}, data, now() FROM agents_state WHERE scope=${fromScope}
+    SELECT ${toScope}, user_id, data, now() FROM agents_state WHERE scope=${fromScope}
     ON CONFLICT (scope) DO UPDATE SET data=EXCLUDED.data, user_id=EXCLUDED.user_id, updated_at=now()
     RETURNING scope`;
   const projects = await sql`
     INSERT INTO projects_state (scope, user_id, data, updated_at)
-    SELECT ${toScope}, ${to}, data, now() FROM projects_state WHERE scope=${fromScope}
+    SELECT ${toScope}, user_id, data, now() FROM projects_state WHERE scope=${fromScope}
     ON CONFLICT (scope) DO UPDATE SET data=EXCLUDED.data, user_id=EXCLUDED.user_id, updated_at=now()
     RETURNING scope`;
   const userdata = await sql`
     INSERT INTO userdata_state (scope, user_id, data, updated_at)
-    SELECT ${toScope}, ${to}, data, now() FROM userdata_state WHERE scope=${fromScope}
+    SELECT ${toScope}, user_id, data, now() FROM userdata_state WHERE scope=${fromScope}
     ON CONFLICT (scope) DO UPDATE SET data=EXCLUDED.data, user_id=EXCLUDED.user_id, updated_at=now()
     RETURNING scope`;
 
