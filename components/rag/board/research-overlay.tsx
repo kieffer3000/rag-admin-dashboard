@@ -154,14 +154,17 @@ export function ResearchOverlay({
     el.style.height = Math.min(el.scrollHeight, 200) + 'px';
   }, [question]);
 
-  // keep the latest answer in view as it streams (behavior is user-toggleable)
+  // keep the latest answer in view as it streams (behavior is user-toggleable).
+  // NEVER smooth-scroll mid-stream — smooth fires ~60×/s during token reveal and
+  // "earthquakes" the viewport (which also makes citations un-clickable). Smooth
+  // glide only on a SETTLED message; during streaming, instant near-bottom pin.
   useEffect(() => {
-    if (scrollStyle === 'smooth') {
+    const el = scrollRef.current;
+    if (!el) return;
+    const streaming = messages[messages.length - 1]?.streaming;
+    if (scrollStyle === 'smooth' && !streaming) {
       endRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
     } else {
-      // pin: only follow when already near the bottom, instant (no streaming jitter)
-      const el = scrollRef.current;
-      if (!el) return;
       const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 140;
       if (nearBottom) el.scrollTo({ top: el.scrollHeight });
     }

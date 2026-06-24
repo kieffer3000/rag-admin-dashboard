@@ -481,12 +481,17 @@ function BrainNodeInner({ id, data, selected }: NodeProps) {
   useEffect(() => {
     const el = scrollRef.current;
     if (!el) return;
-    if (scrollStyle === 'smooth') {
+    const streaming = messages[messages.length - 1]?.streaming;
+    const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 140;
+    // NEVER smooth-scroll mid-stream: streamText updates content ~60×/s, so a
+    // smooth scrollTo per frame stacks animations and "earthquakes" the viewport
+    // (and makes citations impossible to click). During streaming, pin instantly
+    // and only when already near the bottom (so scrolling up to read isn't yanked
+    // back). Smooth glide applies only to a SETTLED message.
+    if (scrollStyle === 'smooth' && !streaming) {
       el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' });
-    } else {
-      // pin: only follow when already near the bottom, instant (no streaming jitter)
-      const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 140;
-      if (nearBottom) el.scrollTo({ top: el.scrollHeight });
+    } else if (nearBottom) {
+      el.scrollTo({ top: el.scrollHeight });
     }
   }, [messages, scrollStyle]);
 
