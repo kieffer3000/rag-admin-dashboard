@@ -18,8 +18,12 @@ import { embedTexts } from '@/lib/rag/embed';
 // drowns in a long passage). More overlap so a fact spanning a boundary still
 // lands whole. Tradeoff: more vectors/embeddings per source — worth it to not
 // lose information. (Index-time: affects future uploads + re-indexes.)
-const CHUNK_CHARS = Number(process.env.RAG_CHUNK_CHARS ?? 1000);
-const CHUNK_OVERLAP = Number(process.env.RAG_CHUNK_OVERLAP ?? 200);
+// Smaller default chunks = precise retrieval (a single address/fact isn't
+// drowned by ~30 others in one passage). Context for the ANSWER is restored at
+// read time by neighbor expansion (lib/rag/expand.ts) — "small to find, big to
+// answer". See agent_files/rag/projects/ESCALATING_RETRIEVAL_DRAFT.md.
+const CHUNK_CHARS = Number(process.env.RAG_CHUNK_CHARS ?? 500);
+const CHUNK_OVERLAP = Number(process.env.RAG_CHUNK_OVERLAP ?? 100);
 const UPSERT_BATCH = 100; // Pinecone upsert cap per request
 const UPSERT_MAX_RETRY = 4;
 

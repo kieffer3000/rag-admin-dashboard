@@ -2,6 +2,7 @@ import { auth } from '@clerk/nextjs/server';
 import { runUtilityLLM } from '@/lib/rag/utility-llm';
 import { fetchSummaries, wantsSummary } from '@/lib/rag/summary-core';
 import { nsForUser } from '@/lib/rag/namespace';
+import { retrieveExpandedContext } from '@/lib/rag/expand';
 
 // Proxies the Board's brain queries to the Make.com Query scenario.
 //
@@ -28,6 +29,26 @@ import { nsForUser } from '@/lib/rag/namespace';
 export const runtime = 'nodejs';
 
 const NOMATCH_THRESHOLD = Number(process.env.RAG_NOMATCH_THRESHOLD ?? 0.6);
+
+// Escalating "small-to-big" retrieval (OFF until the Make answer module is wired
+// to use `injected_context`). On a no-match, widen the context by neighbor
+// expansion (in code) and re-answer through Make with that context injected, up
+// to N tiers of growing radius. See ESCALATING_RETRIEVAL_DRAFT.md.
+const ESCALATE = (process.env.RAG_ESCALATE ?? 'off') === 'on';
+const ESCALATE_RADII = (process.env.RAG_ESCALATE_RADII ?? '1,3,6')
+  .split(',')
+  .map((n) => parseInt(n.trim(), 10))
+  .filter((n) => Number.isFinite(n) && n > 0);
+const ESCALATE_TOPK = Number(process.env.RAG_ESCALATE_TOPK ?? 12);
+
+// The answer LLM is told to say so plainly when the answer isn't in the sources;
+// that admission is our reliable "could not find" signal (there's no validator).
+const NOT_FOUND_RE =
+  /\b(not (?:in|found|available|present|mentioned|contained|included)|could ?n[o']?t (?:find|locate)|could not (?:find|locate)|no (?:information|mention|reference|record|details?|data)\b.{0,30}\b(?:in|on|about)|does(?:n['o]?t| not) (?:appear|contain|mention|include)|unable to (?:find|locate|answer)|i (?:don['o]?t|do not) have)\b/i;
+function answerSaysNotFound(a: string | undefined): boolean {
+  if (!a) return false;
+  return NOT_FOUND_RE.test(a.replace(/<[^>]+>/g, ' ').slice(0, 1500));
+}
 // Last 30 turns (≈15 Q + 15 A) sent verbatim, in FULL (no per-message
 // truncation); everything older is folded into the entity-preserving rolling
 // summary by the client. Wider window = "his house" resolves to the subject
@@ -132,7 +153,8 @@ async function callMake(
   speed: 'fast' | 'detailed' | 'research',
   conversation: string,
   summary: string,
-  namespace: string
+  namespace: string,
+  injectedContext = ''
 ): Promise<MakeResult> {
   const res = await fetch(url, {
     method: 'POST',
@@ -160,6 +182,10 @@ async function callMake(
       answer_mode: mode,
       guides,
       namespace,
+      // Escalation: when non-empty, the Make answer module should use THIS as the
+      // context (aggregator-shaped JSON) instead of re-retrieving. Empty on the
+      // normal first pass. One small scenario edit — no new routers.
+      injected_context: injectedContext,
       model,
       // Lets the Make scenario branch its pipeline (fast skips the expander;
       // research uses the heavier answer model).
@@ -373,29 +399,48 @@ export async function POST(req: Request) {
     .join(' | ')
     .slice(0, 1200);
 
-  // Single retrieval pass. Corrective-retry now lives in the Make scenario
-  // (router loop off the validator verdict).
+  const ns = nsForUser(userId);
+  const prompted = buildPrompt(userQuestion, mode, guides, contextTexts);
+
+  // First retrieval pass (T1) through Make.
   let result: MakeResult;
   try {
     result = await callMake(
-      url,
-      buildPrompt(userQuestion, mode, guides, contextTexts),
-      userQuestion,
-      sourceIds,
-      mode,
-      guides,
-      model,
-      profile,
-      speedParam,
-      conversation,
-      summary,
-      nsForUser(userId)
+      url, prompted, userQuestion, sourceIds, mode, guides,
+      model, profile, speedParam, conversation, summary, ns
     );
   } catch (e) {
     return Response.json(
       { error: e instanceof Error ? e.message : 'Query failed' },
       { status: 502 }
     );
+  }
+
+  // Escalating small-to-big retrieval (gated by RAG_ESCALATE; requires the Make
+  // answer module to honor injected_context). Trigger: score-gate no-match OR the
+  // answer admitting it couldn't find it. Each tier widens the neighbor radius
+  // and re-answers with that context injected — no re-chunking, bounded by
+  // ESCALATE_RADII. Always safe: if expansion yields nothing we keep T1's answer.
+  if (ESCALATE && (result.noMatch || answerSaysNotFound(result.answer))) {
+    for (const radius of ESCALATE_RADII) {
+      const ctx = await retrieveExpandedContext(userQuestion, ns, {
+        topK: ESCALATE_TOPK,
+        radius
+      });
+      if (!ctx.length) break;
+      try {
+        result = await callMake(
+          url, prompted, userQuestion, sourceIds, mode, guides,
+          model, profile, speedParam, conversation, summary, ns, JSON.stringify(ctx)
+        );
+      } catch {
+        break; // keep the best answer we already have
+      }
+      if (!answerSaysNotFound(result.answer)) {
+        result.noMatch = false; // we force-fed context and the model used it
+        break;
+      }
+    }
   }
 
   // NOTE: the Make validator verdict is ADVISORY ONLY — it NEVER blanks the
