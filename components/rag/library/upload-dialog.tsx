@@ -72,6 +72,7 @@ export function UploadDialog({
   const [body, setBody] = useState('');
   const [files, setFiles] = useState<File[]>([]);
   const [dragOver, setDragOver] = useState(false);
+  const [ocr, setOcr] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
   const urlList = urls
@@ -88,6 +89,7 @@ export function UploadDialog({
     setBody('');
     setFiles([]);
     setMethod('file');
+    setOcr(false);
   }
 
   function pickFiles(list: FileList | File[]) {
@@ -131,6 +133,7 @@ export function UploadDialog({
               fd.append('file', file);
               fd.append('name', nm);
               fd.append('source_id', id);
+              if (type === 'document') fd.append('ocr', ocr ? 'true' : 'false');
               const r = await fetch(endpoint, { method: 'POST', body: fd });
               const j = await r.json().catch(() => ({}));
               if (!r.ok || !j.ok) throw new Error(j?.error ?? j?.note ?? 'index failed');
@@ -332,6 +335,18 @@ export function UploadDialog({
                   ))}
                 </div>
               )}
+              <label className="mt-0.5 flex cursor-pointer select-none items-start gap-2 text-[12px] text-muted-foreground">
+                <input
+                  type="checkbox"
+                  checked={ocr}
+                  onChange={(e) => setOcr(e.target.checked)}
+                  className="mt-0.5 h-3.5 w-3.5 accent-[hsl(var(--accent))]"
+                />
+                <span>
+                  <span className="font-medium text-foreground">OCR scanned docs</span> — pull
+                  text from image-only / scanned PDFs (slower, uses more credits)
+                </span>
+              </label>
             </div>
           )}
 

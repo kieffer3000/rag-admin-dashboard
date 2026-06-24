@@ -18,10 +18,10 @@ export const maxDuration = 300;
 
 const MAX_BYTES = 25 * 1024 * 1024; // 25 MB
 
-async function extractPdf(bytes: Uint8Array): Promise<string> {
+async function extractPdf(bytes: Uint8Array, ocr = false): Promise<string> {
   // PRIMARY: CloudConvert "no-fail" path — repairs corrupt PDFs (3heights) and
-  // extracts via pdf→rtf→txt. Survives files that pdf.js chokes on.
-  const cc = await extractPdfViaCloudConvert(bytes);
+  // extracts via pdf→rtf→txt (or pdf→docx with OCR when `ocr`, for scanned PDFs).
+  const cc = await extractPdfViaCloudConvert(bytes, 'input.pdf', { ocr });
   if (cc && cc.length >= 20) return cc;
   // FALLBACK: unpdf (pdf.js) when CloudConvert is unconfigured or returns nothing.
   const { extractText, getDocumentProxy } = await import('unpdf');
@@ -93,6 +93,7 @@ export async function POST(req: Request) {
   const file = form.get('file');
   const name = String(form.get('name') ?? '').trim() || 'Document';
   const sourceId = String(form.get('source_id') ?? '').trim();
+  const ocr = ['true', '1', 'on'].includes(String(form.get('ocr') ?? '').toLowerCase());
   if (!(file instanceof Blob) || !sourceId) {
     return Response.json({ error: 'file and source_id are required' }, { status: 400 });
   }
@@ -139,7 +140,7 @@ export async function POST(req: Request) {
   // 2) Extract text (deterministic).
   let text = '';
   try {
-    if (isPdf) text = await extractPdf(new Uint8Array(buf));
+    if (isPdf) text = await extractPdf(new Uint8Array(buf), ocr);
     else if (isDocx) text = await extractDocx(buf);
     else if (isEpub) text = await extractEpub(buf);
     else text = buf.toString('utf-8');

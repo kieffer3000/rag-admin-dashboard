@@ -16,25 +16,44 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 export async function extractPdfViaCloudConvert(
   bytes: Uint8Array | Buffer,
-  filename = 'input.pdf'
+  filename = 'input.pdf',
+  opts: { ocr?: boolean } = {}
 ): Promise<string> {
   const key = process.env.CLOUDCONVERT_API_KEY;
   if (!key) return '';
   const auth = { Authorization: `Bearer ${key}` };
   try {
-    // 1) create the job (repair → rtf → txt → url)
-    const tasks = {
-      'import-1': { operation: 'import/upload' },
-      'optimize-1': {
-        operation: 'optimize',
-        input: 'import-1',
-        engine: '3heights',
-        profile: 'max'
-      },
-      'rtf-1': { operation: 'convert', input: 'optimize-1', output_format: 'rtf' },
-      'txt-1': { operation: 'convert', input: 'rtf-1', output_format: 'txt' },
-      'export-1': { operation: 'export/url', input: 'txt-1' }
+    // 1) create the job. Both paths repair first (optimize/3heights).
+    //  - default: pdf→rtf→txt (fast, clean text from text-layer PDFs)
+    //  - OCR:     pdf→docx (images_ocr: true, runs OCR on scanned images) →txt
+    //    (costs more CloudConvert time; only for scanned/image PDFs)
+    const optimize = {
+      operation: 'optimize',
+      input: 'import-1',
+      engine: '3heights',
+      profile: 'max'
     };
+    const tasks = opts.ocr
+      ? {
+          'import-1': { operation: 'import/upload' },
+          'optimize-1': optimize,
+          'docx-1': {
+            operation: 'convert',
+            input: 'optimize-1',
+            output_format: 'docx',
+            engine: 'pdftron-pdf2word',
+            images_ocr: true
+          },
+          'txt-1': { operation: 'convert', input: 'docx-1', output_format: 'txt' },
+          'export-1': { operation: 'export/url', input: 'txt-1' }
+        }
+      : {
+          'import-1': { operation: 'import/upload' },
+          'optimize-1': optimize,
+          'rtf-1': { operation: 'convert', input: 'optimize-1', output_format: 'rtf' },
+          'txt-1': { operation: 'convert', input: 'rtf-1', output_format: 'txt' },
+          'export-1': { operation: 'export/url', input: 'txt-1' }
+        };
     const cr = await fetch(`${API}/v2/jobs`, {
       method: 'POST',
       headers: { ...auth, 'Content-Type': 'application/json' },
