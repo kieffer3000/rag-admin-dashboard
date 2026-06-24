@@ -63,14 +63,14 @@ export function UploadDialog({
   open: boolean;
   onOpenChange: (o: boolean) => void;
 }) {
-  const { addMedia } = useRag();
+  const { addMedia, updateMedia } = useRag();
   const [method, setMethod] = useState<Method>('file');
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [date, setDate] = useState(today());
   const [urls, setUrls] = useState('');
   const [body, setBody] = useState('');
-  const [files, setFiles] = useState<string[]>([]);
+  const [files, setFiles] = useState<File[]>([]);
   const [dragOver, setDragOver] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
@@ -91,9 +91,12 @@ export function UploadDialog({
   }
 
   function pickFiles(list: FileList | File[]) {
-    const names = Array.from(list).map((f) => f.name);
-    setFiles((prev) => Array.from(new Set([...prev, ...names])));
-    if (names.length === 1 && !name) setName(names[0].replace(/\.[^.]+$/, ''));
+    const incoming = Array.from(list);
+    setFiles((prev) => {
+      const seen = new Set(prev.map((f) => f.name + ':' + f.size));
+      return [...prev, ...incoming.filter((f) => !seen.has(f.name + ':' + f.size))];
+    });
+    if (incoming.length === 1 && !name) setName(incoming[0].name.replace(/\.[^.]+$/, ''));
   }
 
   const canSubmit =
@@ -104,37 +107,115 @@ export function UploadDialog({
   function submit() {
     if (!canSubmit) return;
 
+    // Each job creates the source (so it shows immediately as "processing")
+    // then runs REAL ingestion against the same routes the board uses. The
+    // source's status flips to indexed/failed as it completes. (This dialog used
+    // to only addMedia with fake content — nothing was ever indexed.)
+    const jobs: { id: string; run: () => Promise<void> }[] = [];
+
     if (method === 'file') {
-      files.forEach((f) => {
-        addMedia({
-          type: inferFileType(f),
-          name: single && name.trim() ? name.trim() : f.replace(/\.[^.]+$/, ''),
-          description: description.trim(),
-          date,
-          content: `Extracted content from ${f}…`,
-          source: f
-        });
-      });
+      for (const file of files) {
+        const type = inferFileType(file.name);
+        const nm = single && name.trim() ? name.trim() : file.name.replace(/\.[^.]+$/, '');
+        // document + image have real index routes; audio has none yet → simulate.
+        if (type === 'document' || type === 'image') {
+          const id = addMedia(
+            { type, name: nm, description: description.trim(), date, content: '', source: file.name },
+            { simulate: false }
+          );
+          const endpoint = type === 'image' ? '/api/index-image' : '/api/index-doc';
+          jobs.push({
+            id,
+            run: async () => {
+              const fd = new FormData();
+              fd.append('file', file);
+              fd.append('name', nm);
+              fd.append('source_id', id);
+              const r = await fetch(endpoint, { method: 'POST', body: fd });
+              const j = await r.json().catch(() => ({}));
+              if (!r.ok || !j.ok) throw new Error(j?.error ?? j?.note ?? 'index failed');
+              updateMedia(id, { status: 'indexed', chunks: j.chunks, source: j.source_url });
+            }
+          });
+        } else {
+          addMedia({
+            type,
+            name: nm,
+            description: description.trim(),
+            date,
+            content: '',
+            source: file.name
+          });
+        }
+      }
     } else if (method === 'youtube' || method === 'website') {
-      urlList.forEach((u) => {
-        addMedia({
-          type: method === 'youtube' ? 'youtube' : 'website',
-          name: single && name.trim() ? name.trim() : nameFromUrl(u),
-          description: description.trim(),
-          date,
-          content: `Content fetched from ${u}…`,
-          source: u
+      for (const u of urlList) {
+        const nm = single && name.trim() ? name.trim() : nameFromUrl(u);
+        const id = addMedia(
+          {
+            type: method === 'youtube' ? 'youtube' : 'website',
+            name: nm,
+            description: description.trim(),
+            date,
+            content: '',
+            source: u
+          },
+          { simulate: false }
+        );
+        const endpoint = method === 'youtube' ? '/api/index-youtube' : '/api/index-website';
+        jobs.push({
+          id,
+          run: async () => {
+            const r = await fetch(endpoint, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ url: u, source_id: id, name: nm })
+            });
+            const j = await r.json().catch(() => ({}));
+            if (!r.ok || j.ok === false) throw new Error(j?.error ?? 'index failed');
+            updateMedia(id, { status: 'indexed', chunks: j.chunks });
+          }
         });
-      });
+      }
     } else {
-      addMedia({
-        type: 'text',
-        name: name.trim(),
-        description: description.trim(),
-        date,
-        content: body.slice(0, 400)
+      const nm = name.trim();
+      const id = addMedia(
+        { type: 'text', name: nm, description: description.trim(), date, content: body.slice(0, 400) },
+        { simulate: false }
+      );
+      jobs.push({
+        id,
+        run: async () => {
+          const r = await fetch('/api/index', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ source_id: id, name: nm, type: 'text', text: body })
+          });
+          const j = await r.json().catch(() => ({}));
+          if (!r.ok || j.status !== 'indexed') throw new Error(j?.error ?? 'index failed');
+          updateMedia(id, { status: 'indexed', chunks: j.chunks });
+        }
       });
     }
+
+    // Fire ingestion in the background (status updates live) — concurrency-capped.
+    void (async () => {
+      let next = 0;
+      const CONCURRENCY = 3;
+      await Promise.all(
+        Array.from({ length: Math.min(CONCURRENCY, jobs.length) }, async () => {
+          while (next < jobs.length) {
+            const job = jobs[next++];
+            try {
+              await job.run();
+            } catch {
+              updateMedia(job.id, { status: 'failed' });
+            }
+          }
+        })
+      );
+    })();
+
     reset();
     onOpenChange(false);
   }
@@ -234,15 +315,15 @@ export function UploadDialog({
 
               {files.length > 0 && (
                 <div className="flex flex-wrap gap-1.5">
-                  {files.map((f) => (
+                  {files.map((f, i) => (
                     <span
-                      key={f}
+                      key={f.name + ':' + f.size + ':' + i}
                       className="inline-flex items-center gap-1.5 rounded-full bg-accent/10 px-2.5 py-1 text-[11px] font-medium text-accent"
                     >
                       <FileText className="h-3 w-3" />
-                      {f}
+                      {f.name}
                       <button
-                        onClick={() => setFiles((prev) => prev.filter((x) => x !== f))}
+                        onClick={() => setFiles((prev) => prev.filter((_, x) => x !== i))}
                         className="opacity-70 hover:opacity-100"
                       >
                         <X className="h-3 w-3" />
