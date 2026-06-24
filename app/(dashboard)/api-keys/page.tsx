@@ -1,58 +1,60 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { KeyRound, Check, Eye, EyeOff, ShieldCheck } from 'lucide-react';
-import { cn } from '@/lib/utils';
+import { KeyRound, Check, Eye, EyeOff, ShieldCheck, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 
-/** Providers a user can bring their own key for, to bill LLM usage to
- *  themselves. Stored in the browser (localStorage) — never committed. */
-const PROVIDERS = [
-  {
-    id: 'anthropic',
-    label: 'Anthropic (Claude)',
-    placeholder: 'sk-ant-…',
-    dot: 'bg-orange-500'
-  },
-  {
-    id: 'openai',
-    label: 'OpenAI (GPT)',
-    placeholder: 'sk-…',
-    dot: 'bg-emerald-500'
-  },
-  {
-    id: 'gemini',
-    label: 'Google Gemini',
-    placeholder: 'AIza…',
-    dot: 'bg-blue-500'
-  }
-] as const;
-
-const LS_KEY = 'answersdoc_api_keys';
-
+// BYOK: bring your own OpenRouter key. The LLM (chat + research) is billed to
+// YOUR OpenRouter account; we cover the rest (search, embeddings, file
+// processing). The key is encrypted on our servers and used only for your
+// organization's LLM calls — never returned to the browser, never logged.
 export default function ApiKeysPage() {
-  const [keys, setKeys] = useState<Record<string, string>>({});
-  const [show, setShow] = useState<Record<string, boolean>>({});
+  const [hasKey, setHasKey] = useState(false);
+  const [value, setValue] = useState('');
+  const [show, setShow] = useState(false);
+  const [busy, setBusy] = useState(false);
   const [saved, setSaved] = useState(false);
 
   useEffect(() => {
-    try {
-      const s = localStorage.getItem(LS_KEY);
-      if (s) setKeys(JSON.parse(s));
-    } catch {
-      /* ignore */
-    }
+    fetch('/api/org-settings')
+      .then((r) => r.json())
+      .then((d) => setHasKey(!!d.hasOpenrouterKey))
+      .catch(() => {});
   }, []);
 
-  function save() {
+  async function save() {
+    if (!value.trim()) return;
+    setBusy(true);
     try {
-      localStorage.setItem(LS_KEY, JSON.stringify(keys));
-      setSaved(true);
-      setTimeout(() => setSaved(false), 1800);
-    } catch {
-      /* ignore */
+      const r = await fetch('/api/org-settings', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ openrouterKey: value.trim() })
+      });
+      if (r.ok) {
+        setHasKey(true);
+        setValue('');
+        setSaved(true);
+        setTimeout(() => setSaved(false), 1800);
+      }
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function remove() {
+    setBusy(true);
+    try {
+      const r = await fetch('/api/org-settings', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ openrouterKey: '' })
+      });
+      if (r.ok) setHasKey(false);
+    } finally {
+      setBusy(false);
     }
   }
 
@@ -66,7 +68,7 @@ export default function ApiKeysPage() {
           <div>
             <h1 className="text-[20px] font-semibold tracking-tight">API Keys</h1>
             <p className="text-[13px] text-muted-foreground/80">
-              Bring your own keys to pay for LLM usage on your own account.
+              Bring your own OpenRouter key — your AI usage is billed to your account.
             </p>
           </div>
         </div>
@@ -74,63 +76,72 @@ export default function ApiKeysPage() {
         <div className="mb-5 flex items-start gap-2.5 rounded-[14px] bg-emerald-500/[0.06] px-4 py-3 text-[12.5px] leading-relaxed text-foreground/80 ring-1 ring-emerald-500/15">
           <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" />
           <span>
-            Keys are stored only in <strong>this browser</strong> (localStorage)
-            and are never sent to our servers or committed anywhere. Leave a
-            field blank to use the workspace default.
+            Your key is <strong>encrypted at rest</strong> and used only for your
+            organization’s LLM calls — never shown again or logged. We cover search,
+            embeddings, and file processing; you cover the model usage on{' '}
+            <a
+              href="https://openrouter.ai/keys"
+              target="_blank"
+              rel="noreferrer"
+              className="text-accent underline"
+            >
+              OpenRouter
+            </a>
+            .
           </span>
         </div>
 
-        <div className="space-y-4">
-          {PROVIDERS.map((p) => (
-            <div
-              key={p.id}
-              className="rounded-[16px] bg-card p-4 shadow-soft dark:ring-1 dark:ring-white/[0.06]"
+        <div className="rounded-[16px] bg-card p-4 shadow-soft dark:ring-1 dark:ring-white/[0.06]">
+          <Label className="mb-2 flex items-center gap-2 text-[13px] font-semibold">
+            <span className="h-2 w-2 rounded-full bg-violet-500" />
+            OpenRouter API key
+            {hasKey && (
+              <span className="ml-1 rounded-full bg-emerald-500/10 px-2 py-0.5 text-[11px] font-medium text-emerald-600">
+                ✓ saved
+              </span>
+            )}
+          </Label>
+          <div className="flex items-center gap-2">
+            <Input
+              type={show ? 'text' : 'password'}
+              value={value}
+              onChange={(e) => setValue(e.target.value)}
+              placeholder={hasKey ? 'Enter a new key to replace…' : 'sk-or-v1-…'}
+              autoComplete="off"
+              className="flex-1 font-mono text-[12.5px]"
+            />
+            <button
+              type="button"
+              onClick={() => setShow((s) => !s)}
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[10px] text-muted-foreground transition-colors hover:bg-[rgb(var(--hairline)/0.06)] hover:text-foreground"
+              title={show ? 'Hide' : 'Show'}
             >
-              <Label className="mb-2 flex items-center gap-2 text-[13px] font-semibold">
-                <span className={cn('h-2 w-2 rounded-full', p.dot)} />
-                {p.label}
-              </Label>
-              <div className="flex items-center gap-2">
-                <Input
-                  type={show[p.id] ? 'text' : 'password'}
-                  value={keys[p.id] ?? ''}
-                  onChange={(e) =>
-                    setKeys((k) => ({ ...k, [p.id]: e.target.value }))
-                  }
-                  placeholder={p.placeholder}
-                  autoComplete="off"
-                  className="flex-1 font-mono text-[12.5px]"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShow((s) => ({ ...s, [p.id]: !s[p.id] }))}
-                  className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[10px] text-muted-foreground transition-colors hover:bg-[rgb(var(--hairline)/0.06)] hover:text-foreground"
-                  title={show[p.id] ? 'Hide' : 'Show'}
-                >
-                  {show[p.id] ? (
-                    <EyeOff className="h-4 w-4" />
-                  ) : (
-                    <Eye className="h-4 w-4" />
-                  )}
-                </button>
-              </div>
-            </div>
-          ))}
+              {show ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+            </button>
+          </div>
         </div>
 
         <div className="mt-5 flex items-center gap-3">
-          <Button variant="accent" onClick={save}>
+          <Button variant="accent" onClick={save} disabled={busy || !value.trim()}>
             {saved ? (
               <>
                 <Check className="mr-1.5 h-4 w-4" /> Saved
               </>
+            ) : hasKey ? (
+              'Replace key'
             ) : (
-              'Save keys'
+              'Save key'
             )}
           </Button>
-          <p className="text-[11.5px] text-muted-foreground/65">
-            Used for your brains&apos; LLM calls when set.
-          </p>
+          {hasKey && (
+            <button
+              onClick={remove}
+              disabled={busy}
+              className="flex items-center gap-1.5 text-[12.5px] text-muted-foreground transition-colors hover:text-red-600"
+            >
+              <Trash2 className="h-3.5 w-3.5" /> Remove
+            </button>
+          )}
         </div>
       </div>
     </div>

@@ -60,6 +60,22 @@ export async function ensureProjectsSchema() {
   projectsEnsured = true;
 }
 
+let orgSettingsEnsured = false;
+
+/** Per-scope settings — currently the BYOK OpenRouter key (encrypted at rest).
+ *  One row per scope (Clerk org, else user). */
+export async function ensureOrgSettingsSchema() {
+  if (!sql || orgSettingsEnsured) return;
+  await sql`
+    CREATE TABLE IF NOT EXISTS org_settings (
+      scope text PRIMARY KEY,
+      openrouter_key_enc text,
+      updated_at timestamptz NOT NULL DEFAULT now()
+    )
+  `;
+  orgSettingsEnsured = true;
+}
+
 let userDataEnsured = false;
 
 /** Idempotent schema bootstrap for misc account data — notes + chat

@@ -3,6 +3,7 @@ import { runUtilityLLM } from '@/lib/rag/utility-llm';
 import { fetchSummaries, wantsSummary } from '@/lib/rag/summary-core';
 import { nsForUser } from '@/lib/rag/namespace';
 import { retrieveExpandedContext } from '@/lib/rag/expand';
+import { getOrgOpenrouterKey, scopeOf } from '@/lib/org-settings';
 
 // Proxies the Board's brain queries to the Make.com Query scenario.
 //
@@ -154,7 +155,8 @@ async function callMake(
   conversation: string,
   summary: string,
   namespace: string,
-  injectedContext = ''
+  injectedContext = '',
+  openrouterKey = ''
 ): Promise<MakeResult> {
   const res = await fetch(url, {
     method: 'POST',
@@ -186,6 +188,9 @@ async function callMake(
       // context (aggregator-shaped JSON) instead of re-retrieving. Empty on the
       // normal first pass. One small scenario edit — no new routers.
       injected_context: injectedContext,
+      // BYOK: the org's OpenRouter key (empty = use the Make connection's key).
+      // The answer module(s) use this as the OpenRouter Bearer when present.
+      openrouter_key: openrouterKey,
       model,
       // Lets the Make scenario branch its pipeline (fast skips the expander;
       // research uses the heavier answer model).
@@ -283,7 +288,7 @@ async function callMake(
 }
 
 export async function POST(req: Request) {
-  const { userId } = await auth();
+  const { userId, orgId } = await auth();
   if (!userId) {
     return Response.json({ error: 'Unauthorized' }, { status: 401 });
   }
@@ -401,13 +406,16 @@ export async function POST(req: Request) {
 
   const ns = nsForUser(userId);
   const prompted = buildPrompt(userQuestion, mode, guides, contextTexts);
+  // BYOK: the org's OpenRouter key (decrypted) — passed to Make so the LLM is
+  // billed to the user's own OpenRouter account. '' = fall back to Make's key.
+  const orKey = await getOrgOpenrouterKey(scopeOf(orgId, userId));
 
   // First retrieval pass (T1) through Make.
   let result: MakeResult;
   try {
     result = await callMake(
       url, prompted, userQuestion, sourceIds, mode, guides,
-      model, profile, speedParam, conversation, summary, ns
+      model, profile, speedParam, conversation, summary, ns, '', orKey
     );
   } catch (e) {
     return Response.json(
@@ -431,7 +439,7 @@ export async function POST(req: Request) {
       try {
         result = await callMake(
           url, prompted, userQuestion, sourceIds, mode, guides,
-          model, profile, speedParam, conversation, summary, ns, JSON.stringify(ctx)
+          model, profile, speedParam, conversation, summary, ns, JSON.stringify(ctx), orKey
         );
       } catch {
         break; // keep the best answer we already have
