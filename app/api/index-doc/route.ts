@@ -2,6 +2,7 @@ import { auth } from '@clerk/nextjs/server';
 import { put } from '@vercel/blob';
 import { indexText } from '@/lib/rag/index-core';
 import { nsForUser } from '@/lib/rag/namespace';
+import { extractPdfViaCloudConvert } from '@/lib/rag/cloudconvert';
 
 // Document ingestion (PDF / DOCX / TXT). Text extraction is deterministic
 // parsing (NOT an LLM), done in-route, then handed to the SAME text pipeline
@@ -18,6 +19,11 @@ export const maxDuration = 300;
 const MAX_BYTES = 25 * 1024 * 1024; // 25 MB
 
 async function extractPdf(bytes: Uint8Array): Promise<string> {
+  // PRIMARY: CloudConvert "no-fail" path — repairs corrupt PDFs (3heights) and
+  // extracts via pdf→rtf→txt. Survives files that pdf.js chokes on.
+  const cc = await extractPdfViaCloudConvert(bytes);
+  if (cc && cc.length >= 20) return cc;
+  // FALLBACK: unpdf (pdf.js) when CloudConvert is unconfigured or returns nothing.
   const { extractText, getDocumentProxy } = await import('unpdf');
   const pdf = await getDocumentProxy(bytes);
   const { text } = await extractText(pdf, { mergePages: true });
