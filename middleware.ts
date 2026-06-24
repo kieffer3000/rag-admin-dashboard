@@ -4,7 +4,8 @@ import { NextResponse } from 'next/server';
 const isPublicRoute = createRouteMatcher([
   '/sign-in(.*)',
   '/sign-up(.*)',
-  '/api/webhooks(.*)'
+  '/api/webhooks(.*)',
+  '/api/admin/inspect' // TEMP: secret-gated read-only inspector (removed after use)
 ]);
 
 export default clerkMiddleware(async (auth, req) => {
