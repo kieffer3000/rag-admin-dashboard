@@ -4,8 +4,7 @@ import { NextResponse } from 'next/server';
 const isPublicRoute = createRouteMatcher([
   '/sign-in(.*)',
   '/sign-up(.*)',
-  '/api/webhooks(.*)',
-  '/api/admin/migrate-scope' // TEMP: secret-gated one-off migration (removed after use)
+  '/api/webhooks(.*)'
 ]);
 
 export default clerkMiddleware(async (auth, req) => {
