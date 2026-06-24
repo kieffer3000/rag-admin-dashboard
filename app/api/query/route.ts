@@ -34,7 +34,7 @@ const NOMATCH_THRESHOLD = Number(process.env.RAG_NOMATCH_THRESHOLD ?? 0.6);
 // to use `injected_context`). On a no-match, widen the context by neighbor
 // expansion (in code) and re-answer through Make with that context injected, up
 // to N tiers of growing radius. See ESCALATING_RETRIEVAL_DRAFT.md.
-const ESCALATE = (process.env.RAG_ESCALATE ?? 'off') === 'on';
+const ESCALATE = (process.env.RAG_ESCALATE ?? 'on') !== 'off';
 const ESCALATE_RADII = (process.env.RAG_ESCALATE_RADII ?? '1,3,6')
   .split(',')
   .map((n) => parseInt(n.trim(), 10))
