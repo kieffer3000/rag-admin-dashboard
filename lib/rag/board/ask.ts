@@ -54,6 +54,38 @@ function youtubeJumpUrl(
  *   - raw_citations: full JSON string from module 14 (TransformToJSON). Preferred.
  *   - citations: the old scalar-collapsed single-item array (fallback).
  */
+/**
+ * Make's WebhookRespond sometimes wraps the answer payload as
+ * `[{ json: "<stringified payload>" }]` or `{ json: "<stringified>" }`
+ * (a TransformToJSON bundle) instead of the raw `{ answer, citations,
+ * raw_citations, ... }` object — a re-import can flip this. Unwrap to the real
+ * object so data.answer / data.raw_citations resolve and inline [n] markers
+ * become clickable footnotes again. No-op when the response is already flat.
+ */
+function unwrapMakeJson(d: any): any {
+  let cur: any = d;
+  for (let i = 0; i < 4 && cur != null; i++) {
+    if (Array.isArray(cur)) {
+      cur = cur[0];
+      continue;
+    }
+    if (
+      typeof cur === 'object' &&
+      cur.answer === undefined &&
+      typeof cur.json === 'string'
+    ) {
+      try {
+        cur = JSON.parse(cur.json);
+        continue;
+      } catch {
+        break;
+      }
+    }
+    break;
+  }
+  return cur && typeof cur === 'object' && !Array.isArray(cur) ? cur : d;
+}
+
 function parseRawCitations(data: {
   citations?: RawCitation[];
   raw_citations?: string | RawCitation[];
@@ -454,7 +486,7 @@ export async function askBrain(
     throw new Error(err.error ?? `Query failed (${res.status})`);
   }
 
-  const data = await res.json();
+  const data = unwrapMakeJson(await res.json());
 
   const suggestedQuestions: string[] = Array.isArray(data.suggestedQuestions)
     ? data.suggestedQuestions.filter(
