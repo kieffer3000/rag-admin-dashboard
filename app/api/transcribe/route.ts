@@ -1,4 +1,5 @@
 import { auth } from '@clerk/nextjs/server';
+import { pollAudioCompressedUrl } from '@/lib/rag/cloudconvert';
 
 // Speech-to-text proxy → Microsoft MAI-Transcribe-1.5 (Foundry LLM Speech API).
 // Contract per learn.microsoft.com/.../mai-transcribe (api-version 2025-10-15):
@@ -10,6 +11,7 @@ import { auth } from '@clerk/nextjs/server';
 // NOTE: MAI-Transcribe is in public preview.
 
 export const runtime = 'nodejs';
+export const maxDuration = 300; // long-audio: CloudConvert poll + MAI transcription
 
 export async function POST(req: Request) {
   const { userId } = await auth();
@@ -30,20 +32,47 @@ export async function POST(req: Request) {
   }
 
   const inForm = await req.formData();
-  const audio = inForm.get('audio');
-  if (!(audio instanceof File)) {
-    return Response.json({ error: 'audio file is required' }, { status: 400 });
-  }
-  // A bare WAV header is 44 bytes — anything near that captured no audio (mic
-  // permission race, AudioContext suspended, or a tap-too-fast recording).
-  if (audio.size < 2048) {
-    return Response.json(
-      {
-        error:
-          'That recording was empty — no audio was captured. Check the mic is allowed, then hold the recording a moment longer.'
-      },
-      { status: 400 }
-    );
+
+  // Two input modes:
+  //  - inline `audio` File — short clips, under Vercel's ~4.5 MB body cap
+  //  - `ccJobId` — a CloudConvert audio-compress job the client uploaded to
+  //    directly (long audio); we fetch the compressed MP3 server-side (no cap)
+  const ccJobId = String(inForm.get('ccJobId') ?? '').trim();
+  let audioBlob: Blob;
+  let audioName = 'audio.wav';
+
+  if (ccJobId) {
+    const url = await pollAudioCompressedUrl(ccJobId);
+    if (!url) {
+      return Response.json(
+        { error: 'Audio compression failed or timed out.' },
+        { status: 502 }
+      );
+    }
+    const got = await fetch(url).catch(() => null);
+    if (!got || !got.ok) {
+      return Response.json({ error: 'Could not fetch compressed audio.' }, { status: 502 });
+    }
+    audioBlob = await got.blob();
+    audioName = 'audio.mp3';
+  } else {
+    const audio = inForm.get('audio');
+    if (!(audio instanceof File)) {
+      return Response.json({ error: 'audio file is required' }, { status: 400 });
+    }
+    // A bare WAV header is 44 bytes — anything near that captured no audio (mic
+    // permission race, AudioContext suspended, or a tap-too-fast recording).
+    if (audio.size < 2048) {
+      return Response.json(
+        {
+          error:
+            'That recording was empty — no audio was captured. Check the mic is allowed, then hold the recording a moment longer.'
+        },
+        { status: 400 }
+      );
+    }
+    audioBlob = audio;
+    audioName = audio.name || 'audio.wav';
   }
 
   let phrases: string[] = [];
@@ -86,7 +115,7 @@ export async function POST(req: Request) {
     : `${endpoint.replace(/\/$/, '')}/speechtotext/transcriptions:transcribe?api-version=${apiVersion}`;
 
   const outForm = new FormData();
-  outForm.append('audio', audio, audio.name || 'audio.wav');
+  outForm.append('audio', audioBlob, audioName);
   outForm.append('definition', JSON.stringify(definition));
 
   let res: Response;

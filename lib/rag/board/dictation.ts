@@ -144,18 +144,11 @@ export interface DetailedTranscript {
   segments: TranscriptSegment[];
 }
 
-/** POST a WAV/MP3 blob to our transcribe proxy → text + per-phrase timestamps.
- *  `phrases` biases recognition toward known entities (wired source names). */
-export async function transcribeAudioDetailed(
-  blob: Blob,
-  phrases: string[] = []
-): Promise<DetailedTranscript> {
-  const fd = new FormData();
-  // name by actual container so Azure/our route detect the format correctly
-  const ext = blob.type.includes('mpeg') || blob.type.includes('mp3') ? 'mp3' : 'wav';
-  fd.append('audio', blob, `dictation.${ext}`);
-  if (phrases.length) fd.append('phrases', JSON.stringify(phrases.slice(0, 50)));
-  const res = await fetch('/api/transcribe', { method: 'POST', body: fd });
+// Vercel function bodies cap at ~4.5 MB — above this we route the audio through
+// CloudConvert (direct upload) instead of POSTing it inline.
+const COMPRESS_OVER_BYTES = 4 * 1024 * 1024;
+
+async function parseTranscribeResponse(res: Response): Promise<DetailedTranscript> {
   if (!res.ok) {
     const e = await res.json().catch(() => ({}));
     const err = new Error(e.error ?? `Transcription failed (${res.status})`) as Error & {
@@ -169,6 +162,50 @@ export async function transcribeAudioDetailed(
     text: (d.text as string) ?? '',
     segments: Array.isArray(d.segments) ? (d.segments as TranscriptSegment[]) : []
   };
+}
+
+/** Long audio: upload the raw file STRAIGHT to CloudConvert (presigned form, no
+ *  Vercel cap), compress to MP3, then transcribe the result by jobId (the route
+ *  fetches the small compressed file server-side). Returns null if compression
+ *  is unavailable so the caller can fall back. */
+async function transcribeViaCompression(
+  blob: Blob,
+  phrases: string[]
+): Promise<DetailedTranscript | null> {
+  const jobRes = await fetch('/api/audio-job', { method: 'POST' });
+  if (!jobRes.ok) return null;
+  const { jobId, upload } = await jobRes.json();
+  if (!jobId || !upload?.url) return null;
+  const up = new FormData();
+  for (const [k, v] of Object.entries(upload.parameters ?? {})) up.append(k, v as string);
+  const ext = blob.type.includes('mpeg') || blob.type.includes('mp3') ? 'mp3' : 'wav';
+  up.append('file', blob, `audio.${ext}`);
+  const ur = await fetch(upload.url, { method: 'POST', body: up });
+  if (!ur.ok && ur.status !== 201) return null;
+  const tfd = new FormData();
+  tfd.append('ccJobId', jobId);
+  if (phrases.length) tfd.append('phrases', JSON.stringify(phrases.slice(0, 50)));
+  return parseTranscribeResponse(await fetch('/api/transcribe', { method: 'POST', body: tfd }));
+}
+
+/** POST a WAV/MP3 blob to our transcribe proxy → text + per-phrase timestamps.
+ *  `phrases` biases recognition toward known entities (wired source names).
+ *  Large files are compressed via CloudConvert first (beats the body cap). */
+export async function transcribeAudioDetailed(
+  blob: Blob,
+  phrases: string[] = []
+): Promise<DetailedTranscript> {
+  if (blob.size > COMPRESS_OVER_BYTES) {
+    const viaCompress = await transcribeViaCompression(blob, phrases);
+    if (viaCompress) return viaCompress;
+    // compression unavailable → fall through (works for borderline sizes)
+  }
+  const fd = new FormData();
+  // name by actual container so Azure/our route detect the format correctly
+  const ext = blob.type.includes('mpeg') || blob.type.includes('mp3') ? 'mp3' : 'wav';
+  fd.append('audio', blob, `dictation.${ext}`);
+  if (phrases.length) fd.append('phrases', JSON.stringify(phrases.slice(0, 50)));
+  return parseTranscribeResponse(await fetch('/api/transcribe', { method: 'POST', body: fd }));
 }
 
 /** Plain-text transcript (dictation → composer). */

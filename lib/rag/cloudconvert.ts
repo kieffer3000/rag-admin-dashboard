@@ -95,3 +95,73 @@ export async function extractPdfViaCloudConvert(
     return '';
   }
 }
+
+// ---- Audio compression (for long-audio transcription) -----------------------
+// Long audio can't be POSTed through a Vercel function (~4.5 MB body cap). So the
+// CLIENT uploads the raw file straight to CloudConvert (presigned form, no cap),
+// CloudConvert compresses it to a small low-bitrate MP3, and the transcribe route
+// fetches that result SERVER-side → MAI (which accepts MP3, up to 300 MB).
+// MAI bills by duration, not size, so this is purely to beat the size limit +
+// shrink the server-side fetch — mirrors the old AnswersDoc m4a@25k trick.
+
+const AUDIO_BITRATE = Number(process.env.AUDIO_COMPRESS_BITRATE ?? 32); // kbps
+
+/** Create a CloudConvert job that compresses an uploaded audio file → MP3.
+ *  Returns the jobId + the presigned upload form for the client to PUT into. */
+export async function createAudioCompressJob(): Promise<
+  { jobId: string; form: { url: string; parameters: Record<string, string> } } | null
+> {
+  const key = process.env.CLOUDCONVERT_API_KEY;
+  if (!key) return null;
+  try {
+    const tasks = {
+      'import-1': { operation: 'import/upload' },
+      'mp3-1': {
+        operation: 'convert',
+        input: 'import-1',
+        output_format: 'mp3',
+        audio_bitrate: AUDIO_BITRATE
+      },
+      'export-1': { operation: 'export/url', input: 'mp3-1' }
+    };
+    const r = await fetch(`${API}/v2/jobs`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ tasks })
+    });
+    if (!r.ok) return null;
+    const job = (await r.json()).data;
+    const form = job?.tasks?.find((t: any) => t.operation === 'import/upload')?.result
+      ?.form;
+    if (!form?.url) return null;
+    return { jobId: job.id, form };
+  } catch {
+    return null;
+  }
+}
+
+/** Poll a CloudConvert job to completion and return the compressed file URL
+ *  (empty string on failure). */
+export async function pollAudioCompressedUrl(jobId: string): Promise<string> {
+  const key = process.env.CLOUDCONVERT_API_KEY;
+  if (!key) return '';
+  const auth = { Authorization: `Bearer ${key}` };
+  for (let i = 0; i < MAX_POLLS; i++) {
+    await sleep(POLL_MS);
+    try {
+      const pr = await fetch(`${API}/v2/jobs/${jobId}`, { headers: auth });
+      if (!pr.ok) continue;
+      const data = (await pr.json()).data;
+      if (data.status === 'error') return '';
+      if (data.status === 'finished')
+        return (
+          data.tasks?.find(
+            (t: any) => t.operation === 'export/url' && t.status === 'finished'
+          )?.result?.files?.[0]?.url ?? ''
+        );
+    } catch {
+      /* keep polling */
+    }
+  }
+  return '';
+}
