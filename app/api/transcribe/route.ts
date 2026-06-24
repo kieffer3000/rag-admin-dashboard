@@ -127,5 +127,17 @@ export async function POST(req: Request) {
     data.displayText ||
     '';
 
-  return Response.json({ text });
+  // Per-phrase timestamps (offsetMilliseconds) — combinedPhrases carries no
+  // timing, but phrases[] does. Surfacing these lets audio sources be indexed
+  // with [MM:SS] markers so citations can point to the moment in the recording.
+  const segments = Array.isArray(data.phrases)
+    ? data.phrases
+        .map((p: { offsetMilliseconds?: number; text?: string }) => ({
+          offsetMs: typeof p.offsetMilliseconds === 'number' ? p.offsetMilliseconds : 0,
+          text: (p.text ?? '').trim()
+        }))
+        .filter((s: { text: string }) => s.text)
+    : [];
+
+  return Response.json({ text, segments });
 }

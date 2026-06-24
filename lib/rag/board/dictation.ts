@@ -135,12 +135,21 @@ function encodeWav(samples: Float32Array, rate: number): Blob {
   return new Blob([view], { type: 'audio/wav' });
 }
 
-/** POST a WAV blob to our transcribe proxy. `phrases` biases recognition
- *  toward known entities (the brain's wired source names). */
-export async function transcribeAudio(
+export interface TranscriptSegment {
+  offsetMs: number;
+  text: string;
+}
+export interface DetailedTranscript {
+  text: string;
+  segments: TranscriptSegment[];
+}
+
+/** POST a WAV/MP3 blob to our transcribe proxy → text + per-phrase timestamps.
+ *  `phrases` biases recognition toward known entities (wired source names). */
+export async function transcribeAudioDetailed(
   blob: Blob,
   phrases: string[] = []
-): Promise<string> {
+): Promise<DetailedTranscript> {
   const fd = new FormData();
   // name by actual container so Azure/our route detect the format correctly
   const ext = blob.type.includes('mpeg') || blob.type.includes('mp3') ? 'mp3' : 'wav';
@@ -156,5 +165,33 @@ export async function transcribeAudio(
     throw err;
   }
   const d = await res.json();
-  return (d.text as string) ?? '';
+  return {
+    text: (d.text as string) ?? '',
+    segments: Array.isArray(d.segments) ? (d.segments as TranscriptSegment[]) : []
+  };
+}
+
+/** Plain-text transcript (dictation → composer). */
+export async function transcribeAudio(
+  blob: Blob,
+  phrases: string[] = []
+): Promise<string> {
+  return (await transcribeAudioDetailed(blob, phrases)).text;
+}
+
+/** ms → [M:SS] (or H:MM:SS for long audio). */
+function fmtTs(ms: number): string {
+  const s = Math.max(0, Math.floor(ms / 1000));
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  const sec = String(s % 60).padStart(2, '0');
+  return h > 0 ? `${h}:${String(m).padStart(2, '0')}:${sec}` : `${m}:${sec}`;
+}
+
+/** Transcript with [M:SS] markers per segment — indexed so audio chunks carry
+ *  their timecode and citations can point to the moment. Falls back to plain
+ *  text when the backend returned no segment timings. */
+export function timestampedTranscript(d: DetailedTranscript): string {
+  if (!d.segments.length) return d.text;
+  return d.segments.map((s) => `[${fmtTs(s.offsetMs)}] ${s.text.trim()}`).join('\n');
 }

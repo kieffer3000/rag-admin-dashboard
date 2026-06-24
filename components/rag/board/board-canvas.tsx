@@ -62,7 +62,7 @@ import { MindmapNode } from './mindmap-node';
 import { ScopeEdge } from './scope-edge';
 import { BoardToolbar } from './toolbar';
 import { BoardChest, CHEST_MIME } from './board-chest';
-import { transcribeAudio } from '@/lib/rag/board/dictation';
+import { transcribeAudioDetailed, timestampedTranscript } from '@/lib/rag/board/dictation';
 
 const nodeTypes = {
   chip: ChipNode,
@@ -2128,7 +2128,9 @@ function BoardCanvasInner() {
           });
           (async () => {
             try {
-              const transcript = await transcribeAudio(file);
+              // Transcribe WITH per-phrase timestamps → index a [M:SS]-marked
+              // transcript so audio citations can point to the moment.
+              const transcript = timestampedTranscript(await transcribeAudioDetailed(file));
               const r = await fetch('/api/index', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
