@@ -139,7 +139,16 @@ export async function indexText(opts: {
   const records: PineVector[] = chunks.map((text, i) => ({
     id: `${sourceId}#${i}`,
     values: values[i],
-    metadata: { source_id: sourceId, name, type, text, ...(opts.meta ?? {}) }
+    // store BOTH `name` and `source_name` — the Make query scenario reads
+    // metadata.source_name for citations; the app reads name. Keep them in sync.
+    metadata: {
+      source_id: sourceId,
+      name,
+      source_name: name,
+      type,
+      text,
+      ...(opts.meta ?? {})
+    }
   }));
 
   // Batch-upsert to Pinecone. Each batch retries; a batch that still fails
