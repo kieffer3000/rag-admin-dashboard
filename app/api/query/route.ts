@@ -27,7 +27,7 @@ import { nsForUser } from '@/lib/rag/namespace';
 
 export const runtime = 'nodejs';
 
-const NOMATCH_THRESHOLD = Number(process.env.RAG_NOMATCH_THRESHOLD ?? 0.65);
+const NOMATCH_THRESHOLD = Number(process.env.RAG_NOMATCH_THRESHOLD ?? 0.6);
 // Last 30 turns (≈15 Q + 15 A) sent verbatim, in FULL (no per-message
 // truncation); everything older is folded into the entity-preserving rolling
 // summary by the client. Wider window = "his house" resolves to the subject
