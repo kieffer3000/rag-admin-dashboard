@@ -412,11 +412,11 @@ export function ResearchOverlay({
         </div>
         <button
           onClick={onExit}
-          title="Exit research mode (Esc)"
-          className="ml-auto flex items-center gap-1.5 rounded-full bg-foreground/[0.05] px-3.5 py-1.5 text-[13px] font-semibold text-foreground/80 transition-colors hover:bg-foreground/[0.1]"
+          title="Minimize research mode (Esc)"
+          className="ml-auto flex items-center gap-1.5 rounded-full bg-accent px-4 py-1.5 text-[13px] font-semibold text-white shadow-[0_2px_10px_hsl(var(--accent)/0.4)] transition-all hover:brightness-110"
         >
-          <Minimize2 className="h-4 w-4 text-accent" />
-          Exit Research
+          <Minimize2 className="h-4 w-4" />
+          Minimize
         </button>
       </header>
 

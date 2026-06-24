@@ -1146,6 +1146,10 @@ function BrainNodeInner({ id, data, selected }: NodeProps) {
           <textarea
             ref={taRef}
             value={question}
+            // Engaging the brain (clicking/focusing the ask box) expands it into
+            // full-screen Research Mode — the board card is now a launcher; the
+            // conversation happens in the distraction-free view.
+            onFocus={() => setResearchBrainId(id)}
             onChange={(e) => setQuestion(e.target.value)}
             onKeyDown={(e) => {
               if (e.key === 'Enter' && !e.shiftKey) {
