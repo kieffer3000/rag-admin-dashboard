@@ -190,6 +190,7 @@ function BrainNodeInner({ id, data, selected }: NodeProps) {
     setBrainBusy,
     stashBrain,
     setResearchBrainId,
+    removeBoardNode,
     nextBoardId
   } = useBoard();
   const { openViewer, activeProjectId } = useRag();
@@ -986,6 +987,24 @@ function BrainNodeInner({ id, data, selected }: NodeProps) {
             ) : (
               <Minimize2 className="h-3.5 w-3.5" />
             )}
+          </button>
+
+          {/* Delete this brain (visible affordance — also right-click → Delete) */}
+          <button
+            onClick={() => {
+              if (
+                window.confirm(
+                  'Delete this brain and its conversation? This cannot be undone. (Wired sources are not deleted.)'
+                )
+              ) {
+                clearBrainMessages(id);
+                removeBoardNode(id);
+              }
+            }}
+            title="Delete this brain"
+            className="nodrag flex h-6 w-6 items-center justify-center rounded-[8px] text-muted-foreground/60 transition-colors hover:bg-red-500/10 hover:text-red-600"
+          >
+            <Trash2 className="h-3.5 w-3.5" />
           </button>
 
           {/* actions: rename / clear / export */}
