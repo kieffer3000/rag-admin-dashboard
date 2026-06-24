@@ -87,6 +87,37 @@ function buildPrompt(
   return parts.join('\n\n');
 }
 
+/**
+ * Make's WebhookRespond sometimes wraps the payload as `[{ json: "<stringified>" }]`
+ * or `{ json: "<stringified>" }` (a TransformToJSON bundle) instead of the raw
+ * `{ answer, citations, raw_citations, ... }` object — a blueprint re-import can
+ * flip this, which silently empties citations (and the answer). Unwrap to the
+ * real object. No-op when the response is already the flat object.
+ */
+function unwrapMakeJson(d: any): any {
+  let cur: any = d;
+  for (let i = 0; i < 4 && cur != null; i++) {
+    if (Array.isArray(cur)) {
+      cur = cur[0];
+      continue;
+    }
+    if (
+      typeof cur === 'object' &&
+      cur.answer === undefined &&
+      typeof cur.json === 'string'
+    ) {
+      try {
+        cur = JSON.parse(cur.json);
+        continue;
+      } catch {
+        break;
+      }
+    }
+    break;
+  }
+  return cur && typeof cur === 'object' && !Array.isArray(cur) ? cur : d;
+}
+
 /** One call to the Make Query scenario; computes the no-match signal and shapes
  *  the response. This is the only network hop. */
 async function callMake(
@@ -137,7 +168,7 @@ async function callMake(
   });
   if (!res.ok) throw new Error(`Query webhook returned ${res.status}`);
 
-  const data = await res.json();
+  const data = unwrapMakeJson(await res.json());
 
   // Prefer the full aggregator array (raw_citations: ALL N retrieved chunks);
   // fall back to data.citations for backward compatibility.
