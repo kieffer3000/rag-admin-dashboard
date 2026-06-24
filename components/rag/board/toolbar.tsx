@@ -61,7 +61,7 @@ export interface BoardToolbarProps {
    *  Returns the created media id. */
   onNewImage: (name: string, file: File) => string;
   /** Upload PDF/DOCX/TXT/… → extract text → chunk + index. Returns media ids. */
-  onNewDocuments: (docs: { name: string; file: File }[]) => string[];
+  onNewDocuments: (docs: { name: string; file: File; ocr?: boolean }[]) => string[];
   /** Upload an audio file → transcribe → index the transcript. */
   onNewAudio: (name: string, file: File) => void;
   /** Existing boxes (clusters) on the board, for "add to an existing box". */
@@ -140,6 +140,9 @@ export function BoardToolbar(p: BoardToolbarProps) {
   const [importing, setImporting] = useState<{ id: string; url: string }[]>([]);
   // File uploads — any number, any supported type, routed per file.
   const [files, setFiles] = useState<File[]>([]);
+  // OCR mode for document uploads (set by the dedicated "OCR" tile). When on, the
+  // doc runs through CloudConvert's OCR path — for scanned / image-only PDFs.
+  const [ocr, setOcr] = useState(false);
   // "Add to a box": dock everything into a cluster — an existing one or a new
   // one. boxTarget is 'new' or an existing box id.
   const [addToBox, setAddToBox] = useState(false);
@@ -284,7 +287,8 @@ export function BoardToolbar(p: BoardToolbarProps) {
                   files.length === 1 && name.trim()
                     ? name.trim()
                     : stripExt(f.name),
-                file: f
+                file: f,
+                ocr
               }))
             )
           : [])
@@ -384,6 +388,7 @@ export function BoardToolbar(p: BoardToolbarProps) {
     setName('');
     setUrl('');
     setFiles([]);
+    setOcr(false);
     setSourceType(t);
   }
 
@@ -812,7 +817,10 @@ export function BoardToolbar(p: BoardToolbarProps) {
                       <p className="text-[11.5px] text-muted-foreground/55">
                         Documents (PDF, DOCX, EPUB, TXT, MD) — select as many as
                         you like. Each is extracted, chunked, and indexed on its
-                        own. (Scanned/image-only PDFs need OCR — coming soon.)
+                        own.{' '}
+                        {ocr
+                          ? 'OCR is ON — scanned / image-only PDFs will be read too (slower, uses more credits).'
+                          : 'For scanned / image-only PDFs, use the OCR tile instead.'}
                       </p>
                     )}
                   </div>
@@ -976,6 +984,16 @@ export function BoardToolbar(p: BoardToolbarProps) {
           </DialogHeader>
           <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3">
             <UploadTile meta={MEDIA_TYPES.document} onClick={() => openType('document')} />
+            <UploadTile
+              label="OCR"
+              icon={OcrDocIcon}
+              text="text-accent"
+              tint="bg-accent/10"
+              onClick={() => {
+                openType('document');
+                setOcr(true);
+              }}
+            />
             <UploadTile meta={MEDIA_TYPES.image} onClick={() => openType('image')} />
             <UploadTile meta={MEDIA_TYPES.audio} onClick={() => openType('audio')} />
             <UploadTile
@@ -1189,6 +1207,36 @@ function RailDivider() {
 
 /** A category tile in the unified upload picker. Pass `meta` for a known media
  *  type, or an explicit label/icon/text/tint (e.g. the disabled Video tile). */
+/** A document glyph with "OCR" lettered across the middle. */
+function OcrDocIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={className}
+    >
+      <path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z" />
+      <path d="M14 3v5h5" />
+      <text
+        x="12"
+        y="16.6"
+        textAnchor="middle"
+        fontSize="6.5"
+        fontWeight="800"
+        fill="currentColor"
+        stroke="none"
+        fontFamily="ui-sans-serif, system-ui, sans-serif"
+      >
+        OCR
+      </text>
+    </svg>
+  );
+}
+
 function UploadTile({
   meta,
   label,

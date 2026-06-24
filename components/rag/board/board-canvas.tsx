@@ -1884,7 +1884,7 @@ function BoardCanvasInner() {
           // Batch upload (PDF/DOCX/EPUB/TXT). Chips appear immediately; the
           // uploads run THROTTLED (3 at a time) so a dozen files don't swamp the
           // Make webhook + Pinecone. Each file → extract → chunk → text pipeline.
-          const jobs = docs.map(({ name, file }) => {
+          const jobs = docs.map(({ name, file, ocr }) => {
             const id = addMedia(
               {
                 type: 'document',
@@ -1901,14 +1901,15 @@ function BoardCanvasInner() {
               position: centerPos(),
               data: { mediaId: id }
             });
-            return { id, name, file };
+            return { id, name, file, ocr };
           });
 
-          const upload = async ({ id, name, file }: (typeof jobs)[number]) => {
+          const upload = async ({ id, name, file, ocr }: (typeof jobs)[number]) => {
             const fd = new FormData();
             fd.append('file', file);
             fd.append('name', name);
             fd.append('source_id', id);
+            if (ocr) fd.append('ocr', 'true');
             try {
               const r = await fetch('/api/index-doc', { method: 'POST', body: fd });
               const j = await r.json().catch(() => ({}));
