@@ -38,6 +38,6 @@ export async function POST(req: Request) {
       ? summary.trim()
       : `Q: ${q} — A: ${a.slice(0, 400)}`;
 
-  const stored = await storeMemory(text);
+  const stored = await storeMemory(text, userId);
   return Response.json({ stored });
 }

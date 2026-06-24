@@ -1,5 +1,6 @@
 import { auth } from '@clerk/nextjs/server';
 import { deleteSourceVectors } from '@/lib/rag/pinecone-delete';
+import { nsForUser } from '@/lib/rag/namespace';
 
 // Deletes a source's vectors from Pinecone when the user deletes the source
 // from their knowledge base. No Make scenario needed — it's a direct Pinecone
@@ -21,7 +22,7 @@ export async function POST(req: Request) {
     return Response.json({ error: 'source_id is required' }, { status: 400 });
   }
 
-  const namespace = process.env.PINECONE_NAMESPACE ?? 'user_kieffer';
+  const namespace = nsForUser(userId);
   const deleted = await deleteSourceVectors(body.source_id, namespace);
   return Response.json({ status: 'deleted', source_id: body.source_id, deleted });
 }

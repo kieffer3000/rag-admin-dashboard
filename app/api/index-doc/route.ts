@@ -1,6 +1,7 @@
 import { auth } from '@clerk/nextjs/server';
 import { put } from '@vercel/blob';
 import { indexText } from '@/lib/rag/index-core';
+import { nsForUser } from '@/lib/rag/namespace';
 
 // Document ingestion (PDF / DOCX / TXT). Text extraction is deterministic
 // parsing (NOT an LLM), done in-route, then handed to the SAME text pipeline
@@ -157,7 +158,13 @@ export async function POST(req: Request) {
 
   // 3) Reuse the text pipeline: chunk → Make embedding → Pinecone.
   try {
-    const r = await indexText({ sourceId, name, type: 'document', text });
+    const r = await indexText({
+      sourceId,
+      name,
+      type: 'document',
+      text,
+      namespace: nsForUser(userId)
+    });
     return Response.json({
       ok: true,
       indexed: true,

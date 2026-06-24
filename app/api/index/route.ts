@@ -1,5 +1,6 @@
 import { auth } from '@clerk/nextjs/server';
 import { indexText } from '@/lib/rag/index-core';
+import { nsForUser } from '@/lib/rag/namespace';
 
 // Proxies Board ingestion to the Make.com Indexing scenario.
 // Contract (per chunk): { chunk_id, source_id, name, type, namespace, text }
@@ -29,7 +30,8 @@ export async function POST(req: Request) {
       sourceId: body.source_id,
       name: body.name,
       type: body.type,
-      text: String(body.text)
+      text: String(body.text),
+      namespace: nsForUser(userId)
     });
     return Response.json({
       status: 'indexed',

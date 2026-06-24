@@ -1,6 +1,7 @@
 import { auth } from '@clerk/nextjs/server';
 import { put } from '@vercel/blob';
 import { deleteSourceVectors } from '@/lib/rag/pinecone-delete';
+import { nsForUser } from '@/lib/rag/namespace';
 
 // Image ingestion → Vercel Blob (durable, displayable URL) + Make.com Image
 // scenario (Gemini 2.5 Pro caption + Gemini Embedding 2 on the PIXELS + Pinecone
@@ -80,7 +81,7 @@ export async function POST(req: Request) {
     addRandomSuffix: true
   });
 
-  const namespace = process.env.PINECONE_NAMESPACE ?? 'user_kieffer';
+  const namespace = nsForUser(userId);
 
   // 2) Hand the model work to Make. Image ingestion now shares the ONE UPSERT
   //    scenario (a Router branches on type=image), so we fall back to the same

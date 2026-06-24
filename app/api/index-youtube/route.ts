@@ -1,5 +1,6 @@
 import { auth } from '@clerk/nextjs/server';
 import { indexText } from '@/lib/rag/index-core';
+import { nsForUser } from '@/lib/rag/namespace';
 
 // YouTube ingestion. Captions are a deterministic data source (like a PDF's
 // text layer), so we fetch the FULL transcript in-route — no LLM, no token
@@ -215,7 +216,13 @@ export async function POST(req: Request) {
   }
 
   try {
-    const r = await indexText({ sourceId, name: title, type: 'youtube', text: transcript });
+    const r = await indexText({
+      sourceId,
+      name: title,
+      type: 'youtube',
+      text: transcript,
+      namespace: nsForUser(userId)
+    });
     return Response.json({
       ok: true,
       indexed: true,

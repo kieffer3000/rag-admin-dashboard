@@ -1,5 +1,6 @@
 import { auth } from '@clerk/nextjs/server';
 import { indexText } from '@/lib/rag/index-core';
+import { nsForUser } from '@/lib/rag/namespace';
 
 // Website ingestion — with guardrails (see legal/risk notes):
 //  • USER-INITIATED, single URL — not a crawler.
@@ -111,7 +112,7 @@ export async function POST(req: Request) {
   if (!userId) return Response.json({ error: 'Unauthorized' }, { status: 401 });
 
   const body = await req.json().catch(() => ({}));
-  const { source_id, name, url, namespace } = body ?? {};
+  const { source_id, name, url } = body ?? {};
   if (!source_id || !url) {
     return Response.json({ error: 'source_id and url are required' }, { status: 400 });
   }
@@ -217,7 +218,7 @@ export async function POST(req: Request) {
       name: title,
       type: 'website',
       text: indexedText,
-      namespace
+      namespace: nsForUser(userId)
     });
     return Response.json({ ok: true, chunks: result.chunks, title });
   } catch (e) {

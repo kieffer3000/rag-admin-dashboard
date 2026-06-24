@@ -1,10 +1,18 @@
 import { deleteSourceVectors } from '@/lib/rag/pinecone-delete';
 import { summarizeText, upsertSummary } from '@/lib/rag/summary-core';
+import { embedTexts } from '@/lib/rag/embed';
 
-// Shared text-indexing core: chunk → delete-before-reindex → upsert each chunk
-// via the Make Indexing webhook. Used by /api/index (raw text) AND
-// /api/index-doc (PDF/DOCX/TXT, after their text is extracted in-route). Keeping
-// chunking + upsert in ONE place means every source type embeds identically.
+// Shared text-indexing core: chunk → delete-before-reindex → embed (in code,
+// gemini-embedding-2 @768, identical to the Make scenarios) → batch-upsert
+// straight to Pinecone. Used by /api/index (raw text) AND /api/index-doc
+// (PDF/DOCX/TXT, after their text is extracted in-route).
+//
+// Why in-code (not the Make Indexing webhook): the old path fired ONE webhook
+// per chunk, so a 315-chunk PDF made 315 calls — Make throttled/queued most
+// (returning "Accepted" while embedding nothing), silently dropping ~2/3 of the
+// document. In-code embeds in a few batched API calls and upserts to Pinecone
+// directly: zero Make operations, reliable, and it FAILS LOUD instead of losing
+// text. Every chunk that's counted as indexed is actually in Pinecone.
 
 // Smaller chunks = higher recall for narrow facts (a one-line aside no longer
 // drowns in a long passage). More overlap so a fact spanning a boundary still
@@ -12,7 +20,52 @@ import { summarizeText, upsertSummary } from '@/lib/rag/summary-core';
 // lose information. (Index-time: affects future uploads + re-indexes.)
 const CHUNK_CHARS = Number(process.env.RAG_CHUNK_CHARS ?? 1000);
 const CHUNK_OVERLAP = Number(process.env.RAG_CHUNK_OVERLAP ?? 200);
-const UPSERT_CONCURRENCY = 5;
+const UPSERT_BATCH = 100; // Pinecone upsert cap per request
+const UPSERT_MAX_RETRY = 4;
+
+function pineconeHost(): string {
+  const h = process.env.PINECONE_HOST;
+  if (!h) throw new Error('PINECONE_HOST is not configured');
+  return `https://${h.replace(/^https?:\/\//, '')}`;
+}
+function pineconeKey(): string {
+  const k = process.env.PINECONE_API_KEY;
+  if (!k) throw new Error('PINECONE_API_KEY is not configured');
+  return k;
+}
+
+interface PineVector {
+  id: string;
+  values: number[];
+  metadata: Record<string, unknown>;
+}
+
+/** Upsert one ≤100-vector batch to Pinecone with retries. Throws on final
+ *  failure so callers never count un-landed vectors as indexed. */
+async function upsertBatch(
+  host: string,
+  key: string,
+  namespace: string,
+  vectors: PineVector[]
+): Promise<void> {
+  let lastErr = '';
+  for (let attempt = 0; attempt < UPSERT_MAX_RETRY; attempt++) {
+    try {
+      const res = await fetch(`${host}/vectors/upsert`, {
+        method: 'POST',
+        headers: { 'Api-Key': key, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ namespace, vectors })
+      });
+      if (res.ok) return;
+      lastErr = `HTTP ${res.status}: ${(await res.text()).slice(0, 160)}`;
+      if (res.status !== 429 && res.status < 500) throw new Error(lastErr);
+    } catch (e: any) {
+      lastErr = e?.message ?? 'upsert error';
+    }
+    await new Promise((r) => setTimeout(r, 400 * 2 ** attempt));
+  }
+  throw new Error(`Pinecone upsert failed after ${UPSERT_MAX_RETRY} attempts: ${lastErr}`);
+}
 
 /** Sentence-aware split into ~CHUNK_CHARS passages with a small overlap so a
  *  fact spanning a boundary still lands whole in at least one chunk. */
@@ -42,81 +95,62 @@ export function chunkText(text: string): string[] {
   return chunks.filter((c) => c.length > 0);
 }
 
-/** Run upserts with a small concurrency cap (Make ops + serverless time). */
-async function runPool<T>(
-  items: T[],
-  worker: (item: T, i: number) => Promise<void>,
-  concurrency: number
-): Promise<void> {
-  let next = 0;
-  const runners = Array.from(
-    { length: Math.min(concurrency, items.length) },
-    async () => {
-      while (next < items.length) {
-        const i = next++;
-        await worker(items[i], i);
-      }
-    }
-  );
-  await Promise.all(runners);
-}
-
 export interface IndexResult {
   ok: boolean;
   chunks: number;
+  upserted: number;
   failed: number;
   deletedPrior: number;
 }
 
 /**
- * Chunk `text` and upsert every passage for `sourceId`. Deletes prior vectors
- * for the source first (idempotent re-index). Throws on missing config / empty
- * text / total webhook failure so the caller can map a status code.
+ * Chunk `text`, embed in code, and batch-upsert every passage for `sourceId`
+ * into `namespace`. Deletes prior vectors for the source first (idempotent
+ * re-index). Throws on missing config / empty text / any upsert batch that
+ * can't land — so a partial index is reported as a failure, never as success.
  */
 export async function indexText(opts: {
   sourceId: string;
   name?: string;
   type?: string;
   text: string;
-  namespace?: string;
+  namespace: string;
+  /** Extra metadata stored on every vector (e.g. { email }). */
+  meta?: Record<string, unknown>;
 }): Promise<IndexResult> {
-  const url = process.env.MAKE_INDEX_WEBHOOK_URL;
-  if (!url) throw new Error('MAKE_INDEX_WEBHOOK_URL is not configured');
-
   const sourceId = opts.sourceId;
   const name = opts.name ?? sourceId;
   const type = opts.type ?? 'text';
-  const namespace =
-    opts.namespace ?? process.env.PINECONE_NAMESPACE ?? 'user_kieffer';
+  const namespace = opts.namespace;
+  if (!namespace) throw new Error('namespace is required');
 
   const chunks = chunkText(String(opts.text));
   if (chunks.length === 0) throw new Error('text is empty after cleaning');
 
+  const host = pineconeHost();
+  const key = pineconeKey();
+
   const deletedPrior = await deleteSourceVectors(sourceId, namespace);
 
-  const failures: number[] = [];
-  await runPool(
-    chunks,
-    async (chunkValue, i) => {
-      const res = await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          chunk_id: `${sourceId}#${i}`,
-          source_id: sourceId,
-          name,
-          type,
-          namespace,
-          text: chunkValue
-        })
-      });
-      if (!res.ok) failures.push(i);
-    },
-    UPSERT_CONCURRENCY
-  );
+  // Embed every chunk in code (throws if any chunk fails to embed → no silent
+  // loss). Vectors come back aligned to `chunks` order.
+  const values = await embedTexts(chunks);
 
-  if (failures.length === chunks.length)
-    throw new Error(`Indexing webhook failed for all ${chunks.length} chunks`);
+  const records: PineVector[] = chunks.map((text, i) => ({
+    id: `${sourceId}#${i}`,
+    values: values[i],
+    metadata: { source_id: sourceId, name, type, text, ...(opts.meta ?? {}) }
+  }));
+
+  // Batch-upsert to Pinecone. Each batch retries; a batch that still fails
+  // throws → the whole index reports failure (caller re-runs; delete-before-
+  // reindex keeps it idempotent). No batch is counted unless it landed.
+  let upserted = 0;
+  for (let i = 0; i < records.length; i += UPSERT_BATCH) {
+    const batch = records.slice(i, i + UPSERT_BATCH);
+    await upsertBatch(host, key, namespace, batch);
+    upserted += batch.length;
+  }
 
   // Level 1 of the summary tree: one pre-made summary of the WHOLE source, kept
   // as a reserved `${sourceId}#summary` vector. Best-effort — a summary hiccup
@@ -132,7 +166,8 @@ export async function indexText(opts: {
   return {
     ok: true,
     chunks: chunks.length,
-    failed: failures.length,
+    upserted,
+    failed: chunks.length - upserted,
     deletedPrior
   };
 }

@@ -1,6 +1,7 @@
 import { auth } from '@clerk/nextjs/server';
 import { runUtilityLLM } from '@/lib/rag/utility-llm';
 import { fetchSummaries, wantsSummary } from '@/lib/rag/summary-core';
+import { nsForUser } from '@/lib/rag/namespace';
 
 // Proxies the Board's brain queries to the Make.com Query scenario.
 //
@@ -99,7 +100,8 @@ async function callMake(
   profile: string,
   speed: 'fast' | 'detailed' | 'research',
   conversation: string,
-  summary: string
+  summary: string,
+  namespace: string
 ): Promise<MakeResult> {
   const res = await fetch(url, {
     method: 'POST',
@@ -126,7 +128,7 @@ async function callMake(
       scope: 'selected',
       answer_mode: mode,
       guides,
-      namespace: process.env.PINECONE_NAMESPACE ?? 'user_kieffer',
+      namespace,
       model,
       // Lets the Make scenario branch its pipeline (fast skips the expander;
       // research uses the heavier answer model).
@@ -278,8 +280,11 @@ export async function POST(req: Request) {
       body.everything === true && typeof body.project_id === 'string'
         ? [body.project_id]
         : clusterIds;
-    let summaries = rollupIds.length ? await fetchSummaries(rollupIds) : [];
-    if (!summaries.length) summaries = await fetchSummaries(sourceIds);
+    let summaries = rollupIds.length
+      ? await fetchSummaries(rollupIds, nsForUser(userId))
+      : [];
+    if (!summaries.length)
+      summaries = await fetchSummaries(sourceIds, nsForUser(userId));
     if (summaries.length) {
       const ctx = summaries
         .map((s, i) => `[${i + 1}] ${s.name}\n${s.text}`)
@@ -352,7 +357,8 @@ export async function POST(req: Request) {
       profile,
       speedParam,
       conversation,
-      summary
+      summary,
+      nsForUser(userId)
     );
   } catch (e) {
     return Response.json(

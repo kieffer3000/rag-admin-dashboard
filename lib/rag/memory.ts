@@ -9,12 +9,11 @@
 // webhook isn't configured, long-term memory simply turns off (no direct call).
 // Pinecone is still hit directly (it's a vector DB, not a model).
 
+import { memNsForUser } from '@/lib/rag/namespace';
+
 const TOP_K = Number(process.env.RAG_MEMORY_TOPK ?? 3);
 const MIN_SCORE = Number(process.env.RAG_MEMORY_MIN_SCORE ?? 0.55);
 
-function memNamespace(): string {
-  return `${process.env.PINECONE_NAMESPACE ?? 'user_kieffer'}__mem`;
-}
 function pineconeHost(): string | null {
   const h = process.env.PINECONE_HOST;
   return h ? `https://${h.replace(/^https?:\/\//, '')}` : null;
@@ -40,10 +39,10 @@ async function embedText(text: string): Promise<number[] | null> {
 }
 
 /** Embed a memory summary and upsert it to the memory namespace. */
-export async function storeMemory(text: string): Promise<boolean> {
+export async function storeMemory(text: string, userId: string): Promise<boolean> {
   const host = pineconeHost();
   const key = process.env.PINECONE_API_KEY;
-  if (!host || !key) return false;
+  if (!host || !key || !userId) return false;
   const values = await embedText(text);
   if (!values) return false;
   const id = `mem_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
@@ -52,7 +51,7 @@ export async function storeMemory(text: string): Promise<boolean> {
       method: 'POST',
       headers: { 'Api-Key': key, 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        namespace: memNamespace(),
+        namespace: memNsForUser(userId),
         vectors: [{ id, values, metadata: { text, ts: Date.now() } }]
       })
     });
@@ -63,10 +62,10 @@ export async function storeMemory(text: string): Promise<boolean> {
 }
 
 /** Retrieve the most relevant past-conversation memories for a question. */
-export async function retrieveMemories(question: string): Promise<string[]> {
+export async function retrieveMemories(question: string, userId: string): Promise<string[]> {
   const host = pineconeHost();
   const key = process.env.PINECONE_API_KEY;
-  if (!host || !key) return [];
+  if (!host || !key || !userId) return [];
   const values = await embedText(question);
   if (!values) return [];
   try {
@@ -74,7 +73,7 @@ export async function retrieveMemories(question: string): Promise<string[]> {
       method: 'POST',
       headers: { 'Api-Key': key, 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        namespace: memNamespace(),
+        namespace: memNsForUser(userId),
         vector: values,
         topK: TOP_K,
         includeMetadata: true
