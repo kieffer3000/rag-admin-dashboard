@@ -14,6 +14,25 @@ import {
 export const runtime = 'nodejs';
 export const maxDuration = 60;
 
+// Inventory: list every scope that has data + row counts, so we can see where
+// the board/library actually lives. Secret-gated.
+export async function GET(req: Request) {
+  const secret = req.headers.get('x-migrate-secret');
+  if (!process.env.MIGRATE_SECRET || secret !== process.env.MIGRATE_SECRET) {
+    return Response.json({ error: 'forbidden' }, { status: 403 });
+  }
+  if (!sql) return Response.json({ error: 'no database' }, { status: 503 });
+  await ensureBoardSchema();
+  await ensureAgentsSchema();
+  await ensureProjectsSchema();
+  await ensureUserDataSchema();
+  const board = await sql`SELECT scope, count(*)::int AS n FROM board_state GROUP BY scope ORDER BY n DESC`;
+  const agents = await sql`SELECT scope FROM agents_state`;
+  const projects = await sql`SELECT scope FROM projects_state`;
+  const userdata = await sql`SELECT scope FROM userdata_state`;
+  return Response.json({ board, agents, projects, userdata });
+}
+
 export async function POST(req: Request) {
   const secret = req.headers.get('x-migrate-secret');
   if (!process.env.MIGRATE_SECRET || secret !== process.env.MIGRATE_SECRET) {
