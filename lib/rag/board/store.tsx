@@ -409,41 +409,74 @@ export function BoardProvider({ children }: { children: ReactNode }) {
     };
   }, [board, brainMessages, projectMedia]);
 
-  // ---- AUTOSAVE: local IMMEDIATELY (guaranteed), DB debounced ----
-  useEffect(() => {
-    const pid = activeProjectId;
+  // Refs the interval/flush saves read — updated cheaply each render (NO
+  // serialization here, unlike the old per-change save that lagged dragging).
+  const dirty = useRef(false);
+  const buildDocRef = useRef(buildDoc);
+  const pidRef = useRef(activeProjectId);
+  buildDocRef.current = buildDoc;
+  pidRef.current = activeProjectId;
+
+  /** Serialize once and persist (local + cloud). The ONLY place the whole board
+   *  doc is stringified — called on a timer / on chat / on page-hide, never per
+   *  pointer-move. */
+  const persistNow = useCallback(() => {
+    const pid = pidRef.current;
     if (!hydrated.current.has(pid)) return;
-    const doc = buildDoc();
+    const doc = buildDocRef.current();
     latestDoc.current = { pid, doc };
-    writeLocal(pid, doc); // synchronous — survives an instant refresh
+    dirty.current = false;
+    writeLocal(pid, doc);
     setSaveStatus('saving');
-    if (saveTimer.current) clearTimeout(saveTimer.current);
-    saveTimer.current = setTimeout(() => {
-      fetch('/api/board', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ projectId: pid, data: doc })
-      })
-        .then((r) => setSaveStatus(r.ok ? 'saved' : 'local'))
-        .catch(() => setSaveStatus('local')); // saved on-device, cloud failed
-    }, 800);
-    return () => {
-      if (saveTimer.current) clearTimeout(saveTimer.current);
-    };
+    fetch('/api/board', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ projectId: pid, data: doc })
+    })
+      .then((r) => setSaveStatus(r.ok ? 'saved' : 'local'))
+      .catch(() => setSaveStatus('local'));
+  }, []);
+
+  // ---- Mark dirty on any change (cheap: a flag, no serialization). ----
+  useEffect(() => {
+    if (!hydrated.current.has(activeProjectId)) return;
+    dirty.current = true;
+    setSaveStatus('saving');
   }, [buildDoc, activeProjectId]);
 
-  // ---- FLUSH on page-hide / tab-switch (closes the debounce gap) ----
+  // ---- AUTOSAVE: every 60s, NOT on every move (so dragging stays smooth). The
+  // synchronous per-change localStorage write of the whole board was the lag. ----
+  useEffect(() => {
+    const iv = setInterval(() => {
+      if (dirty.current) persistNow();
+    }, 60000);
+    return () => clearInterval(iv);
+  }, [persistNow]);
+
+  // ---- Discussion text saves PROMPTLY (debounced ~2.5s) so chat is never lost
+  // between 60s ticks. Fires only when messages change — not while dragging. ----
+  useEffect(() => {
+    if (!hydrated.current.has(activeProjectId)) return;
+    const t = setTimeout(() => persistNow(), 2500);
+    return () => clearTimeout(t);
+  }, [brainMessages, activeProjectId, persistNow]);
+
+  // ---- FLUSH on page-hide / tab-switch — builds the CURRENT doc fresh so the
+  // latest positions/edits are saved even though we only persist every 60s. ----
   useEffect(() => {
     const flush = () => {
-      const ld = latestDoc.current;
-      if (!ld) return;
-      writeLocal(ld.pid, ld.doc); // sync, always succeeds
+      const pid = pidRef.current;
+      if (!hydrated.current.has(pid)) return;
+      const doc = buildDocRef.current();
+      latestDoc.current = { pid, doc };
+      dirty.current = false;
+      writeLocal(pid, doc); // sync, always succeeds
       try {
         // keepalive lets the request outlive the page (best-effort cloud save)
         fetch('/api/board', {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ projectId: ld.pid, data: ld.doc }),
+          body: JSON.stringify({ projectId: pid, data: doc }),
           keepalive: true
         }).catch(() => {});
       } catch {

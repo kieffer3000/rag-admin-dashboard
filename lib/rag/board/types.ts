@@ -75,6 +75,8 @@ export interface ArtifactData extends Record<string, unknown> {
   content: string;
   /** Hero/preview image (the page's og:image), loaded with the URL. UI only. */
   image?: string;
+  /** Pixel-accurate rendered screenshot URL (preferred over `image`). UI only. */
+  screenshot?: string;
 }
 
 /** A REFERENCE (top plug) — an exemplar to imitate or a clue to consider

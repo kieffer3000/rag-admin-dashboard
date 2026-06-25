@@ -1522,19 +1522,37 @@ function BoardCanvasInner() {
     const typeOf = (n: BoardNode) =>
       media.find((m) => m.id === n.data.mediaId)?.type;
 
+    // Block = one rigid unit to place (a chip stack, a hub, a brain, an item).
+    // `kind`: brain | left (sources/context) | right (artifact/reference/robot) |
+    // loose (annotations/mindmaps). `owner` = the brain it's wired to (first one,
+    // by top-to-bottom order) so its pieces tidy into THAT brain's row-band.
     interface Block {
       ids: string[];
       w: number;
       h: number;
-      col: number; // 0 left · 1 middle · 2 right
-      rank: number; // vertical sub-order within a column (top → bottom)
-      offs: { id: string; dx: number; dy: number }[]; // member offset from block origin
+      kind: 'brain' | 'left' | 'right' | 'loose';
+      owner: string | null;
+      offs: { id: string; dx: number; dy: number }[];
     }
-    // Role-based columns matching the brain's plug geometry: knowledge/sources on
-    // the LEFT, brains lined up in the MIDDLE (references stacked above, the robot
-    // below), artifacts on the RIGHT.
-    const COL = { left: 0, middle: 1, right: 2 } as const;
-    const NCOL = 3;
+    // Brains, top-to-bottom — each gets a horizontal band; its wired pieces sit
+    // beside it (sources left, artifact/references/robot right).
+    const brainNodes = nodes
+      .filter((n) => n.type === 'brain' && !n.parentId)
+      .sort((a, b) => a.position.y - b.position.y);
+    const brainOrder = new Map(brainNodes.map((b, i) => [b.id, i]));
+    // The brain a piece belongs to = the first (topmost) brain any of its ids
+    // wires into; null = orphan (parked at the bottom of its column).
+    const ownerBrain = (memberIds: string[]): string | null => {
+      let best: { id: string; order: number } | null = null;
+      for (const e of board.edges) {
+        if (!e.source || !memberIds.includes(e.source)) continue;
+        const o = e.target ? brainOrder.get(e.target) : undefined;
+        if (o === undefined) continue;
+        if (!best || o < best.order) best = { id: e.target!, order: o };
+      }
+      return best?.id ?? null;
+    };
+
     const used = new Set<string>();
     const blocks: Block[] = [];
 
@@ -1549,8 +1567,8 @@ function BoardCanvasInner() {
           ids: members.map((m) => m.id),
           w: CHIP_W,
           h: members.length * STACK_PITCH + CHIP_TAB,
-          col: COL.left,
-          rank: 1, // under the boxes, with the sources on the left
+          kind: 'left',
+          owner: ownerBrain(members.map((m) => m.id)),
           offs: members.map((m) => ({
             id: m.id,
             dx: m.position.x - minX,
@@ -1559,20 +1577,20 @@ function BoardCanvasInner() {
         });
       } else {
         used.add(n.id);
-        // Role → column + vertical rank. Sources on the LEFT, brains in the
-        // MIDDLE column, and references + artifacts + robot all on the RIGHT.
-        let col: number = COL.left;
-        let rank = 2; // generic notes sit under the source stacks on the left
-        if (n.type === 'hub') { col = COL.left; rank = 0; }
-        else if (n.type === 'brain') { col = COL.middle; rank = 0; }
-        else if (n.type === 'reference') { col = COL.right; rank = 0; }
-        else if (n.type === 'artifact') { col = COL.right; rank = 1; }
-        else if (n.type === 'prompt' || n.type === 'agent') { col = COL.right; rank = 2; } // robot
-        let w = (n.width as number) ?? 240;
-        let h = (n.height as number) ?? 150;
+        let kind: Block['kind'] = 'loose';
+        if (n.type === 'brain') kind = 'brain';
+        else if (n.type === 'hub' || n.type === 'textNode') kind = 'left';
+        else if (
+          n.type === 'reference' ||
+          n.type === 'artifact' ||
+          n.type === 'prompt' ||
+          n.type === 'agent'
+        )
+          kind = 'right';
+        let w = (n.width as number) ?? (n.type === 'brain' ? 400 : 240);
+        let h = (n.height as number) ?? (n.type === 'brain' ? 480 : 150);
         if (n.type === 'hub') {
-          // Collapse-aware: a minimized box reserves its real mini footprint,
-          // not the expanded grid — else Clean Desk leaves a huge empty gap.
+          // Collapse-aware: a minimized box reserves its real mini footprint.
           const sz = hubFootprint(
             n.data,
             nodes.filter((c) => c.parentId === n.id).length
@@ -1580,40 +1598,74 @@ function BoardCanvasInner() {
           w = sz.width;
           h = sz.height;
         }
-        blocks.push({ ids: [n.id], w, h, col, rank, offs: [{ id: n.id, dx: 0, dy: 0 }] });
+        blocks.push({
+          ids: [n.id],
+          w,
+          h,
+          kind,
+          owner: kind === 'left' || kind === 'right' ? ownerBrain([n.id]) : null,
+          offs: [{ id: n.id, dx: 0, dy: 0 }]
+        });
       }
     }
     if (blocks.length < 2) return;
 
-    // Column geometry: 3 columns (sources left · brains middle · references +
-    // artifacts + robot right). x = running sum of prior columns' widest block +
-    // a gap. Within a column, blocks lay out top-down by rank.
     const COL_GAP = 90;
-    const ROW_GAP = 34;
+    const ROW_GAP = 28;
+    const BAND_GAP = 60;
     const TOP = 80;
-    const byCol = [0, 1, 2].map((c) =>
-      blocks.filter((b) => b.col === c).sort((a, b) => a.rank - b.rank)
-    );
-    const colWidth = byCol.map((bs) =>
-      bs.length ? Math.max(...bs.map((b) => b.w)) : 0
-    );
-    const colX: number[] = [];
-    let runX = 80;
-    for (let c = 0; c < NCOL; c++) {
-      colX[c] = runX;
-      if (colWidth[c] > 0) runX += colWidth[c] + COL_GAP;
-    }
+    const LEFT = 80;
 
-    // Target origin (top-left) per block, centered within its column.
+    const leftBlocks = blocks.filter((b) => b.kind === 'left');
+    const rightBlocks = blocks.filter((b) => b.kind === 'right');
+    const looseBlocks = blocks.filter((b) => b.kind === 'loose');
+
+    // Column widths from the widest block in each column.
+    const leftColW = Math.max(0, ...leftBlocks.concat(looseBlocks).map((b) => b.w));
+    const midColW = Math.max(0, ...blocks.filter((b) => b.kind === 'brain').map((b) => b.w));
+    const rightColW = Math.max(0, ...rightBlocks.map((b) => b.w));
+    const leftX = LEFT;
+    const midX = leftX + (leftColW ? leftColW + COL_GAP : 0);
+    const rightX = midX + (midColW ? midColW + COL_GAP : 0);
+
     const target = new Map<string, { x: number; y: number }>();
-    for (let c = 0; c < NCOL; c++) {
-      let y = TOP;
-      for (const b of byCol[c]) {
-        const x = colX[c] + (colWidth[c] - b.w) / 2;
+    const stackHeight = (bs: Block[]) =>
+      bs.reduce((s, b, i) => s + b.h + (i ? ROW_GAP : 0), 0);
+    // Lay a vertical stack of blocks in a column; returns the y after the stack.
+    const placeStack = (bs: Block[], colX: number, colW: number, startY: number) => {
+      let y = startY;
+      for (const b of bs) {
+        const x = colX + (colW - b.w) / 2;
         for (const o of b.offs) target.set(o.id, { x: x + o.dx, y: y + o.dy });
         y += b.h + ROW_GAP;
       }
+      return y;
+    };
+
+    // One row-band per brain: its sources left, the brain in the middle, its
+    // artifact/references/robot right — all vertically centered in the band so a
+    // brain's pieces line up with IT (brain 2's sources never sit by brain 1).
+    let y = TOP;
+    for (const bn of brainNodes) {
+      const brainBlock = blocks.find((b) => b.kind === 'brain' && b.ids[0] === bn.id);
+      if (!brainBlock) continue;
+      const lefts = leftBlocks.filter((b) => b.owner === bn.id);
+      const rights = rightBlocks.filter((b) => b.owner === bn.id);
+      const leftH = stackHeight(lefts);
+      const rightH = stackHeight(rights);
+      const bandH = Math.max(brainBlock.h, leftH, rightH);
+      if (lefts.length) placeStack(lefts, leftX, leftColW, y + (bandH - leftH) / 2);
+      placeStack([brainBlock], midX, midColW, y + (bandH - brainBlock.h) / 2);
+      if (rights.length) placeStack(rights, rightX, rightColW, y + (bandH - rightH) / 2);
+      y += bandH + BAND_GAP;
     }
+
+    // Orphans (wired to no brain) park at the BOTTOM of their columns.
+    const orphanLeft = leftBlocks.filter((b) => !b.owner);
+    const orphanRight = rightBlocks.filter((b) => !b.owner);
+    const yL = placeStack(orphanLeft, leftX, leftColW, y);
+    const yR = placeStack(orphanRight, rightX, rightColW, y);
+    placeStack(looseBlocks, leftX, leftColW, Math.max(yL, yR, y));
 
     // Animate from current → target with an ease, then re-frame.
     tidying.current = true;

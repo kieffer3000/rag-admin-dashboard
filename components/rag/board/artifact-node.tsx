@@ -19,12 +19,18 @@ function ArtifactNodeInner({ id, data, selected, parentId }: NodeProps) {
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [imgOk, setImgOk] = useState(true);
+  // Prefer the pixel-accurate screenshot; if it fails to load, fall back to the
+  // og:image, then hide entirely.
+  const [shotFailed, setShotFailed] = useState(false);
+  const preview = !shotFailed && d.screenshot ? d.screenshot : d.image;
 
   async function loadUrl() {
     const url = (d.url ?? '').trim();
     if (!url || loading) return;
     setErr(null);
     setLoading(true);
+    setShotFailed(false);
+    setImgOk(true);
     try {
       const res = await fetch('/api/fetch-page', {
         method: 'POST',
@@ -34,17 +40,16 @@ function ArtifactNodeInner({ id, data, selected, parentId }: NodeProps) {
       const j = await res.json();
       if (!j.ok) {
         setErr(j.note || 'Could not load that page.');
-        // a paywall/illegible page can still carry a title + hero image
-        if (j.image) {
-          setImgOk(true);
-          updateBoardNodeData(id, { image: j.image });
+        // a paywall/JS-only page can still carry a screenshot + title
+        if (j.screenshot || j.image) {
+          updateBoardNodeData(id, { screenshot: j.screenshot, image: j.image });
         }
       } else {
-        setImgOk(true);
         updateBoardNodeData(id, {
           content: j.text ?? d.content,
           title: d.title?.trim() ? d.title : j.title ?? '',
-          image: j.image ?? d.image
+          image: j.image ?? d.image,
+          screenshot: j.screenshot ?? d.screenshot
         });
       }
     } catch {
@@ -116,14 +121,18 @@ function ArtifactNodeInner({ id, data, selected, parentId }: NodeProps) {
         </button>
       </div>
 
-      {/* Hero preview (the page's og:image) once a URL is loaded. */}
-      {d.image && imgOk && (
+      {/* Page preview — pixel-accurate screenshot (falls back to og:image). */}
+      {preview && imgOk && (
         // eslint-disable-next-line @next/next/no-img-element
         <img
-          src={d.image}
+          src={preview}
           alt="Page preview"
-          onError={() => setImgOk(false)}
-          className="h-24 w-full shrink-0 object-cover"
+          onError={() => {
+            // screenshot failed → try the og:image; that failed too → hide.
+            if (!shotFailed && d.screenshot) setShotFailed(true);
+            else setImgOk(false);
+          }}
+          className="h-28 w-full shrink-0 object-cover object-top"
         />
       )}
 
