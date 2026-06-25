@@ -61,6 +61,7 @@ import { AnnotationNode } from './annotation-node';
 import { MindmapNode } from './mindmap-node';
 import { ArtifactNode } from './artifact-node';
 import { ReferenceNode } from './reference-node';
+import { ArtifactDialog } from './artifact-dialog';
 import { ScopeEdge } from './scope-edge';
 import { BoardToolbar } from './toolbar';
 import { BoardChest, CHEST_MIME } from './board-chest';
@@ -259,6 +260,7 @@ function BoardCanvasInner() {
   // re-run with the now-complete set of source summaries.
   const summaryBackfilled = useRef<string | null>(null);
   const [backfillTick, setBackfillTick] = useState(0);
+  const [artifactDlgOpen, setArtifactDlgOpen] = useState(false);
   useEffect(() => {
     if (hydratedProject !== activeProjectId) return;
     if (summaryBackfilled.current === activeProjectId) return;
@@ -2159,16 +2161,7 @@ function BoardCanvasInner() {
             data: { text: '' }
           })
         }
-        onAddArtifact={() =>
-          pushNode({
-            id: nextBoardId('art'),
-            type: 'artifact',
-            position: centerPos(),
-            width: 260,
-            height: 200,
-            data: { title: '', url: '', content: '' }
-          })
-        }
+        onAddArtifact={() => setArtifactDlgOpen(true)}
         onAddReference={() =>
           pushNode({
             id: nextBoardId('ref'),
@@ -2308,6 +2301,26 @@ function BoardCanvasInner() {
 
       {/* the CHEST — bottom dock of all produced media + prompts, drag onto
           the canvas as puzzle pieces */}
+      <ArtifactDialog
+        open={artifactDlgOpen}
+        onOpenChange={setArtifactDlgOpen}
+        onCreate={(a) =>
+          pushNode({
+            id: nextBoardId('art'),
+            type: 'artifact',
+            position: centerPos(),
+            width: 280,
+            height: 240,
+            data: {
+              title: a.title ?? '',
+              url: a.url ?? '',
+              content: a.content,
+              image: a.image,
+              screenshot: a.screenshot
+            }
+          })
+        }
+      />
       <BoardChest
         placedIds={placedIds}
         saveStatus={saveStatus}
