@@ -908,12 +908,15 @@ export function BoardProvider({ children }: { children: ReactNode }) {
           if (t) guides.push(t);
         } else if (src.type === 'artifact') {
           // RIGHT plug — the subject the corpus opines on. Carried whole, never
-          // indexed. One per brain (last wired wins).
-          const content = (src.data.content as string)?.trim();
-          if (content) {
+          // indexed. One per brain (last wired wins). Counts as present when it
+          // has content OR a URL (the server loads the URL's text if empty), so
+          // Opine engages even before the user clicks Load.
+          const content = (src.data.content as string)?.trim() || '';
+          const url = (src.data.url as string)?.trim() || '';
+          if (content || url) {
             artifact = {
               title: (src.data.title as string) || undefined,
-              url: (src.data.url as string) || undefined,
+              url: url || undefined,
               content
             };
           }

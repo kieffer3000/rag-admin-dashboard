@@ -1,4 +1,5 @@
 import 'server-only';
+import { captureWebsiteText } from '@/lib/rag/cloudconvert';
 
 // Fetch-only readable-page extraction for the OPINE artifact (right plug). Same
 // guardrails as /api/index-website (robots.txt, SSRF guard, paywall/JS-only
@@ -202,7 +203,14 @@ export async function fetchReadablePage(url: string, name?: string): Promise<Fet
 
   const title = extractTitle(html) || (typeof name === 'string' && name.trim()) || target.hostname;
   const image = extractImage(html, target);
-  const text = htmlToText(html);
+  let text = htmlToText(html);
+
+  // JS-only site → the plain HTML had little/no text. Recover it by rendering the
+  // page in a headless browser (CloudConvert) and reading the rendered text.
+  if (text.length < MIN_TEXT) {
+    const rendered = await captureWebsiteText(target.toString());
+    if (rendered && rendered.length >= MIN_TEXT) text = rendered;
+  }
 
   if (text.length < MIN_TEXT) {
     return {

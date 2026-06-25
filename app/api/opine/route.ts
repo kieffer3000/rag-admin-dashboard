@@ -1,6 +1,7 @@
 import { auth } from '@clerk/nextjs/server';
 import { nsForUser } from '@/lib/rag/namespace';
 import { runOpine, type Artifact } from '@/lib/rag/opine';
+import { fetchReadablePage } from '@/lib/rag/web-extract';
 
 // "Opine" — the wired corpus (LEFT plug) reasons ABOUT an artifact (RIGHT plug),
 // optionally guided by references (TOP plug) and a robot persona (guides). Unlike
@@ -41,14 +42,37 @@ export async function POST(req: Request) {
     );
   }
 
-  // RIGHT plug — the artifact, carried whole, NEVER indexed.
+  // RIGHT plug — the artifact, carried whole, NEVER indexed. Present when it has
+  // content OR a URL; if content is empty but a URL is set, the server loads the
+  // page text here (with the JS-render fallback) so Opine works even if the node
+  // hadn't finished loading client-side.
   let artifact: Artifact | null = null;
-  if (body.artifact && typeof body.artifact.content === 'string' && body.artifact.content.trim()) {
-    artifact = {
-      content: body.artifact.content,
-      title: typeof body.artifact.title === 'string' ? body.artifact.title : undefined,
-      url: typeof body.artifact.url === 'string' ? body.artifact.url : undefined
-    };
+  if (body.artifact) {
+    const content = typeof body.artifact.content === 'string' ? body.artifact.content : '';
+    const url = typeof body.artifact.url === 'string' ? body.artifact.url.trim() : '';
+    const title = typeof body.artifact.title === 'string' ? body.artifact.title : undefined;
+    if (content.trim() || url) {
+      let resolved = content;
+      if (!content.trim() && url) {
+        const p = await fetchReadablePage(url);
+        if (p.ok && p.text) resolved = p.text;
+      }
+      artifact = { content: resolved, title, url: url || undefined };
+    }
+  }
+  // An artifact wired with only a URL we couldn't read → tell the user, don't
+  // silently fall back to generic corpus Q&A.
+  if (artifact && !artifact.content.trim()) {
+    return Response.json({
+      answer:
+        '<p>The wired artifact has no readable text yet. Click <strong>Load</strong> on the artifact (or paste its text) and ask again — public pages only; paywalled or login-gated pages can’t be read.</p>',
+      citations: [],
+      raw_citations: null,
+      used_sources: null,
+      topScore: null,
+      noMatch: true,
+      suggestedQuestions: []
+    });
   }
 
   // TOP plug — reference exemplars / clues (optional, not citable).

@@ -146,6 +146,53 @@ export async function captureWebsiteScreenshot(
   }
 }
 
+/** Rendered TEXT of a page via CloudConvert (capture-website → pdf → txt) —
+ *  Puppeteer runs the page's JS, so this recovers text from client-rendered
+ *  (JS-only) sites where a plain HTML fetch sees nothing. '' on failure. */
+export async function captureWebsiteText(url: string): Promise<string> {
+  const key = process.env.CLOUDCONVERT_API_KEY;
+  if (!key) return '';
+  const auth = { Authorization: `Bearer ${key}` };
+  try {
+    const tasks = {
+      'shot-1': {
+        operation: 'capture-website',
+        url,
+        output_format: 'pdf',
+        screen_width: 1280,
+        wait_until: 'networkidle0'
+      },
+      'txt-1': { operation: 'convert', input: 'shot-1', output_format: 'txt' },
+      'export-1': { operation: 'export/url', input: 'txt-1' }
+    };
+    const cr = await fetch(`${API}/v2/jobs`, {
+      method: 'POST',
+      headers: { ...auth, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ tasks })
+    });
+    if (!cr.ok) return '';
+    const job = (await cr.json()).data;
+    let data: any = null;
+    for (let i = 0; i < MAX_POLLS; i++) {
+      await sleep(POLL_MS);
+      const pr = await fetch(`${API}/v2/jobs/${job.id}`, { headers: auth });
+      if (!pr.ok) continue;
+      data = (await pr.json()).data;
+      if (data.status === 'finished' || data.status === 'error') break;
+    }
+    if (!data || data.status !== 'finished') return '';
+    const fileUrl = data.tasks?.find(
+      (t: any) => t.operation === 'export/url' && t.status === 'finished'
+    )?.result?.files?.[0]?.url;
+    if (!fileUrl) return '';
+    const tr = await fetch(fileUrl);
+    if (!tr.ok) return '';
+    return (await tr.text()).trim();
+  } catch {
+    return '';
+  }
+}
+
 // ---- Audio compression (for long-audio transcription) -----------------------
 // Long audio can't be POSTed through a Vercel function (~4.5 MB body cap). So the
 // CLIENT uploads the raw file straight to CloudConvert (presigned form, no cap),

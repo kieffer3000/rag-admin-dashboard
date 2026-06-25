@@ -51,11 +51,14 @@ function ArtifactNodeInner({ id, data, selected, parentId }: NodeProps) {
     }
   }
 
-  // Artifacts created via the upload dialog arrive with a url + content but no
-  // screenshot yet → capture once on mount. (Inline Load captures directly.)
+  // On mount: a URL-only artifact auto-loads its text (so Opine has content even
+  // if you never clicked Load); a loaded-but-unshot artifact grabs its screenshot.
   useEffect(() => {
-    if ((d.url ?? '').trim() && (d.content ?? '').trim() && !d.screenshot) {
-      void captureScreenshot(d.url as string);
+    const u = (d.url ?? '').trim();
+    if (u && !(d.content ?? '').trim()) {
+      void loadUrl(); // fetches text, then captures the screenshot
+    } else if (u && (d.content ?? '').trim() && !d.screenshot) {
+      void captureScreenshot(u);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
