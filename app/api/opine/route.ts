@@ -53,9 +53,11 @@ export async function POST(req: Request) {
     const title = typeof body.artifact.title === 'string' ? body.artifact.title : undefined;
     if (content.trim() || url) {
       let resolved = content;
-      if (!content.trim() && url) {
+      // Thin content (empty, or just a nav snippet) + a URL → load the full page
+      // text server-side. Guards against asking before the node finished loading.
+      if (content.trim().length < 200 && url) {
         const p = await fetchReadablePage(url);
-        if (p.ok && p.text) resolved = p.text;
+        if (p.ok && p.text && p.text.length > content.trim().length) resolved = p.text;
       }
       artifact = { content: resolved, title, url: url || undefined };
     }
