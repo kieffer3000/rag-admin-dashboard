@@ -247,6 +247,15 @@ function BrainNodeInner({ id, data, selected }: NodeProps) {
       : '') +
     (scope.guides.length > 0
       ? ` · ${scope.guides.length} guide${scope.guides.length === 1 ? '' : 's'}`
+      : '') +
+    // Wiring readout: confirms the brain SEES the artifact (and whether it has
+    // text). If you ask and this shows "📄 artifact", you'll get Opine, not a
+    // generic answer; "(empty)" means load/paste its text first.
+    (scope.artifact
+      ? ` · 📄 artifact${(scope.artifact.content?.trim().length ?? 0) >= 200 ? '' : ' (empty)'}`
+      : '') +
+    (scope.references.length > 0
+      ? ` · ${scope.references.length} ref${scope.references.length === 1 ? '' : 's'}`
       : '');
 
   // Auto-grow the composer as text fills it (capped; overflow scrolls).
