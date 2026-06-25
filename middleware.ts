@@ -16,8 +16,15 @@ const ALLOWED_EMAILS = (process.env.ALLOWED_EMAILS ?? 'tiosquareinc@gmail.com')
   .map((s) => s.trim().toLowerCase())
   .filter(Boolean);
 
+// When OFF (default): app is PRIVATE — only ALLOWED_EMAILS get in.
+// When ON: app is OPEN to paying customers — allowlisted OR an active
+// subscription (individual `pro` or org `team` seat) gets in; everyone else is
+// sent to /pricing to subscribe.
+const BILLING_OPEN = process.env.BILLING_OPEN === 'on';
+const PLAN_SLUGS = ['pro', 'team'];
+
 export default clerkMiddleware(async (auth, req) => {
-  const { userId } = await auth();
+  const { userId, has } = await auth();
 
   // Signed-in users hitting auth pages go home.
   if (userId && /^\/sign-(in|up)/.test(req.nextUrl.pathname)) {
@@ -33,10 +40,15 @@ export default clerkMiddleware(async (auth, req) => {
     return NextResponse.redirect(signInUrl, 307);
   }
 
-  // Owner-only lockdown: a signed-in user whose email isn't allowlisted is
-  // blocked (APIs get 403 JSON, pages go to /not-authorized). Fail-open only on
-  // a transient lookup error so the owner is never locked out by a hiccup.
+  // Access gate. Owners (ALLOWED_EMAILS) are always in. Otherwise: PRIVATE mode
+  // blocks everyone else; OPEN mode (BILLING_OPEN) lets active subscribers in and
+  // sends the rest to /pricing. Fail-open only on a transient lookup error so the
+  // owner is never locked out by a hiccup.
   if (userId && !isPublicRoute(req)) {
+    // /pricing must stay reachable for any signed-in user so they can subscribe.
+    if (req.nextUrl.pathname === '/pricing') return;
+
+    const isApi = req.nextUrl.pathname.startsWith('/api');
     try {
       const client = await clerkClient();
       const u = await client.users.getUser(userId);
@@ -45,11 +57,25 @@ export default clerkMiddleware(async (auth, req) => {
         u.emailAddresses[0]?.emailAddress ??
         ''
       ).toLowerCase();
-      if (email && !ALLOWED_EMAILS.includes(email)) {
-        if (req.nextUrl.pathname.startsWith('/api')) {
-          return NextResponse.json({ error: 'Access restricted' }, { status: 403 });
+
+      const isOwner = !!email && ALLOWED_EMAILS.includes(email);
+      if (isOwner) return; // allowlisted → always allowed, never paywalled
+
+      if (!BILLING_OPEN) {
+        // PRIVATE: non-allowlisted users are blocked entirely.
+        if (email) {
+          return isApi
+            ? NextResponse.json({ error: 'Access restricted' }, { status: 403 })
+            : NextResponse.redirect(new URL('/not-authorized', req.url), 307);
         }
-        return NextResponse.redirect(new URL('/not-authorized', req.url), 307);
+      } else {
+        // OPEN: require an active subscription (individual `pro` or org `team`).
+        const subscribed = PLAN_SLUGS.some((slug) => has({ plan: slug }));
+        if (!subscribed) {
+          return isApi
+            ? NextResponse.json({ error: 'Subscription required' }, { status: 402 })
+            : NextResponse.redirect(new URL('/pricing', req.url), 307);
+        }
       }
     } catch {
       /* transient Clerk lookup error → don't lock the owner out */
