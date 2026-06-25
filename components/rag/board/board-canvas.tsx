@@ -1559,14 +1559,15 @@ function BoardCanvasInner() {
         });
       } else {
         used.add(n.id);
-        // Role → column + vertical rank.
+        // Role → column + vertical rank. Sources on the LEFT, brains in the
+        // MIDDLE column, and references + artifacts + robot all on the RIGHT.
         let col: number = COL.left;
         let rank = 2; // generic notes sit under the source stacks on the left
         if (n.type === 'hub') { col = COL.left; rank = 0; }
-        else if (n.type === 'reference') { col = COL.middle; rank = 0; } // top
-        else if (n.type === 'brain') { col = COL.middle; rank = 1; } // middle
-        else if (n.type === 'prompt' || n.type === 'agent') { col = COL.middle; rank = 2; } // robot, bottom
-        else if (n.type === 'artifact') { col = COL.right; rank = 0; }
+        else if (n.type === 'brain') { col = COL.middle; rank = 0; }
+        else if (n.type === 'reference') { col = COL.right; rank = 0; }
+        else if (n.type === 'artifact') { col = COL.right; rank = 1; }
+        else if (n.type === 'prompt' || n.type === 'agent') { col = COL.right; rank = 2; } // robot
         let w = (n.width as number) ?? 240;
         let h = (n.height as number) ?? 150;
         if (n.type === 'hub') {
@@ -1584,26 +1585,15 @@ function BoardCanvasInner() {
     }
     if (blocks.length < 2) return;
 
-    // Column geometry: 3 columns. x = running sum of prior columns' widest block
-    // + a gap. Within a column, blocks lay out top-down. Left/right go by rank;
-    // the MIDDLE column goes: Brain 1 → References → Brains 2..N → Robot, so the
-    // references sit BETWEEN the first and second brain (central with many brains)
-    // rather than stranded above a tall brain stack.
+    // Column geometry: 3 columns (sources left · brains middle · references +
+    // artifacts + robot right). x = running sum of prior columns' widest block +
+    // a gap. Within a column, blocks lay out top-down by rank.
     const COL_GAP = 90;
     const ROW_GAP = 34;
     const TOP = 80;
-    const orderMiddle = (bs: Block[]): Block[] => {
-      const refs = bs.filter((b) => b.rank === 0); // references
-      const brains = bs.filter((b) => b.rank === 1);
-      const robots = bs.filter((b) => b.rank === 2); // the one robot
-      return brains.length <= 1
-        ? [...brains, ...refs, ...robots]
-        : [brains[0], ...refs, ...brains.slice(1), ...robots];
-    };
-    const byCol = [0, 1, 2].map((c) => {
-      const bs = blocks.filter((b) => b.col === c);
-      return c === COL.middle ? orderMiddle(bs) : bs.sort((a, b) => a.rank - b.rank);
-    });
+    const byCol = [0, 1, 2].map((c) =>
+      blocks.filter((b) => b.col === c).sort((a, b) => a.rank - b.rank)
+    );
     const colWidth = byCol.map((bs) =>
       bs.length ? Math.max(...bs.map((b) => b.w)) : 0
     );
