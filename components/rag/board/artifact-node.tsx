@@ -1,21 +1,58 @@
 'use client';
 
-import { memo } from 'react';
+import { memo, useState } from 'react';
 import { Handle, NodeResizer, Position, type NodeProps } from '@xyflow/react';
 import { cn } from '@/lib/utils';
-import { FileText, X } from 'lucide-react';
+import { FileText, X, Download, Loader2, AlertCircle } from 'lucide-react';
 import { useBoard } from '@/lib/rag/board/store';
 import { CHIP_W, CHIP_H, type ArtifactData } from '@/lib/rag/board/types';
 
 /**
  * ARTIFACT (right plug) — the user's own working doc the wired corpus reasons
  * ABOUT in Opine mode (critique / improve / continue). Carried WHOLE into the
- * prompt, NEVER indexed (it must not pollute the knowledge base). Wire it to a
- * brain alongside a corpus → the brain opines on it. One artifact per brain.
+ * prompt, NEVER indexed. Paste text, or type a URL and hit Load — /api/fetch-page
+ * pulls the readable text + the page's hero image (og:image) WITHOUT indexing it.
  */
 function ArtifactNodeInner({ id, data, selected, parentId }: NodeProps) {
   const d = data as ArtifactData;
   const { updateBoardNodeData, removeBoardNode } = useBoard();
+  const [loading, setLoading] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const [imgOk, setImgOk] = useState(true);
+
+  async function loadUrl() {
+    const url = (d.url ?? '').trim();
+    if (!url || loading) return;
+    setErr(null);
+    setLoading(true);
+    try {
+      const res = await fetch('/api/fetch-page', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url })
+      });
+      const j = await res.json();
+      if (!j.ok) {
+        setErr(j.note || 'Could not load that page.');
+        // a paywall/illegible page can still carry a title + hero image
+        if (j.image) {
+          setImgOk(true);
+          updateBoardNodeData(id, { image: j.image });
+        }
+      } else {
+        setImgOk(true);
+        updateBoardNodeData(id, {
+          content: j.text ?? d.content,
+          title: d.title?.trim() ? d.title : j.title ?? '',
+          image: j.image ?? d.image
+        });
+      }
+    } catch {
+      setErr('Could not reach that page.');
+    } finally {
+      setLoading(false);
+    }
+  }
 
   // Docked in a box → compact tile.
   if (parentId) {
@@ -46,15 +83,15 @@ function ArtifactNodeInner({ id, data, selected, parentId }: NodeProps) {
   return (
     <div
       className={cn(
-        'flex h-full min-h-[150px] w-full min-w-[220px] flex-col overflow-hidden rounded-[16px] bg-card',
+        'flex h-full min-h-[210px] w-full min-w-[240px] flex-col overflow-hidden rounded-[16px] bg-card',
         'shadow-[0_1px_3px_rgb(0_0_0/0.05),0_8px_24px_rgb(0_0_0/0.06)]',
         'dark:ring-1 dark:ring-white/[0.07]',
         selected && 'ring-2 ring-indigo-400/60'
       )}
     >
       <NodeResizer
-        minWidth={210}
-        minHeight={150}
+        minWidth={230}
+        minHeight={210}
         isVisible={selected}
         lineClassName="!border-indigo-400/40"
         handleClassName="!h-2.5 !w-2.5 !rounded-full !border !border-white/70 !bg-indigo-500"
@@ -78,22 +115,68 @@ function ArtifactNodeInner({ id, data, selected, parentId }: NodeProps) {
           <X className="h-3.5 w-3.5" />
         </button>
       </div>
+
+      {/* Hero preview (the page's og:image) once a URL is loaded. */}
+      {d.image && imgOk && (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={d.image}
+          alt="Page preview"
+          onError={() => setImgOk(false)}
+          className="h-24 w-full shrink-0 object-cover"
+        />
+      )}
+
       <input
         value={d.title ?? ''}
         onChange={(e) => updateBoardNodeData(id, { title: e.target.value })}
         placeholder="Title (e.g. Best Running Shoes 2026)"
         className="nodrag block w-full shrink-0 border-b border-black/[0.04] bg-transparent px-3 py-1.5 text-[12px] font-semibold outline-none placeholder:font-normal placeholder:text-muted-foreground/40 dark:border-white/[0.06]"
       />
-      <input
-        value={d.url ?? ''}
-        onChange={(e) => updateBoardNodeData(id, { url: e.target.value })}
-        placeholder="URL (optional)"
-        className="nodrag block w-full shrink-0 border-b border-black/[0.04] bg-transparent px-3 py-1 text-[10px] text-muted-foreground outline-none placeholder:text-muted-foreground/40 dark:border-white/[0.06]"
-      />
+
+      {/* URL + Load: fetch readable text + hero image, never indexed. */}
+      <div className="flex shrink-0 items-center gap-1 border-b border-black/[0.04] px-2 py-1 dark:border-white/[0.06]">
+        <input
+          value={d.url ?? ''}
+          onChange={(e) => updateBoardNodeData(id, { url: e.target.value })}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              e.preventDefault();
+              void loadUrl();
+            }
+          }}
+          placeholder="https://… then Load"
+          className="nodrag min-w-0 flex-1 bg-transparent px-1 py-0.5 text-[10px] text-muted-foreground outline-none placeholder:text-muted-foreground/40"
+        />
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            void loadUrl();
+          }}
+          disabled={loading || !(d.url ?? '').trim()}
+          title="Fetch the page text + hero image (not indexed)"
+          className="nodrag flex shrink-0 items-center gap-1 rounded-md bg-indigo-500/10 px-2 py-0.5 text-[10px] font-semibold text-indigo-600 transition-colors hover:bg-indigo-500/20 disabled:opacity-40 dark:text-indigo-400"
+        >
+          {loading ? (
+            <Loader2 className="h-3 w-3 animate-spin" />
+          ) : (
+            <Download className="h-3 w-3" />
+          )}
+          {loading ? 'Loading' : 'Load'}
+        </button>
+      </div>
+
+      {err && (
+        <div className="flex shrink-0 items-start gap-1 bg-amber-500/[0.08] px-3 py-1 text-[10px] leading-snug text-amber-700 dark:text-amber-400">
+          <AlertCircle className="mt-0.5 h-3 w-3 shrink-0" />
+          <span>{err}</span>
+        </div>
+      )}
+
       <textarea
         value={d.content ?? ''}
         onChange={(e) => updateBoardNodeData(id, { content: e.target.value })}
-        placeholder="Paste the article / webpage / draft to critique or improve…"
+        placeholder="Paste the article / webpage / draft to critique or improve — or load a URL above…"
         className="nodrag block min-h-0 w-full flex-1 resize-none bg-transparent px-3 py-2 text-[12px] leading-relaxed outline-none placeholder:text-muted-foreground/40"
       />
       <Handle
