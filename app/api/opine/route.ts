@@ -151,7 +151,7 @@ export async function POST(req: Request) {
   // the artifact text didn't reach the brain (stale client bundle / not wired).
   const subject = (artifact?.title || '').trim() || (artifact?.url ? artifact.url.replace(/^https?:\/\//, '').replace(/\/$/, '') : 'your artifact');
   const esc = (s: string) => s.replace(/[<>&"]/g, (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;' }[c] as string));
-  const banner = `<p style="font-size:11px;opacity:0.55;margin:0 0 10px"><em>🔍 Opine — critiquing <strong>${esc(subject)}</strong> (${(artifact?.content.trim().length ?? 0).toLocaleString()} chars) against ${result.pool.length} corpus excerpts.</em></p>`;
+  const banner = `<p style="font-size:11px;opacity:0.55;margin:0 0 10px"><em>🔗 Working from your artifact <strong>${esc(subject)}</strong> (${(artifact?.content.trim().length ?? 0).toLocaleString()} chars) fused with ${result.pool.length} excerpts from your knowledge base.</em></p>`;
 
   return Response.json({
     answer: banner + result.answer,

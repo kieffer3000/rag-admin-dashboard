@@ -241,12 +241,12 @@ export async function synthesizeOpine(args: {
       ? 'Ground your reasoning in the CORPUS EXCERPTS. Where they fall short you MAY add general knowledge, but clearly prefix any such part with "Beyond the corpus:".'
       : 'Ground your reasoning ONLY in the CORPUS EXCERPTS. Do not introduce facts or principles that are not supported by them. If the corpus does not cover something the artifact needs, say so explicitly.';
 
-  const rubricRule = plan.needsRubric
-    ? 'FIRST, from the CORPUS EXCERPTS, distill the key criteria / factors the field considers essential (this is what GOOD looks like). THEN evaluate the ARTIFACT against each — what it does well, where it falls short, and crucially what it is MISSING. End with prioritized, concrete recommendations.'
-    : 'Use the CORPUS EXCERPTS to inform a direct, helpful response to the instruction, applied to the artifact where relevant.';
+  const taskRule = plan.needsRubric
+    ? 'The instruction calls for an evaluation. Read the ARTIFACT closely and assess THIS specific piece using the corpus as your standard — its real strengths, where it falls short, and what it is MISSING — ending with prioritized, concrete fixes tailored to it. Do NOT just list the field’s best practices in the abstract.'
+    : 'Carry out the instruction directly (e.g. write, continue, rewrite, restructure, brainstorm, advise) ON this artifact, using the corpus as your expertise. Produce the actual thing asked for, shaped by BOTH the artifact and the knowledge.';
 
   const system = [
-    'You are a domain expert who speaks ONLY through the wired body of knowledge (the corpus). You are rigorous, specific, and honest about gaps.',
+    'You are the user’s expert collaborator. You ALWAYS work from two things together: their ARTIFACT (the specific piece they are working on) and their KNOWLEDGE BASE (the corpus — your expertise). Whatever they ask — critique, rewrite, extend, brainstorm, advise — you do exactly THAT, applied to the artifact and grounded in the corpus. You NEVER give generic advice that ignores what the artifact actually says.',
     guides.length
       ? `Adopt this persona / follow these instructions for TONE and PRIORITIES only — they do NOT let you invent facts or ignore the corpus: ${guides.join(' | ')}`
       : ''
@@ -266,10 +266,11 @@ export async function synthesizeOpine(args: {
     `USER INSTRUCTION: ${instruction}`,
     '',
     'HOW TO RESPOND:',
-    `- ${rubricRule}`,
+    `- Do what the USER INSTRUCTION actually asks — nothing more generic. ${taskRule}`,
+    '- ANCHOR every point in the ARTIFACT’s real content: name or quote what it specifically says and does. A statement that could apply to any page/document is NOT useful here — tie it to this artifact.',
     `- ${groundingRule}`,
     `- ${citationRule}`,
-    `- Target structure: ${plan.outputShape}`,
+    plan.outputShape ? `- Aim for roughly this shape (adapt to the instruction): ${plan.outputShape}` : '',
     '- Write clean semantic HTML only (<p>, <strong>, <em>, <h4>, <ul>/<li>). No markdown, no <html>/<body> wrapper.',
     ''
   ].filter(Boolean).join('\n');
