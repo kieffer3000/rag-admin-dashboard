@@ -145,8 +145,16 @@ export async function POST(req: Request) {
         )
       : null;
 
+  // Self-identifying banner so it's UNMISTAKABLE that this is Opine (critiquing
+  // the artifact), not generic corpus Q&A — and proof the page text reached the
+  // engine (the char count). If you ever see a generic answer WITHOUT this line,
+  // the artifact text didn't reach the brain (stale client bundle / not wired).
+  const subject = (artifact?.title || '').trim() || (artifact?.url ? artifact.url.replace(/^https?:\/\//, '').replace(/\/$/, '') : 'your artifact');
+  const esc = (s: string) => s.replace(/[<>&"]/g, (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;' }[c] as string));
+  const banner = `<p style="font-size:11px;opacity:0.55;margin:0 0 10px"><em>🔍 Opine — critiquing <strong>${esc(subject)}</strong> (${(artifact?.content.trim().length ?? 0).toLocaleString()} chars) against ${result.pool.length} corpus excerpts.</em></p>`;
+
   return Response.json({
-    answer: result.answer,
+    answer: banner + result.answer,
     citations: [],
     raw_citations,
     used_sources: null,
