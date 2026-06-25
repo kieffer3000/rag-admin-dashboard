@@ -27,7 +27,7 @@ export function ScopeEdge({
   markerEnd,
   animated
 }: EdgeProps) {
-  const { removeBoardEdge } = useBoard();
+  const { removeBoardEdge, board, setBrainPicker } = useBoard();
   const [hover, setHover] = useState(false);
   const [edgePath, labelX, labelY] = getBezierPath({
     sourceX,
@@ -46,7 +46,17 @@ export function ScopeEdge({
   // The whole wire is ALSO clickable to cut, so you don't even need the button.
   const cutX = labelX;
   const cutY = labelY;
-  const cut = () => removeBoardEdge(id);
+  // Cutting an ARTIFACT's wire can't just orphan it — an artifact must always
+  // belong to a brain. Open the picker to reassign it or delete it.
+  const cut = () => {
+    const edge = board.edges.find((e) => e.id === id);
+    const src = edge && board.nodes.find((n) => n.id === edge.source);
+    if (src?.type === 'artifact') {
+      setBrainPicker({ artId: src.id, afterCutEdge: id });
+      return;
+    }
+    removeBoardEdge(id);
+  };
 
   return (
     <>
@@ -120,7 +130,7 @@ export function ScopeEdge({
           onMouseLeave={() => setHover(false)}
           onClick={(e) => {
             e.stopPropagation();
-            removeBoardEdge(id);
+            cut();
           }}
           style={{
             position: 'absolute',

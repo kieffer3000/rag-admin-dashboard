@@ -62,6 +62,7 @@ import { MindmapNode } from './mindmap-node';
 import { ArtifactNode } from './artifact-node';
 import { ReferenceNode } from './reference-node';
 import { ArtifactDialog } from './artifact-dialog';
+import { ArtifactBrainPicker } from './artifact-brain-picker';
 import { ScopeEdge } from './scope-edge';
 import { BoardToolbar } from './toolbar';
 import { BoardChest, CHEST_MIME } from './board-chest';
@@ -204,7 +205,7 @@ const FILL_MAX_ZOOM = 2;
 const FILL_MIN_ZOOM = 0.2;
 
 function BoardCanvasInner() {
-  const { board, setBoard, setBoardSilent, nextBoardId, busyBrains, saveStatus, saveNow, removeBoardNode, hydratedProject, researchBrainId, setResearchBrainId } =
+  const { board, setBoard, setBoardSilent, nextBoardId, busyBrains, saveStatus, saveNow, removeBoardNode, connectArtifactToBrain, setBrainPicker, hydratedProject, researchBrainId, setResearchBrainId } =
     useBoard();
   const { media, projectMedia, addMedia, updateMedia, deleteMedia, activeProjectId, activeProject } = useRag();
   // Garbage bin (bottom-left): drag a source chip onto it to delete the source
@@ -474,6 +475,12 @@ function BoardCanvasInner() {
         }));
         return;
       }
+      // Artifact: belongs to exactly ONE brain → route through the lifecycle
+      // helper (drops any prior brain for it / prior artifact on this brain).
+      if (src.type === 'artifact') {
+        connectArtifactToBrain(src.id, tgt.id);
+        return;
+      }
       const plug = plugFor(src.type);
       // Only ONE robot (agent/prompt persona) per brain.
       if (plug === 'robot') {
@@ -499,7 +506,7 @@ function BoardCanvasInner() {
         )
       }));
     },
-    [board.nodes, board.edges, setBoard, nextBoardId]
+    [board.nodes, board.edges, setBoard, nextBoardId, connectArtifactToBrain]
   );
 
   /** Edges only flow INTO a brain, from chips / hubs / text nodes. */
@@ -2292,9 +2299,11 @@ function BoardCanvasInner() {
       <ArtifactDialog
         open={artifactDlgOpen}
         onOpenChange={setArtifactDlgOpen}
-        onCreate={(a) =>
+        onCreate={(a) => {
+          const artId = nextBoardId('art');
+          const brains = board.nodes.filter((n) => n.type === 'brain' && !n.parentId);
           pushNode({
-            id: nextBoardId('art'),
+            id: artId,
             type: 'artifact',
             position: centerPos(),
             width: 280,
@@ -2306,9 +2315,18 @@ function BoardCanvasInner() {
               image: a.image,
               screenshot: a.screenshot
             }
-          })
-        }
+          });
+          // An artifact is born connected to a brain. One brain → auto-wire;
+          // several → ask which; none → tell the user to add one.
+          if (brains.length === 1) connectArtifactToBrain(artId, brains[0].id);
+          else if (brains.length > 1) setBrainPicker({ artId });
+          else
+            window.alert(
+              'Add a brain to the board first — an artifact must be connected to a brain.'
+            );
+        }}
       />
+      <ArtifactBrainPicker />
       <BoardChest
         placedIds={placedIds}
         saveStatus={saveStatus}

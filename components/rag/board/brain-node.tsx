@@ -1446,13 +1446,23 @@ function BrainNodeInner({ id, data, selected }: NodeProps) {
           busy && 'animate-pulse'
         )}
       />
-      {/* Right plug — the ARTIFACT the corpus opines on. */}
+      {/* Right plug — the ARTIFACT the corpus opines on. Lights up + pulses when
+          an artifact is connected and detected. */}
       <Handle
         id="artifact"
         type="target"
         position={Position.Right}
-        title="Artifact — wire the working doc you want critiqued (right plug)"
-        className="!h-7 !w-3.5 !-right-1 !rounded-full !border-2 !border-card !bg-indigo-500 !shadow-[inset_0_1px_2px_rgb(0_0_0/0.3),0_1px_4px_rgb(99_102_241/0.5)]"
+        title={
+          scope.artifact
+            ? 'Artifact connected ✓'
+            : 'Artifact — wire the working doc here (right plug)'
+        }
+        className={cn(
+          '!h-7 !w-3.5 !-right-1 !rounded-full !border-2 !border-card !bg-indigo-500',
+          scope.artifact
+            ? '!shadow-[0_0_12px_3px_rgb(99_102_241/0.85)] animate-pulse'
+            : '!shadow-[inset_0_1px_2px_rgb(0_0_0/0.3),0_1px_4px_rgb(99_102_241/0.5)]'
+        )}
       />
       {/* Top plug — REFERENCE exemplars/clues. */}
       <Handle

@@ -183,6 +183,14 @@ interface BoardCtxState {
   removeBoardEdge: (edgeId: string) => void;
   /** Remove a node from the board (+ its edges); re-tiles its box if docked. */
   removeBoardNode: (nodeId: string) => void;
+  /** Wire an artifact to EXACTLY ONE brain (removes any prior brain for this
+   *  artifact AND any prior artifact on that brain — an artifact always belongs
+   *  to a single brain). */
+  connectArtifactToBrain: (artifactId: string, brainId: string) => void;
+  /** Brain-picker request — set when an artifact needs a brain chosen (created
+   *  with multiple brains present, or its wire was cut). null = closed. */
+  brainPicker: { artId: string; afterCutEdge?: string } | null;
+  setBrainPicker: (p: { artId: string; afterCutEdge?: string } | null) => void;
   /** Un-snap a welded stack at the seam ABOVE this piece — this piece and
    *  everything below it detach into their own stack. */
   unsnapPiece: (nodeId: string) => void;
@@ -678,6 +686,37 @@ export function BoardProvider({ children }: { children: ReactNode }) {
     [setBoard]
   );
 
+  // An artifact belongs to exactly one brain. Wiring it to a brain drops any
+  // edge it had to another brain AND any other artifact already on that brain.
+  const [brainPicker, setBrainPicker] = useState<
+    { artId: string; afterCutEdge?: string } | null
+  >(null);
+  const connectArtifactToBrain = useCallback(
+    (artifactId: string, brainId: string) => {
+      setBoard((prev) => {
+        const artIds = new Set(
+          prev.nodes.filter((n) => n.type === 'artifact').map((n) => n.id)
+        );
+        const edges = prev.edges.filter((e) => {
+          // drop this artifact's existing brain link
+          if (e.source === artifactId) return false;
+          // drop any OTHER artifact already wired to this brain (one per brain)
+          if (e.target === brainId && e.source && artIds.has(e.source)) return false;
+          return true;
+        });
+        edges.push({
+          id: `e${++boardIdCounter}`,
+          source: artifactId,
+          target: brainId,
+          type: 'scope',
+          targetHandle: 'artifact'
+        } as BoardEdge);
+        return { ...prev, edges };
+      });
+    },
+    [setBoard]
+  );
+
   const removeBoardNode = useCallback(
     (nodeId: string) => {
       setBoard((prev) => {
@@ -964,6 +1003,9 @@ export function BoardProvider({ children }: { children: ReactNode }) {
     resizeBoardNode,
     removeBoardEdge,
     removeBoardNode,
+    connectArtifactToBrain,
+    brainPicker,
+    setBrainPicker,
     unsnapPiece,
     stashBrain,
     unstashBrain,
