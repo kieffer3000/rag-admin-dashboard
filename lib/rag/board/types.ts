@@ -30,6 +30,9 @@ export interface HubData extends Record<string, unknown> {
 
 export interface BrainData extends Record<string, unknown> {
   name: string;
+  /** Opine citations toggle. When an artifact is wired, ON (default) shows inline
+   *  [n] footnotes; OFF returns clean prose still grounded in the corpus. */
+  citations?: boolean;
 }
 
 export interface TextNodeData extends Record<string, unknown> {
@@ -60,6 +63,24 @@ export interface AgentData extends Record<string, unknown> {
 
 export interface AnnotationData extends Record<string, unknown> {
   text: string;
+}
+
+/** The ARTIFACT (right plug) — the user's own working doc (a draft, an article,
+ *  a webpage) that the wired corpus reasons ABOUT in Opine mode. Carried WHOLE
+ *  into the prompt, NEVER indexed (it must not pollute the knowledge base). One
+ *  artifact per brain. */
+export interface ArtifactData extends Record<string, unknown> {
+  title?: string;
+  url?: string;
+  content: string;
+}
+
+/** A REFERENCE (top plug) — an exemplar to imitate or a clue to consider
+ *  ("make it like this", "weigh these leads"). Guides Opine judgment; carried
+ *  whole, NEVER indexed and never cited. Multiple may be wired. */
+export interface ReferenceData extends Record<string, unknown> {
+  title?: string;
+  content: string;
 }
 
 export type BoardNode = Node<Record<string, any>>;

@@ -29,7 +29,9 @@ import {
   RotateCcw,
   Trash2,
   UploadCloud,
-  Film
+  Film,
+  FileText,
+  BookOpen
 } from 'lucide-react';
 import {
   Dialog,
@@ -78,6 +80,10 @@ export interface BoardToolbarProps {
   onDeleteSource: (id: string) => void;
   onAddBrain: () => void;
   onAddText: () => void;
+  /** Drop an ARTIFACT (right plug) — your working doc the corpus opines ON. */
+  onAddArtifact: () => void;
+  /** Drop a REFERENCE (top plug) — an exemplar/clue to steer Opine judgment. */
+  onAddReference: () => void;
   onAddAnnotation: () => void;
   /** Create a BOX — a named cluster of intelligence holding any media mix. */
   onAddHub: (name: string) => void;
@@ -525,6 +531,19 @@ export function BoardToolbar(p: BoardToolbarProps) {
             desc="A free-floating label to caption a region of the board. Purely visual."
             icon={<StickyNote className="h-[17px] w-[17px]" />}
             onClick={p.onAddAnnotation}
+          />
+          <RailDivider />
+          <RailButton
+            label="Artifact"
+            desc="Your working doc (article, webpage, draft). Wire it to a brain WITH a corpus → the brain opines on it. Carried whole, never indexed."
+            icon={<FileText className="h-[17px] w-[17px]" />}
+            onClick={p.onAddArtifact}
+          />
+          <RailButton
+            label="Reference"
+            desc="An example or template to steer the brain by ('make it like this'). Guides Opine judgment; never indexed, never cited."
+            icon={<BookOpen className="h-[17px] w-[17px]" />}
+            onClick={p.onAddReference}
           />
           <RailDivider />
           <RailButton

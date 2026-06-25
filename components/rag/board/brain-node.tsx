@@ -13,7 +13,7 @@ import { useBoard } from '@/lib/rag/board/store';
 import { useRag } from '@/lib/rag/store';
 import { streamText } from '@/lib/rag/mock-answer';
 import { useScrollStyle } from '@/lib/rag/scroll-style';
-import { askBrain } from '@/lib/rag/board/ask';
+import { askBrain, opineBrain } from '@/lib/rag/board/ask';
 import { startHum, stopHum, playChime } from '@/lib/rag/board/sound';
 import { WavRecorder, transcribeAudio } from '@/lib/rag/board/dictation';
 import { ChatMessage } from '@/lib/rag/types';
@@ -609,20 +609,35 @@ function BrainNodeInner({ id, data, selected }: NodeProps) {
             .replace(/\s+/g, ' ')
             .trim()
         }));
-      const r = await askBrain(
-        q,
-        scope.items,
-        scope.contextTexts,
-        modelId,
-        answerMode,
-        scope.guides,
-        history,
-        (d.summary as string) ?? '',
-        speed,
-        scope.clusterIds,
-        scope.everything,
-        activeProjectId
-      );
+      // OPINE PATH: an artifact (right plug) is wired → the corpus reasons ABOUT
+      // it (critique/assist), grounded + cited per the Citations toggle. Otherwise
+      // the normal RAG Q&A path. Both reuse the same footnote pipeline + UI.
+      const r = scope.artifact
+        ? await opineBrain(
+            q,
+            scope.items,
+            scope.artifact,
+            scope.references,
+            scope.guides,
+            d.citations === false ? 'off' : 'on',
+            answerMode,
+            history,
+            activeProjectId
+          )
+        : await askBrain(
+            q,
+            scope.items,
+            scope.contextTexts,
+            modelId,
+            answerMode,
+            scope.guides,
+            history,
+            (d.summary as string) ?? '',
+            speed,
+            scope.clusterIds,
+            scope.everything,
+            activeProjectId
+          );
       content = r.answer;
       citations = r.citations;
       noMatch = r.noMatch;
@@ -1385,6 +1400,29 @@ function BrainNodeInner({ id, data, selected }: NodeProps) {
               </>
             )}
           </button>
+          {/* Opine citations toggle — only when an artifact (right plug) is wired.
+              ON (default) = inline [n] footnotes; OFF = clean prose, still grounded. */}
+          {scope.artifact && (
+            <button
+              onClick={() =>
+                updateBoardNodeData(id, { citations: d.citations === false })
+              }
+              title={
+                d.citations === false
+                  ? 'Citations OFF — clean prose, still grounded in the corpus. Click to show [n] footnotes.'
+                  : 'Citations ON — inline [n] footnotes to the corpus. Click for clean prose (still grounded).'
+              }
+              className={cn(
+                'nodrag flex items-center gap-1 rounded-full px-2 py-0.5 text-[15px] font-semibold uppercase tracking-wide transition-colors',
+                d.citations === false
+                  ? 'bg-muted text-muted-foreground'
+                  : 'bg-blue-500/10 text-blue-600 dark:text-blue-400'
+              )}
+            >
+              <Quote className="h-[15px] w-[15px]" />
+              {d.citations === false ? 'No cites' : 'Citations'}
+            </button>
+          )}
         </div>
       </div>
 

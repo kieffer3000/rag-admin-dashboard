@@ -529,3 +529,69 @@ export async function askBrain(
     suggestedQuestions
   };
 }
+
+/**
+ * Opine — the wired corpus reasons ABOUT an artifact (the right plug, carried
+ * whole, never indexed) with optional reference samples and robot `guides`.
+ * Calls /api/opine (in-code two-pass Conductor), which returns the SAME response
+ * shape as /api/query — so the entire footnote/citation pipeline below is reused
+ * verbatim. `citations:'off'` makes the server return no raw_citations → clean
+ * prose with no footnotes (still grounded). `grounding` reuses the brain's
+ * cited/hybrid dial.
+ */
+export async function opineBrain(
+  instruction: string,
+  items: MediaItem[],
+  artifact: { title?: string; url?: string; content: string },
+  references: Array<{ title?: string; content: string }>,
+  guides: string[] = [],
+  citations: 'on' | 'off' = 'on',
+  grounding: 'cited' | 'hybrid' = 'cited',
+  history: { role: 'user' | 'assistant'; content: string }[] = [],
+  projectId?: string
+): Promise<AskResult> {
+  const res = await fetch('/api/opine', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      instruction,
+      artifact,
+      references,
+      source_ids: items.map((m) => m.id),
+      guides,
+      citations,
+      grounding,
+      history,
+      project_id: projectId
+    })
+  });
+
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error ?? `Opine failed (${res.status})`);
+  }
+
+  const data = unwrapMakeJson(await res.json());
+  const byId = new Map(items.map((m) => [m.id, m]));
+
+  // Same app-side citation/footnote build as askBrain. When citations are OFF the
+  // server sends no raw_citations → ordered is empty → no footnotes, answer as-is.
+  const ordered = parseRawCitations(data);
+  const inline = footnotesFromInlineCitations(data.answer ?? '', ordered, byId);
+  const used = inline.length
+    ? inline
+    : selectByUsedSources(ordered, data.used_sources, byId);
+  const built = used.length
+    ? used
+    : buildCitationsFallback(ordered, data.answer ?? '', byId);
+  const answer = footnoteAnswer(data.answer ?? '', built, ordered);
+
+  return {
+    answer,
+    citations: built,
+    live: true,
+    noMatch: Boolean(data.noMatch),
+    topScore: typeof data.topScore === 'number' ? data.topScore : null,
+    suggestedQuestions: []
+  };
+}

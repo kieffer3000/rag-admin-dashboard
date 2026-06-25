@@ -138,6 +138,13 @@ export interface BrainScope {
   /** Wired box (hub) ids — so "summarize this box" can use the precomputed
    *  `${boxId}#summary` rollup instead of re-synthesizing every member. */
   clusterIds: string[];
+  /** The wired ARTIFACT (right plug) — the user's working doc the corpus opines
+   *  ON. Carried whole, NEVER indexed. One per brain (last wired wins). null when
+   *  none → the brain behaves as normal RAG Q&A. */
+  artifact: { title?: string; url?: string; content: string } | null;
+  /** Wired REFERENCE samples (top plug) — exemplars/clues that steer Opine
+   *  judgment. Carried whole, never indexed, never cited. */
+  references: Array<{ title?: string; content: string }>;
 }
 
 interface BoardCtxState {
@@ -814,6 +821,9 @@ export function BoardProvider({ children }: { children: ReactNode }) {
       const guides: string[] = [];
       const clusterIds: string[] = [];
       let everything = false;
+      // Opine plugs (carried whole, NEVER indexed).
+      let artifact: { title?: string; url?: string; content: string } | null = null;
+      const references: Array<{ title?: string; content: string }> = [];
 
       const typeOf = (n: BoardNode) =>
         media.find((m) => m.id === n.data.mediaId)?.type;
@@ -863,6 +873,23 @@ export function BoardProvider({ children }: { children: ReactNode }) {
           // answer as guidance, exactly like a prompt piece.
           const t = (src.data.text as string)?.trim();
           if (t) guides.push(t);
+        } else if (src.type === 'artifact') {
+          // RIGHT plug — the subject the corpus opines on. Carried whole, never
+          // indexed. One per brain (last wired wins).
+          const content = (src.data.content as string)?.trim();
+          if (content) {
+            artifact = {
+              title: (src.data.title as string) || undefined,
+              url: (src.data.url as string) || undefined,
+              content
+            };
+          }
+        } else if (src.type === 'reference') {
+          // TOP plug — exemplar/clue. Steers judgment; never a source.
+          const content = (src.data.content as string)?.trim();
+          if (content) {
+            references.push({ title: (src.data.title as string) || undefined, content });
+          }
         }
       }
 
@@ -881,7 +908,9 @@ export function BoardProvider({ children }: { children: ReactNode }) {
         contextTexts: [...new Set(contextTexts)],
         guides: [...new Set(guides)],
         everything,
-        clusterIds: [...new Set(clusterIds)]
+        clusterIds: [...new Set(clusterIds)],
+        artifact,
+        references
       };
     },
     [board, media, projectMedia]

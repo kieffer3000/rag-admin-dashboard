@@ -59,6 +59,8 @@ import { PromptNode } from './prompt-node';
 import { AgentNode } from './agent-node';
 import { AnnotationNode } from './annotation-node';
 import { MindmapNode } from './mindmap-node';
+import { ArtifactNode } from './artifact-node';
+import { ReferenceNode } from './reference-node';
 import { ScopeEdge } from './scope-edge';
 import { BoardToolbar } from './toolbar';
 import { BoardChest, CHEST_MIME } from './board-chest';
@@ -72,22 +74,30 @@ const nodeTypes = {
   prompt: PromptNode,
   agent: AgentNode,
   annotation: AnnotationNode,
-  mindmap: MindmapNode
+  mindmap: MindmapNode,
+  artifact: ArtifactNode,
+  reference: ReferenceNode
 };
 
 const edgeTypes = { scope: ScopeEdge };
 
-const SOURCE_TYPES = new Set(['chip', 'hub', 'textNode', 'prompt', 'agent']);
+const SOURCE_TYPES = new Set([
+  'chip', 'hub', 'textNode', 'prompt', 'agent', 'artifact', 'reference'
+]);
 /** Node types the right-click menu can duplicate (content artifacts — chips
  *  are one-per-source, hubs/brains aren't sensibly cloned). */
-const DUPLICABLE = new Set(['textNode', 'prompt', 'agent', 'annotation', 'mindmap']);
+const DUPLICABLE = new Set([
+  'textNode', 'prompt', 'agent', 'annotation', 'mindmap', 'artifact', 'reference'
+]);
 /** New-id prefix per duplicable node type. */
 const DUP_PREFIX: Record<string, string> = {
   textNode: 'text',
   prompt: 'prompt',
   agent: 'agent',
   annotation: 'ann',
-  mindmap: 'mm'
+  mindmap: 'mm',
+  artifact: 'art',
+  reference: 'ref'
 };
 /** Node types that dock into cluster boxes as compact tiles (non-source
  *  context: notes + prompt/agent guides). */
@@ -2028,6 +2038,26 @@ function BoardCanvasInner() {
             width: 234,
             height: 132,
             data: { text: '' }
+          })
+        }
+        onAddArtifact={() =>
+          pushNode({
+            id: nextBoardId('art'),
+            type: 'artifact',
+            position: centerPos(),
+            width: 260,
+            height: 200,
+            data: { title: '', url: '', content: '' }
+          })
+        }
+        onAddReference={() =>
+          pushNode({
+            id: nextBoardId('ref'),
+            type: 'reference',
+            position: centerPos(),
+            width: 234,
+            height: 170,
+            data: { title: '', content: '' }
           })
         }
         onAddAnnotation={() =>
