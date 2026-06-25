@@ -1,6 +1,6 @@
 'use client';
 
-import { memo, useState } from 'react';
+import { memo, useState, useEffect, useRef } from 'react';
 import { Handle, NodeResizer, Position, type NodeProps } from '@xyflow/react';
 import { cn } from '@/lib/utils';
 import { FileText, X, Download, Loader2, AlertCircle } from 'lucide-react';
@@ -22,7 +22,43 @@ function ArtifactNodeInner({ id, data, selected, parentId }: NodeProps) {
   // Prefer the pixel-accurate screenshot; if it fails to load, fall back to the
   // og:image, then hide entirely.
   const [shotFailed, setShotFailed] = useState(false);
+  const [shotPending, setShotPending] = useState(false);
+  const shotReq = useRef<string | undefined>(undefined);
   const preview = !shotFailed && d.screenshot ? d.screenshot : d.image;
+
+  // Capture a pixel-accurate screenshot via CloudConvert (persisted to Blob),
+  // in the BACKGROUND — the og:image shows instantly and swaps when this lands.
+  async function captureScreenshot(rawUrl: string) {
+    const u = rawUrl.trim();
+    if (!u || shotReq.current === u) return;
+    shotReq.current = u;
+    setShotPending(true);
+    try {
+      const r = await fetch('/api/screenshot', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url: u })
+      });
+      const j = await r.json();
+      if (j.ok && j.url) {
+        setShotFailed(false);
+        updateBoardNodeData(id, { screenshot: j.url });
+      }
+    } catch {
+      /* keep the og:image fallback */
+    } finally {
+      setShotPending(false);
+    }
+  }
+
+  // Artifacts created via the upload dialog arrive with a url + content but no
+  // screenshot yet → capture once on mount. (Inline Load captures directly.)
+  useEffect(() => {
+    if ((d.url ?? '').trim() && (d.content ?? '').trim() && !d.screenshot) {
+      void captureScreenshot(d.url as string);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   async function loadUrl() {
     const url = (d.url ?? '').trim();
@@ -40,17 +76,16 @@ function ArtifactNodeInner({ id, data, selected, parentId }: NodeProps) {
       const j = await res.json();
       if (!j.ok) {
         setErr(j.note || 'Could not load that page.');
-        // a paywall/JS-only page can still carry a screenshot + title
-        if (j.screenshot || j.image) {
-          updateBoardNodeData(id, { screenshot: j.screenshot, image: j.image });
-        }
+        if (j.image) updateBoardNodeData(id, { image: j.image });
+        // a JS-only page still renders in a browser → try the screenshot anyway
+        void captureScreenshot(url);
       } else {
         updateBoardNodeData(id, {
           content: j.text ?? d.content,
           title: d.title?.trim() ? d.title : j.title ?? '',
-          image: j.image ?? d.image,
-          screenshot: j.screenshot ?? d.screenshot
+          image: j.image ?? d.image
         });
+        void captureScreenshot(url);
       }
     } catch {
       setErr('Could not reach that page.');
@@ -121,19 +156,33 @@ function ArtifactNodeInner({ id, data, selected, parentId }: NodeProps) {
         </button>
       </div>
 
-      {/* Page preview — pixel-accurate screenshot (falls back to og:image). */}
-      {preview && imgOk && (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img
-          src={preview}
-          alt="Page preview"
-          onError={() => {
-            // screenshot failed → try the og:image; that failed too → hide.
-            if (!shotFailed && d.screenshot) setShotFailed(true);
-            else setImgOk(false);
-          }}
-          className="h-28 w-full shrink-0 object-cover object-top"
-        />
+      {/* Page preview — pixel-accurate CloudConvert screenshot. Shows the
+          og:image instantly with a "capturing…" badge, then swaps to the
+          screenshot. Falls back to og:image, then a placeholder, then hides. */}
+      {(preview || shotPending) && imgOk && (
+        <div className="relative shrink-0">
+          {preview ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={preview}
+              alt="Page preview"
+              onError={() => {
+                if (!shotFailed && d.screenshot) setShotFailed(true);
+                else setImgOk(false);
+              }}
+              className="h-28 w-full object-cover object-top"
+            />
+          ) : (
+            <div className="flex h-28 w-full items-center justify-center gap-1.5 bg-indigo-500/[0.06] text-[11px] text-muted-foreground">
+              <Loader2 className="h-3 w-3 animate-spin" /> Capturing screenshot…
+            </div>
+          )}
+          {shotPending && !d.screenshot && preview && (
+            <span className="absolute right-1 top-1 flex items-center gap-1 rounded bg-black/55 px-1.5 py-0.5 text-[9px] font-medium text-white">
+              <Loader2 className="h-2.5 w-2.5 animate-spin" /> screenshot…
+            </span>
+          )}
+        </div>
       )}
 
       <input

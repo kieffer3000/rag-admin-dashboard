@@ -96,6 +96,56 @@ export async function extractPdfViaCloudConvert(
   }
 }
 
+// ---- Website screenshot (for the Opine artifact preview) --------------------
+// Pixel-accurate rendered screenshot via CloudConvert's capture-website op
+// (Puppeteer). Returns a TEMPORARY export URL (the caller should persist it,
+// e.g. to Blob, since CloudConvert URLs expire). '' on failure / unconfigured.
+
+export async function captureWebsiteScreenshot(
+  url: string,
+  opts: { width?: number; height?: number } = {}
+): Promise<string> {
+  const key = process.env.CLOUDCONVERT_API_KEY;
+  if (!key) return '';
+  const auth = { Authorization: `Bearer ${key}` };
+  try {
+    const tasks = {
+      'shot-1': {
+        operation: 'capture-website',
+        url,
+        output_format: 'png',
+        screen_width: opts.width ?? 1280,
+        screen_height: opts.height ?? 800,
+        wait_until: 'networkidle0'
+      },
+      'export-1': { operation: 'export/url', input: 'shot-1' }
+    };
+    const cr = await fetch(`${API}/v2/jobs`, {
+      method: 'POST',
+      headers: { ...auth, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ tasks })
+    });
+    if (!cr.ok) return '';
+    const job = (await cr.json()).data;
+    let data: any = null;
+    for (let i = 0; i < MAX_POLLS; i++) {
+      await sleep(POLL_MS);
+      const pr = await fetch(`${API}/v2/jobs/${job.id}`, { headers: auth });
+      if (!pr.ok) continue;
+      data = (await pr.json()).data;
+      if (data.status === 'finished' || data.status === 'error') break;
+    }
+    if (!data || data.status !== 'finished') return '';
+    return (
+      data.tasks?.find(
+        (t: any) => t.operation === 'export/url' && t.status === 'finished'
+      )?.result?.files?.[0]?.url ?? ''
+    );
+  } catch {
+    return '';
+  }
+}
+
 // ---- Audio compression (for long-audio transcription) -----------------------
 // Long audio can't be POSTed through a Vercel function (~4.5 MB body cap). So the
 // CLIENT uploads the raw file straight to CloudConvert (presigned form, no cap),

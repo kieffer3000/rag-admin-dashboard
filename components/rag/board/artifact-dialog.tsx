@@ -92,12 +92,12 @@ export function ArtifactDialog({
           setBusy(false);
           return;
         }
+        // screenshot is captured by the artifact node on mount (CloudConvert).
         onCreate({
           title: title.trim() || j.title,
           url: url.trim(),
           content: j.text ?? '',
-          image: j.image,
-          screenshot: j.screenshot
+          image: j.image
         });
         done();
       } else if (file) {

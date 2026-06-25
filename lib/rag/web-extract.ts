@@ -130,24 +130,12 @@ async function robotsAllows(target: URL): Promise<boolean> {
   }
 }
 
-/** A pixel-accurate RENDERED screenshot of the page (vs og:image, which is just
- *  the social card). Defaults to thum.io (no setup); override with
- *  SCREENSHOT_URL_TEMPLATE (use {url}) to point at Cloudflare Browser Rendering,
- *  urlbox, etc. The returned value is a plain image URL the <img> tag loads. */
-function screenshotUrl(target: URL): string {
-  const tmpl =
-    process.env.SCREENSHOT_URL_TEMPLATE ||
-    'https://image.thum.io/get/width/1280/noanimate/{url}';
-  return tmpl.replace('{url}', target.toString());
-}
-
 export interface FetchedPage {
   ok: boolean;
   title?: string;
   text?: string;
-  /** Pixel-accurate rendered screenshot URL (preferred preview). */
-  screenshot?: string;
-  /** Hero/social image URL (og:image), absolute — fallback preview. */
+  /** Hero/social image URL (og:image), absolute — instant fallback preview while
+   *  the pixel-accurate CloudConvert screenshot renders. */
   image?: string;
   url?: string;
   /** Soft-failure explanation for the user (robots/paywall/illegible). */
@@ -221,18 +209,10 @@ export async function fetchReadablePage(url: string, name?: string): Promise<Fet
       ok: false,
       title,
       image,
-      screenshot: screenshotUrl(target),
       note:
         'I couldn’t pull readable text from that page — it’s likely paywalled, login-gated, or rendered entirely in JavaScript. You can paste the text in instead.'
     };
   }
 
-  return {
-    ok: true,
-    title,
-    text,
-    image,
-    screenshot: screenshotUrl(target),
-    url: target.toString()
-  };
+  return { ok: true, title, text, image, url: target.toString() };
 }
