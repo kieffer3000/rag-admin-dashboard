@@ -3,7 +3,7 @@
 import { memo, useState, useEffect, useRef } from 'react';
 import { Handle, NodeResizer, Position, type NodeProps } from '@xyflow/react';
 import { cn } from '@/lib/utils';
-import { FileText, X, Download, Loader2, AlertCircle } from 'lucide-react';
+import { FileText, X, Download, Loader2, AlertCircle, Check } from 'lucide-react';
 import { useBoard } from '@/lib/rag/board/store';
 import { CHIP_W, CHIP_H, type ArtifactData } from '@/lib/rag/board/types';
 
@@ -25,6 +25,10 @@ function ArtifactNodeInner({ id, data, selected, parentId }: NodeProps) {
   const [shotPending, setShotPending] = useState(false);
   const shotReq = useRef<string | undefined>(undefined);
   const preview = !shotFailed && d.screenshot ? d.screenshot : d.image;
+  // Truth indicator: does the brain actually have text to opine on? (<200 chars
+  // = effectively empty — the same threshold the server uses to re-load.)
+  const contentLen = (d.content ?? '').trim().length;
+  const hasText = contentLen >= 200;
 
   // Capture a pixel-accurate screenshot via CloudConvert (persisted to Blob),
   // in the BACKGROUND — the og:image shows instantly and swaps when this lands.
@@ -144,6 +148,27 @@ function ArtifactNodeInner({ id, data, selected, parentId }: NodeProps) {
         <span className="text-[11px] font-semibold text-indigo-700 dark:text-indigo-400">
           Artifact
         </span>
+        {/* Truth indicator — is there text for the brain to opine on? */}
+        {loading ? (
+          <span className="flex items-center gap-0.5 text-[9px] font-medium text-muted-foreground">
+            <Loader2 className="h-2.5 w-2.5 animate-spin" /> loading…
+          </span>
+        ) : hasText ? (
+          <span
+            title={`${contentLen.toLocaleString()} characters loaded — the brain can opine on this`}
+            className="flex items-center gap-0.5 text-[9px] font-semibold text-emerald-600 dark:text-emerald-400"
+          >
+            <Check className="h-2.5 w-2.5" />
+            {contentLen >= 1000 ? `${Math.round(contentLen / 1000)}k` : contentLen} chars
+          </span>
+        ) : (
+          <span
+            title="No readable text yet — Load a URL or paste text, or the brain will fall back to generic answers"
+            className="flex items-center gap-0.5 text-[9px] font-semibold text-amber-600 dark:text-amber-400"
+          >
+            <AlertCircle className="h-2.5 w-2.5" /> empty
+          </span>
+        )}
         <span className="ml-auto text-[9px] uppercase tracking-wide text-muted-foreground/50">
           not indexed
         </span>
