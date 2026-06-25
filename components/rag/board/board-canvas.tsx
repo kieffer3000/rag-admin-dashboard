@@ -450,10 +450,9 @@ function BoardCanvasInner() {
     [setBoard, setBoardSilent]
   );
 
-  // Each source TYPE has exactly one plug (side) on the brain it may wire into:
+  // Each source TYPE has exactly one plug (side) on the brain it wires into:
   // knowledge/sources → left, artifact → right, references → top, robot → bottom.
-  // Wrong side (or a 2nd robot) is rejected with a message; a connection with no
-  // explicit handle is auto-pinned to the correct side.
+  // A connection auto-routes to its type's plug no matter where it's dropped.
   const plugFor = (type?: string): 'sources' | 'artifact' | 'references' | 'robot' =>
     type === 'artifact'
       ? 'artifact'
@@ -462,13 +461,6 @@ function BoardCanvasInner() {
       : type === 'prompt' || type === 'agent'
       ? 'robot'
       : 'sources';
-  const PLUG_SIDE = { sources: 'left', artifact: 'right', references: 'top', robot: 'bottom' } as const;
-  const PLUG_LABEL = {
-    sources: 'Sources',
-    artifact: 'The artifact',
-    references: 'References',
-    robot: 'The robot'
-  } as const;
 
   const onConnect = useCallback(
     (conn: Connection) => {
@@ -483,13 +475,6 @@ function BoardCanvasInner() {
         return;
       }
       const plug = plugFor(src.type);
-      // Wrong side: the user aimed this piece at a plug that isn't its side.
-      if (conn.targetHandle && conn.targetHandle !== plug) {
-        window.alert(
-          `${PLUG_LABEL[plug]} connect to the ${PLUG_SIDE[plug]} side of the brain only.`
-        );
-        return;
-      }
       // Only ONE robot (agent/prompt persona) per brain.
       if (plug === 'robot') {
         const hasRobot = board.edges.some((e) => {
@@ -502,7 +487,10 @@ function BoardCanvasInner() {
           return;
         }
       }
-      // Good — pin it to the correct plug side.
+      // AUTO-ROUTE: drop the wire ANYWHERE on the brain and it snaps to the
+      // correct plug for the source TYPE (sources→left, artifact→right,
+      // references→top, robot→bottom). No fiddly handle-targeting, so the edge
+      // ALWAYS forms — a near-miss never silently fails to connect.
       setBoard((prev) => ({
         ...prev,
         edges: addEdge(
