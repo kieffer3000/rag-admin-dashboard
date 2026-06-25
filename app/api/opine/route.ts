@@ -51,23 +51,28 @@ export async function POST(req: Request) {
     const content = typeof body.artifact.content === 'string' ? body.artifact.content : '';
     const url = typeof body.artifact.url === 'string' ? body.artifact.url.trim() : '';
     const title = typeof body.artifact.title === 'string' ? body.artifact.title : undefined;
-    if (content.trim() || url) {
-      let resolved = content;
-      // Thin content (empty, or just a nav snippet) + a URL → load the full page
-      // text server-side. Guards against asking before the node finished loading.
-      if (content.trim().length < 200 && url) {
-        const p = await fetchReadablePage(url);
-        if (p.ok && p.text && p.text.length > content.trim().length) resolved = p.text;
-      }
-      artifact = { content: resolved, title, url: url || undefined };
+    let resolved = content;
+    // Thin content (empty, or just a nav snippet) + a URL → load the full page
+    // text server-side. Guards against asking before the node finished loading.
+    if (content.trim().length < 200 && url) {
+      const p = await fetchReadablePage(url);
+      if (p.ok && p.text && p.text.length > content.trim().length) resolved = p.text;
     }
+    artifact = { content: resolved, title, url: url || undefined };
   }
-  // An artifact wired with only a URL we couldn't read → tell the user, don't
-  // silently fall back to generic corpus Q&A.
-  if (artifact && !artifact.content.trim()) {
+
+  // An artifact is wired but there's no usable text to critique → EXPLAIN what's
+  // happening and why, instead of silently answering generically from the corpus.
+  if (artifact && artifact.content.trim().length < 200) {
+    const hadUrl = !!artifact.url;
+    const why = hadUrl
+      ? 'I tried to load that page but couldn’t read its text — it may be paywalled, login-gated, or rendered entirely in JavaScript.'
+      : 'The artifact has no text in it yet.';
+    const how = hadUrl
+      ? 'Click <strong>Load</strong> on the artifact (or paste the page’s text in directly), then ask again.'
+      : 'Paste the text into the artifact, or add a URL and click <strong>Load</strong>, then ask again.';
     return Response.json({
-      answer:
-        '<p>The wired artifact has no readable text yet. Click <strong>Load</strong> on the artifact (or paste its text) and ask again — public pages only; paywalled or login-gated pages can’t be read.</p>',
+      answer: `<p><strong>I can’t critique your page yet — there’s no readable text in the wired artifact.</strong> ${why}</p><p>${how} Until it has text, I can only answer <em>generally</em> from your wired sources — I can’t evaluate <em>your specific page</em>.</p>`,
       citations: [],
       raw_citations: null,
       used_sources: null,

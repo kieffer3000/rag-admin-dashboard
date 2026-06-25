@@ -908,18 +908,14 @@ export function BoardProvider({ children }: { children: ReactNode }) {
           if (t) guides.push(t);
         } else if (src.type === 'artifact') {
           // RIGHT plug — the subject the corpus opines on. Carried whole, never
-          // indexed. One per brain (last wired wins). Counts as present when it
-          // has content OR a URL (the server loads the URL's text if empty), so
-          // Opine engages even before the user clicks Load.
-          const content = (src.data.content as string)?.trim() || '';
-          const url = (src.data.url as string)?.trim() || '';
-          if (content || url) {
-            artifact = {
-              title: (src.data.title as string) || undefined,
-              url: url || undefined,
-              content
-            };
-          }
+          // indexed. Present whenever an artifact node is wired (even empty): the
+          // server loads its URL if needed, and if there's still no text it tells
+          // the user WHY rather than silently giving a generic corpus answer.
+          artifact = {
+            title: (src.data.title as string) || undefined,
+            url: (src.data.url as string)?.trim() || undefined,
+            content: (src.data.content as string)?.trim() || ''
+          };
         } else if (src.type === 'reference') {
           // TOP plug — exemplar/clue. Steers judgment; never a source.
           const content = (src.data.content as string)?.trim();
