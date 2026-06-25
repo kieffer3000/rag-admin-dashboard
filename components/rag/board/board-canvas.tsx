@@ -448,13 +448,68 @@ function BoardCanvasInner() {
     [setBoard, setBoardSilent]
   );
 
+  // Each source TYPE has exactly one plug (side) on the brain it may wire into:
+  // knowledge/sources → left, artifact → right, references → top, robot → bottom.
+  // Wrong side (or a 2nd robot) is rejected with a message; a connection with no
+  // explicit handle is auto-pinned to the correct side.
+  const plugFor = (type?: string): 'sources' | 'artifact' | 'references' | 'robot' =>
+    type === 'artifact'
+      ? 'artifact'
+      : type === 'reference'
+      ? 'references'
+      : type === 'prompt' || type === 'agent'
+      ? 'robot'
+      : 'sources';
+  const PLUG_SIDE = { sources: 'left', artifact: 'right', references: 'top', robot: 'bottom' } as const;
+  const PLUG_LABEL = {
+    sources: 'Sources',
+    artifact: 'The artifact',
+    references: 'References',
+    robot: 'The robot'
+  } as const;
+
   const onConnect = useCallback(
-    (conn: Connection) =>
+    (conn: Connection) => {
+      const src = board.nodes.find((n) => n.id === conn.source);
+      const tgt = board.nodes.find((n) => n.id === conn.target);
+      // Non-brain targets (shouldn't happen) just add as-is.
+      if (!src || !tgt || tgt.type !== 'brain') {
+        setBoard((prev) => ({
+          ...prev,
+          edges: addEdge({ ...conn, id: nextBoardId('e') }, prev.edges as Edge[])
+        }));
+        return;
+      }
+      const plug = plugFor(src.type);
+      // Wrong side: the user aimed this piece at a plug that isn't its side.
+      if (conn.targetHandle && conn.targetHandle !== plug) {
+        window.alert(
+          `${PLUG_LABEL[plug]} connect to the ${PLUG_SIDE[plug]} side of the brain only.`
+        );
+        return;
+      }
+      // Only ONE robot (agent/prompt persona) per brain.
+      if (plug === 'robot') {
+        const hasRobot = board.edges.some((e) => {
+          if (e.target !== tgt.id) return false;
+          const s = board.nodes.find((n) => n.id === e.source);
+          return !!s && (s.type === 'prompt' || s.type === 'agent');
+        });
+        if (hasRobot) {
+          window.alert('Only one robot (agent or prompt) can connect to a brain. Unplug the current one first.');
+          return;
+        }
+      }
+      // Good — pin it to the correct plug side.
       setBoard((prev) => ({
         ...prev,
-        edges: addEdge({ ...conn, id: nextBoardId('e') }, prev.edges as Edge[])
-      })),
-    [setBoard, nextBoardId]
+        edges: addEdge(
+          { ...conn, targetHandle: plug, id: nextBoardId('e') },
+          prev.edges as Edge[]
+        )
+      }));
+    },
+    [board.nodes, board.edges, setBoard, nextBoardId]
   );
 
   /** Edges only flow INTO a brain, from chips / hubs / text nodes. */
@@ -1471,10 +1526,15 @@ function BoardCanvasInner() {
       ids: string[];
       w: number;
       h: number;
-      col: number; // which zone
+      col: number; // 0 left · 1 middle · 2 right
+      rank: number; // vertical sub-order within a column (top → bottom)
       offs: { id: string; dx: number; dy: number }[]; // member offset from block origin
     }
-    const ZONE = { hub: 0, chip: 1, note: 2, brain: 3 } as const;
+    // Role-based columns matching the brain's plug geometry: knowledge/sources on
+    // the LEFT, brains lined up in the MIDDLE (references stacked above, the robot
+    // below), artifacts on the RIGHT.
+    const COL = { left: 0, middle: 1, right: 2 } as const;
+    const NCOL = 3;
     const used = new Set<string>();
     const blocks: Block[] = [];
 
@@ -1489,7 +1549,8 @@ function BoardCanvasInner() {
           ids: members.map((m) => m.id),
           w: CHIP_W,
           h: members.length * STACK_PITCH + CHIP_TAB,
-          col: ZONE.chip,
+          col: COL.left,
+          rank: 1, // under the boxes, with the sources on the left
           offs: members.map((m) => ({
             id: m.id,
             dx: m.position.x - minX,
@@ -1498,12 +1559,14 @@ function BoardCanvasInner() {
         });
       } else {
         used.add(n.id);
-        const col =
-          n.type === 'hub'
-            ? ZONE.hub
-            : n.type === 'brain'
-            ? ZONE.brain
-            : ZONE.note; // textNode, annotation, mindmap
+        // Role → column + vertical rank.
+        let col: number = COL.left;
+        let rank = 2; // generic notes sit under the source stacks on the left
+        if (n.type === 'hub') { col = COL.left; rank = 0; }
+        else if (n.type === 'reference') { col = COL.middle; rank = 0; } // top
+        else if (n.type === 'brain') { col = COL.middle; rank = 1; } // middle
+        else if (n.type === 'prompt' || n.type === 'agent') { col = COL.middle; rank = 2; } // robot, bottom
+        else if (n.type === 'artifact') { col = COL.right; rank = 0; }
         let w = (n.width as number) ?? 240;
         let h = (n.height as number) ?? 150;
         if (n.type === 'hub') {
@@ -1516,30 +1579,33 @@ function BoardCanvasInner() {
           w = sz.width;
           h = sz.height;
         }
-        blocks.push({ ids: [n.id], w, h, col, offs: [{ id: n.id, dx: 0, dy: 0 }] });
+        blocks.push({ ids: [n.id], w, h, col, rank, offs: [{ id: n.id, dx: 0, dy: 0 }] });
       }
     }
     if (blocks.length < 2) return;
 
-    // Column geometry: each zone's x is the running sum of prior zones' widest
-    // block + a gap. Within a zone, blocks stack top-down with a row gap.
+    // Column geometry: 3 columns. x = running sum of prior columns' widest block
+    // + a gap. Within a column, blocks lay out top-down BY RANK (so in the middle:
+    // references → brains → robot).
     const COL_GAP = 90;
     const ROW_GAP = 34;
     const TOP = 80;
-    const byCol = [0, 1, 2, 3].map((c) => blocks.filter((b) => b.col === c));
+    const byCol = [0, 1, 2].map((c) =>
+      blocks.filter((b) => b.col === c).sort((a, b) => a.rank - b.rank)
+    );
     const colWidth = byCol.map((bs) =>
       bs.length ? Math.max(...bs.map((b) => b.w)) : 0
     );
     const colX: number[] = [];
     let runX = 80;
-    for (let c = 0; c < 4; c++) {
+    for (let c = 0; c < NCOL; c++) {
       colX[c] = runX;
       if (colWidth[c] > 0) runX += colWidth[c] + COL_GAP;
     }
 
     // Target origin (top-left) per block, centered within its column.
     const target = new Map<string, { x: number; y: number }>();
-    for (let c = 0; c < 4; c++) {
+    for (let c = 0; c < NCOL; c++) {
       let y = TOP;
       for (const b of byCol[c]) {
         const x = colX[c] + (colWidth[c] - b.w) / 2;

@@ -4,7 +4,6 @@ import { memo, useRef, useState, useEffect, useCallback } from 'react';
 import {
   Handle,
   Position,
-  NodeResizer,
   useReactFlow,
   type NodeProps
 } from '@xyflow/react';
@@ -849,14 +848,8 @@ function BrainNodeInner({ id, data, selected }: NodeProps) {
 
   return (
     <div className="relative h-full w-full">
-      <NodeResizer
-        minWidth={340}
-        minHeight={300}
-        isVisible={selected}
-        lineClassName="!border-accent/30"
-        // Frosted-glass grips, not generic blue squares.
-        handleClassName="!h-3 !w-3 !rounded-full !border !border-white/70 !bg-white/60 !shadow-[0_1px_3px_rgb(0_0_0/0.25)] !backdrop-blur-md"
-      />
+      {/* No free-form resize — the brain has exactly 3 sizes (normal · half ·
+          reading/research), cycled by the size button in the header. */}
       <div
         className={cn(
           'flex h-full w-full flex-col overflow-hidden rounded-[20px] bg-card',
@@ -1432,8 +1425,10 @@ function BrainNodeInner({ id, data, selected }: NodeProps) {
           comes alive when cables are plugged in (soft inner glow) and pulses
           in time with the wires while the brain is thinking. */}
       <Handle
+        id="sources"
         type="target"
         position={Position.Left}
+        title="Knowledge — wire your sources / boxes here (left plug)"
         className={cn(
           '!h-7 !w-3.5 !-left-1 !rounded-full !border-2 !border-card !bg-gradient-to-b !from-accent !to-violet-600',
           wired
@@ -1441,6 +1436,30 @@ function BrainNodeInner({ id, data, selected }: NodeProps) {
             : '!shadow-[inset_0_1px_2px_rgb(0_0_0/0.3),0_1px_4px_hsl(var(--accent)/0.45)]',
           busy && 'animate-pulse'
         )}
+      />
+      {/* Right plug — the ARTIFACT the corpus opines on. */}
+      <Handle
+        id="artifact"
+        type="target"
+        position={Position.Right}
+        title="Artifact — wire the working doc you want critiqued (right plug)"
+        className="!h-7 !w-3.5 !-right-1 !rounded-full !border-2 !border-card !bg-indigo-500 !shadow-[inset_0_1px_2px_rgb(0_0_0/0.3),0_1px_4px_rgb(99_102_241/0.5)]"
+      />
+      {/* Top plug — REFERENCE exemplars/clues. */}
+      <Handle
+        id="references"
+        type="target"
+        position={Position.Top}
+        title="References — wire exemplars or clues to steer judgment (top plug)"
+        className="!h-3.5 !w-7 !-top-1 !rounded-full !border-2 !border-card !bg-violet-500 !shadow-[inset_0_1px_2px_rgb(0_0_0/0.3),0_1px_4px_rgb(139_92_246/0.5)]"
+      />
+      {/* Bottom plug — the ROBOT persona (one only). */}
+      <Handle
+        id="robot"
+        type="target"
+        position={Position.Bottom}
+        title="Robot — wire ONE agent/prompt persona (bottom plug)"
+        className="!h-3.5 !w-7 !-bottom-1 !rounded-full !border-2 !border-card !bg-emerald-500 !shadow-[inset_0_1px_2px_rgb(0_0_0/0.3),0_1px_4px_rgb(16_185_129/0.5)]"
       />
     </div>
   );
