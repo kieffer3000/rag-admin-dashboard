@@ -240,9 +240,11 @@ function ArtifactNodeInner({ id, data, selected, parentId }: NodeProps) {
         placeholder="Paste the article / webpage / draft to critique or improve — or load a URL above…"
         className="nodrag block min-h-0 w-full flex-1 resize-none bg-transparent px-3 py-2 text-[12px] leading-relaxed outline-none placeholder:text-muted-foreground/40"
       />
+      {/* Connector on the LEFT — the artifact sits to the right of the brain, so
+          a left-facing plug runs the wire straight into the brain's right side. */}
       <Handle
         type="source"
-        position={Position.Right}
+        position={Position.Left}
         className="!h-2.5 !w-2.5 !border-2 !border-card !bg-indigo-500"
       />
     </div>
