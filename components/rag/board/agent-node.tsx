@@ -99,7 +99,7 @@ function AgentNodeInner({ id, data, selected, parentId }: NodeProps) {
           point. pointer-events-auto so it's still draggable for wiring. */}
       <Handle
         type="source"
-        position={Position.Right}
+        position={Position.Left}
         className="pointer-events-auto !h-2.5 !w-2.5 !border-2 !border-card !bg-emerald-500"
       />
     </div>

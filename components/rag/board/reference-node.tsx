@@ -88,9 +88,10 @@ function ReferenceNodeInner({ id, data, selected, parentId }: NodeProps) {
         placeholder="Paste the example / template / clue to steer the brain by…"
         className="nodrag block min-h-0 w-full flex-1 resize-none bg-transparent px-3 py-2 text-[12px] leading-relaxed outline-none placeholder:text-muted-foreground/40"
       />
+      {/* Connector on the LEFT — references sit to the right of the brain. */}
       <Handle
         type="source"
-        position={Position.Right}
+        position={Position.Left}
         className="!h-2.5 !w-2.5 !border-2 !border-card !bg-violet-500"
       />
     </div>

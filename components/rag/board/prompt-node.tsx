@@ -134,7 +134,7 @@ function PromptNodeInner({ id, data, selected, parentId }: NodeProps) {
 
       <Handle
         type="source"
-        position={Position.Right}
+        position={Position.Left}
         className="!h-2.5 !w-2.5 !border-2 !border-card !bg-accent"
       />
     </div>
