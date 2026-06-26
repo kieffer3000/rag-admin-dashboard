@@ -399,8 +399,23 @@ function BoardCanvasInner() {
       const el = wrapRef.current;
       if (!el) return;
       const rect = el.getBoundingClientRect();
-      const nodes = getNodes().filter((n) => !n.hidden); // skip collapsed members
-      if (!nodes.length) return;
+      const all = getNodes().filter((n) => !n.hidden); // skip collapsed members
+      if (!all.length) return;
+      // Exclude FAR OUTLIERS (a stray off-canvas box) from the framing — otherwise
+      // one node at an extreme coordinate blows the bounds up and the zoom
+      // collapses to minimum, dumping you in empty space. Frame the bulk; the
+      // outlier is still reachable via the 📦 dock → jump.
+      const med = (vals: number[]) => {
+        const s = [...vals].sort((a, b) => a - b);
+        return s[Math.floor(s.length / 2)] ?? 0;
+      };
+      const mx = med(all.map((n) => n.position.x));
+      const my = med(all.map((n) => n.position.y));
+      const OUTLIER = 14000;
+      const core = all.filter(
+        (n) => Math.abs(n.position.x - mx) < OUTLIER && Math.abs(n.position.y - my) < OUTLIER
+      );
+      const nodes = core.length ? core : all;
       const b = getNodesBounds(nodes);
       if (!b.width || !b.height) return;
       const availW = Math.max(120, rect.width - FILL_INSET.left - FILL_INSET.right);
@@ -421,6 +436,30 @@ function BoardCanvasInner() {
     if (hydratedProject !== activeProjectId) return; // wait for the real board
     if (focusedProject.current === activeProjectId) return;
     focusedProject.current = activeProjectId;
+    // RECOVER strays: a bad recenter can fling a box thousands of px off-canvas
+    // ("unknown space"). Pull any extreme top-level outlier back beside the
+    // content so it's never lost and can't poison the framing.
+    setBoard((prev) => {
+      const top = prev.nodes.filter((n) => !n.parentId);
+      if (top.length < 3) return prev;
+      const med = (vals: number[]) => {
+        const s = [...vals].sort((a, b) => a - b);
+        return s[Math.floor(s.length / 2)] ?? 0;
+      };
+      const mx = med(top.map((n) => n.position.x));
+      const my = med(top.map((n) => n.position.y));
+      const STRAY = 25000;
+      let moved = 0;
+      const nodes = prev.nodes.map((n) => {
+        if (n.parentId) return n;
+        if (Math.abs(n.position.x - mx) > STRAY || Math.abs(n.position.y - my) > STRAY) {
+          moved++;
+          return { ...n, position: { x: mx + 60 + moved * 48, y: my + 60 + moved * 48 } };
+        }
+        return n;
+      });
+      return moved ? { ...prev, nodes } : prev;
+    });
     // delay so React Flow has measured the freshly-loaded nodes before fitting
     const t = setTimeout(() => {
       try {
@@ -428,9 +467,9 @@ function BoardCanvasInner() {
       } catch (e) {
         console.error('focus-on-load fitToFill', e);
       }
-    }, 300);
+    }, 350);
     return () => clearTimeout(t);
-  }, [hydratedProject, activeProjectId, board.nodes, fitToFill]);
+  }, [hydratedProject, activeProjectId, board.nodes, fitToFill, setBoard]);
 
   // RESEARCH MODE is a dedicated full-screen overlay (ResearchOverlay), rendered
   // below — it covers the whole canvas, so nothing here needs to change.
