@@ -70,6 +70,10 @@ interface RagState {
   deleteProject: (id: string) => void;
   addSourcesToProject: (projectId: string, sourceIds: string[]) => void;
   removeSourceFromProject: (projectId: string, sourceId: string) => void;
+  /** Cross-page handoff: the Library sets this (name + source ids) then navigates
+   *  to the Board, which builds a box from it and clears it. */
+  pendingBox: { name: string; sourceIds: string[] } | null;
+  setPendingBox: (b: { name: string; sourceIds: string[] } | null) => void;
 
   // conversations
   newConversation: () => string;
@@ -110,6 +114,9 @@ const now = () => new Date().toISOString();
 export function RagProvider({ children }: { children: ReactNode }) {
   // Start empty — only real, indexed sources appear (no sample/mock files).
   const [media, setMedia] = useState<MediaItem[]>([]);
+  const [pendingBox, setPendingBox] = useState<{ name: string; sourceIds: string[] } | null>(
+    null
+  );
   const [agents, setAgents] = useState<Agent[]>(MOCK_AGENTS);
   // Agents persist to Neon (account-global) with a localStorage cache as the
   // same-device safety net. `agentsHydrated` gates the save effect so the seed
@@ -763,6 +770,8 @@ export function RagProvider({ children }: { children: ReactNode }) {
     updateProject,
     deleteProject,
     addSourcesToProject,
+    pendingBox,
+    setPendingBox,
     removeSourceFromProject,
     newConversation,
     setActiveConversation,

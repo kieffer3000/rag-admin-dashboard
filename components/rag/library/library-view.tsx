@@ -1,6 +1,7 @@
 'use client';
 
 import { useMemo, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { useRag, mediaTypeCounts } from '@/lib/rag/store';
 import { useIsAdmin } from '@/lib/rag/use-role';
 import { MediaType } from '@/lib/rag/types';
@@ -10,29 +11,70 @@ import { UploadDialog } from './upload-dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
-import { Plus, Search, MessagesSquare, X, Library as LibraryIcon } from 'lucide-react';
+import { Plus, Search, MessagesSquare, X, Library as LibraryIcon, Boxes, ArrowDownUp } from 'lucide-react';
 import Link from 'next/link';
 
 type Filter = 'all' | MediaType;
+type Sort = 'date-desc' | 'date-asc' | 'name-asc' | 'name-desc';
+const SORTS: { key: Sort; label: string }[] = [
+  { key: 'date-desc', label: 'Newest first' },
+  { key: 'date-asc', label: 'Oldest first' },
+  { key: 'name-asc', label: 'Name A–Z' },
+  { key: 'name-desc', label: 'Name Z–A' }
+];
 
 export function LibraryView() {
-  const { media, selectedIds, clearSelection, activeProject, addSourcesToProject } =
+  const { media, selectedIds, toggleSelect, selectAll, clearSelection, activeProject, addSourcesToProject, setPendingBox } =
     useRag();
+  const router = useRouter();
   const [filter, setFilter] = useState<Filter>('all');
   const [query, setQuery] = useState('');
+  const [sort, setSort] = useState<Sort>('date-desc');
   const [uploadOpen, setUploadOpen] = useState(false);
+  const [lastIndex, setLastIndex] = useState<number | null>(null);
   const isAdmin = useIsAdmin();
 
   const counts = useMemo(() => mediaTypeCounts(media), [media]);
 
   const visible = useMemo(() => {
-    return media.filter((m) => {
+    const list = media.filter((m) => {
       if (filter !== 'all' && m.type !== filter) return false;
       if (query && !`${m.name} ${m.description}`.toLowerCase().includes(query.toLowerCase()))
         return false;
       return true;
     });
-  }, [media, filter, query]);
+    const byDate = (a: { date?: string }, b: { date?: string }) =>
+      (a.date || '').localeCompare(b.date || '');
+    const byName = (a: { name: string }, b: { name: string }) =>
+      a.name.localeCompare(b.name);
+    const sorted = [...list];
+    if (sort === 'date-desc') sorted.sort((a, b) => byDate(b, a));
+    else if (sort === 'date-asc') sorted.sort(byDate);
+    else if (sort === 'name-asc') sorted.sort(byName);
+    else sorted.sort((a, b) => byName(b, a));
+    return sorted;
+  }, [media, filter, query, sort]);
+
+  // Shift-click selects the range from the last-clicked row.
+  function onRowToggle(index: number, shiftKey: boolean) {
+    if (shiftKey && lastIndex !== null) {
+      const [a, b] = lastIndex < index ? [lastIndex, index] : [index, lastIndex];
+      selectAll(visible.slice(a, b + 1).map((m) => m.id));
+    } else {
+      toggleSelect(visible[index].id);
+    }
+    setLastIndex(index);
+  }
+
+  function sendToBox() {
+    const ids = Array.from(selectedIds);
+    if (!ids.length) return;
+    const name = window.prompt('Name this box:', 'New box');
+    if (name === null) return;
+    setPendingBox({ name: name.trim() || 'New box', sourceIds: ids });
+    clearSelection();
+    router.push('/');
+  }
 
   const tabs: { key: Filter; label: string; count: number }[] = [
     { key: 'all', label: 'All', count: media.length },
@@ -64,6 +106,21 @@ export function LibraryView() {
                 placeholder="Search sources…"
                 className="h-9 w-56 rounded-xl pl-9"
               />
+            </div>
+            <div className="relative">
+              <ArrowDownUp className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+              <select
+                value={sort}
+                onChange={(e) => setSort(e.target.value as Sort)}
+                title="Sort sources"
+                className="h-9 cursor-pointer rounded-xl border border-input bg-card pl-8 pr-2 text-[13px] outline-none focus:ring-2 focus:ring-ring/40"
+              >
+                {SORTS.map((s) => (
+                  <option key={s.key} value={s.key}>
+                    {s.label}
+                  </option>
+                ))}
+              </select>
             </div>
             {isAdmin && (
               <Button variant="accent" className="gap-1.5 rounded-xl" onClick={() => setUploadOpen(true)}>
@@ -122,7 +179,20 @@ export function LibraryView() {
             </Button>
           </div>
         ) : (
-          visible.map((m) => <MediaRow key={m.id} item={m} />)
+          <>
+            <div className="flex items-center justify-between px-1 pb-1 text-[12px] text-muted-foreground">
+              <button
+                onClick={() => selectAll(visible.map((m) => m.id))}
+                className="rounded-md px-2 py-1 font-medium hover:bg-[rgb(var(--hairline)/0.06)] hover:text-foreground"
+              >
+                {visible.every((m) => selectedIds.has(m.id)) ? 'Deselect all' : `Select all ${visible.length}`}
+              </button>
+              <span>Tip: click one, then shift-click another to select the range.</span>
+            </div>
+            {visible.map((m, i) => (
+              <MediaRow key={m.id} item={m} index={i} onToggle={onRowToggle} />
+            ))}
+          </>
         )}
       </div>
 
@@ -133,6 +203,14 @@ export function LibraryView() {
             <span className="pl-1 text-[13px] font-medium">
               {selectedIds.size} selected
             </span>
+            <Button
+              variant="accent"
+              size="sm"
+              className="gap-1.5 rounded-xl"
+              onClick={sendToBox}
+            >
+              <Boxes className="h-4 w-4" /> Send to box
+            </Button>
             <Button
               variant="outline"
               size="sm"

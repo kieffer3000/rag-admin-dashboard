@@ -23,7 +23,15 @@ import {
   ExternalLink
 } from 'lucide-react';
 
-export function MediaRow({ item }: { item: MediaItem }) {
+export function MediaRow({
+  item,
+  index,
+  onToggle
+}: {
+  item: MediaItem;
+  index?: number;
+  onToggle?: (index: number, shiftKey: boolean) => void;
+}) {
   const { selectedIds, toggleSelect, updateMedia, deleteMedia } = useRag();
   const [editing, setEditing] = useState(false);
   const [name, setName] = useState(item.name);
@@ -56,11 +64,20 @@ export function MediaRow({ item }: { item: MediaItem }) {
         checked && 'ring-1 ring-accent/25 dark:ring-accent/40'
       )}
     >
-      <Checkbox
-        checked={checked}
-        onCheckedChange={() => toggleSelect(item.id)}
-        className={cn(item.status !== 'indexed' && 'opacity-50')}
-      />
+      {/* Wrapper captures shiftKey for range-select; the Checkbox just displays. */}
+      <span
+        className="cursor-pointer"
+        onClick={(e) => {
+          e.stopPropagation();
+          if (onToggle && index !== undefined) onToggle(index, e.shiftKey);
+          else toggleSelect(item.id);
+        }}
+      >
+        <Checkbox
+          checked={checked}
+          className={cn('pointer-events-none', item.status !== 'indexed' && 'opacity-50')}
+        />
+      </span>
       <MediaIcon type={item.type} />
 
       <div className="min-w-0 flex-1">

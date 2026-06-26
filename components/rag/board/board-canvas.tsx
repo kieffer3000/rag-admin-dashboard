@@ -207,7 +207,55 @@ const FILL_MIN_ZOOM = 0.2;
 function BoardCanvasInner() {
   const { board, setBoard, setBoardSilent, nextBoardId, busyBrains, saveStatus, saveNow, removeBoardNode, connectArtifactToBrain, setBrainPicker, hydratedProject, researchBrainId, setResearchBrainId } =
     useBoard();
-  const { media, projectMedia, addMedia, updateMedia, deleteMedia, activeProjectId, activeProject } = useRag();
+  const { media, projectMedia, addMedia, updateMedia, deleteMedia, activeProjectId, activeProject, pendingBox, setPendingBox } = useRag();
+
+  // Library → Board handoff: build a box from a selection sent over from the
+  // Library ("Send to box"). Creates the hub + a chip per source (pulling any
+  // existing chip for that source in first), then clears the request.
+  useEffect(() => {
+    if (!pendingBox || !pendingBox.sourceIds.length || !hydratedProject) return;
+    const { name, sourceIds } = pendingBox;
+    const idSet = new Set(sourceIds);
+    setBoard((prev) => {
+      const leftHubs = new Set<string>();
+      let nodes = prev.nodes.filter((n) => {
+        if (n.type === 'chip' && idSet.has(n.data.mediaId as string)) {
+          if (n.parentId) leftHubs.add(n.parentId);
+          return false;
+        }
+        return true;
+      });
+      const hubId = nextBoardId('hub');
+      const size = hubFootprint({ mediaType: 'cluster' }, sourceIds.length);
+      const pos = freePosition(nodes, centerPos(), size.width, size.height);
+      nodes.push({
+        id: hubId,
+        type: 'hub',
+        position: pos,
+        data: { name: name || 'New box', mediaType: 'cluster' }
+      });
+      sourceIds.forEach((mid) =>
+        nodes.push({
+          id: nextBoardId('chip'),
+          type: 'chip',
+          parentId: hubId,
+          position: { x: 0, y: 0 },
+          data: { mediaId: mid }
+        })
+      );
+      for (const h of new Set([hubId, ...leftHubs])) {
+        nodes = retile(nodes, h);
+        nodes = nodes.map((n) =>
+          n.id === h && (n.width != null || n.height != null)
+            ? { ...n, width: undefined, height: undefined }
+            : n
+        );
+      }
+      return { ...prev, nodes };
+    });
+    setPendingBox(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingBox, hydratedProject]);
   // Garbage bin (bottom-left): drag a source chip onto it to delete the source
   // and its Pinecone vectors. `binHot` highlights it while a chip hovers over.
   const binRef = useRef<HTMLButtonElement>(null);
