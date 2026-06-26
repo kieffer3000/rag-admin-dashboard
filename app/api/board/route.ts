@@ -48,6 +48,13 @@ export async function PUT(req: Request) {
   const inc = data as { nodes?: unknown[]; media?: unknown[] };
   const incMedia = Array.isArray(inc.media) ? inc.media.length : 0;
   const incNodes = Array.isArray(inc.nodes) ? inc.nodes.length : 0;
+
+  // OVERFLOW guard: a corrupt media list (a duplication bug once hit 65k) must
+  // never be saved — it freezes the board. Real source counts are in the low
+  // thousands; reject anything absurd so a frozen tab can't re-persist it.
+  if (incMedia > 12000) {
+    return Response.json({ ok: false, rejected: 'media-overflow', incMedia }, { status: 200 });
+  }
   const exRows = await sql`
     SELECT data FROM board_state WHERE scope=${scope} AND project_id=${projectId}`;
   const ex = exRows[0]?.data as { nodes?: unknown[]; media?: unknown[] } | undefined;
