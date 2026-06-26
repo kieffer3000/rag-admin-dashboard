@@ -308,8 +308,9 @@ export function Sidebar() {
         <div className="panel mt-auto rounded-[20px] p-3.5">
           <div className="flex items-center gap-2 text-[13px] font-medium">
             <span className="relative flex h-2 w-2">
-              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-60" />
-              <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500" />
+              {/* steady dot — the old animate-ping ring read as a constant flicker
+                  once the board went quiet. A soft glow keeps the "live" feel. */}
+              <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500 shadow-[0_0_0_3px_rgb(16_185_129/0.15)]" />
             </span>
             Vector store
           </div>
