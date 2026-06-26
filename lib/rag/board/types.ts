@@ -186,6 +186,11 @@ export function hubSize(memberCount: number) {
  *  mostly-off-screen giant). */
 export const HUB_MINI_SIZE = { width: 300, height: 232 } as const;
 
+/** "Expanded" size of a big cluster box — roughly DOUBLE the mini height, then
+ *  scroll. A box never grows into a 1000-tile wall: it's mini (~9 visible) or
+ *  this capped, scrollable preview. */
+export const HUB_EXPANDED_SIZE = { width: 360, height: 470 } as const;
+
 /** A cluster box AUTO-minimizes past this many pieces. The minimized renderer
  *  (a scrollable DOM grid) is fixed-size and always fully on-screen, which is
  *  what makes big boxes manageable. Kept low so the common "import 100 videos
@@ -205,15 +210,36 @@ export function hubCollapsed(
   return memberCount > HUB_AUTOCOLLAPSE_AT;
 }
 
+/** A cluster box renders as the FIXED, scrollable DOM grid (not unbounded canvas
+ *  children) when it is minimized OR simply holds a lot of pieces — so a giant
+ *  box is never a wall of tiles. Small expanded boxes still use the canvas grid
+ *  (draggable chips). */
+export function hubUsesGrid(
+  data: { mediaType?: HubType; collapsed?: boolean },
+  memberCount: number
+): boolean {
+  if (data.mediaType !== 'cluster') return false;
+  return hubCollapsed(data, memberCount) || memberCount > HUB_AUTOCOLLAPSE_AT;
+}
+
+/** Within a grid box, is it in the EXPANDED (2x, scrollable) state vs mini? */
+export function hubGridExpanded(
+  data: { mediaType?: HubType; collapsed?: boolean },
+  memberCount: number
+): boolean {
+  return hubUsesGrid(data, memberCount) && !hubCollapsed(data, memberCount);
+}
+
 /** Real on-canvas size of a hub (collapse-aware). Overlap math + Clean Desk
- *  must reserve the ACTUAL footprint — a minimized box is HUB_MINI_SIZE, not
- *  its expanded grid — or auto-minimized boxes leave huge gaps / mis-overlap. */
+ *  must reserve the ACTUAL footprint — a grid box is HUB_MINI/EXPANDED_SIZE, not
+ *  its full grid — or auto-minimized boxes leave huge gaps / mis-overlap. */
 export function hubFootprint(
   data: { mediaType?: HubType; collapsed?: boolean },
   memberCount: number
 ): { width: number; height: number } {
   if (data.mediaType === 'everything') return { width: 230, height: 86 };
-  if (hubCollapsed(data, memberCount)) return { ...HUB_MINI_SIZE };
+  if (hubUsesGrid(data, memberCount))
+    return hubGridExpanded(data, memberCount) ? { ...HUB_EXPANDED_SIZE } : { ...HUB_MINI_SIZE };
   return hubSize(memberCount);
 }
 

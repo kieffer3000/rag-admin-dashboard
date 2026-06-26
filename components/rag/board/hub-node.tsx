@@ -9,7 +9,10 @@ import {
   hubSlot,
   hubCols,
   hubCollapsed,
+  hubUsesGrid,
+  hubGridExpanded,
   HUB_MINI_SIZE,
+  HUB_EXPANDED_SIZE,
   CHIP_W,
   CHIP_H,
   HUB_HEADER_H,
@@ -84,10 +87,17 @@ function HubNodeInner({ id, data, selected }: NodeProps) {
   // preview instead of an enormous object that flickers / flies away. Big boxes
   // minimize automatically (hubCollapsed); the ▲/▼ button forces either state.
   const collapsed = hubCollapsed(d, memberCount);
+  // Big boxes ALWAYS render the fixed, scrollable DOM grid (never an unbounded
+  // wall of canvas tiles): "normal" = mini (~9 visible), "expanded" = ~2x +
+  // scroll. Only small boxes use the draggable canvas grid.
+  const usesGrid = hubUsesGrid(d, memberCount);
+  const gridExpanded = hubGridExpanded(d, memberCount);
   const size = everything
     ? { width: 230, height: 86 }
-    : collapsed
-    ? { ...HUB_MINI_SIZE } // header + a 3-col scrollable thumbnail preview
+    : usesGrid
+    ? gridExpanded
+      ? { ...HUB_EXPANDED_SIZE }
+      : { ...HUB_MINI_SIZE }
     : hubSize(memberCount);
   const cols = hubCols(memberCount);
   const indexedAll = projectMedia.filter((m) => m.status === 'indexed').length;
@@ -96,7 +106,7 @@ function HubNodeInner({ id, data, selected }: NodeProps) {
   // pieces here" without words. Empty tray shows a full first row; otherwise
   // the trailing open column of the current last row.
   const ghostSlots: number[] =
-    everything || collapsed
+    everything || usesGrid
       ? []
       : memberCount === 0
       ? Array.from({ length: cols }, (_, i) => i)
@@ -128,7 +138,7 @@ function HubNodeInner({ id, data, selected }: NodeProps) {
       {/* the recessed WELL — a distinct cool-gray surface cut into the body,
           with the inset shadow ONLY here so the dish depth is unmistakable.
           Docked chip tiles (RF children) render on top of it. */}
-      {!everything && !collapsed && (
+      {!everything && !usesGrid && (
         <div
           style={{ top: HUB_HEADER_H - 2 }}
           className={cn(
@@ -171,12 +181,12 @@ function HubNodeInner({ id, data, selected }: NodeProps) {
       {/* MINIMIZED: a scrollable thumbnail grid in the box's own DOM (the real
           chips are hidden on the canvas). A 100-item box becomes a tidy 3-wide
           preview you can scroll, instead of eating the screen. */}
-      {cluster && collapsed && (
+      {cluster && usesGrid && (
         <div
           style={{ top: HUB_HEADER_H - 2, bottom: 6 }}
           className="nodrag nowheel scroll-clean absolute inset-x-1.5 overflow-y-auto rounded-[13px] bg-[#eef1f5] p-1.5 dark:bg-black/30"
         >
-          <div className="grid grid-cols-3 gap-1.5">
+          <div className={cn('grid gap-1.5', gridExpanded ? 'grid-cols-4' : 'grid-cols-3')}>
             {members.map(({ nodeId, nodeType, mediaId }) => {
               const m = mediaId ? media.find((x) => x.id === mediaId) : undefined;
               const isSource = nodeType === 'chip';

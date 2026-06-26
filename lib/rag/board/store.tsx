@@ -21,10 +21,10 @@ import {
   BoardNode,
   BoardEdge,
   BoardState,
-  hubSize,
   hubSlot,
   hubCols,
   hubCollapsed,
+  hubFootprint,
   HUB_MINI_SIZE,
   CHIP_W,
   CHIP_H,
@@ -616,10 +616,10 @@ export function BoardProvider({ children }: { children: ReactNode }) {
         ).length;
         const isCollapsed = hubCollapsed(hub.data, members);
         const willCollapse = !isCollapsed;
-        const expanded = hubSize(members);
-        const mini = { ...HUB_MINI_SIZE };
-        const from = isCollapsed ? mini : expanded;
-        const to = willCollapse ? mini : expanded;
+        // Use the grid-aware footprint (mini / 2x-expanded / small-canvas) so a
+        // big box recenters by the RIGHT delta, not the old unbounded grid size.
+        const from = hubFootprint(hub.data, members);
+        const to = hubFootprint({ ...hub.data, collapsed: willCollapse }, members);
         const position = {
           x: hub.position.x + (from.width - to.width) / 2,
           y: hub.position.y + (from.height - to.height) / 2

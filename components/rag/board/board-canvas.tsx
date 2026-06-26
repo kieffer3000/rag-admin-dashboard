@@ -38,7 +38,7 @@ import {
   BoardNode,
   hubSlot,
   hubCols,
-  hubCollapsed,
+  hubUsesGrid,
   hubFootprint,
   stackOf,
   CHIP_W,
@@ -1450,18 +1450,21 @@ function BoardCanvasInner() {
       )
         memberCount.set(n.parentId, (memberCount.get(n.parentId) ?? 0) + 1);
     }
-    const collapsed = new Set(
+    // Hide a box's canvas chips whenever the box renders as the DOM grid (mini OR
+    // big-expanded) — the grid draws its own thumbnails, so the real chips would
+    // otherwise spill across the canvas.
+    const gridded = new Set(
       board.nodes
         .filter(
           (n) =>
             n.type === 'hub' &&
-            hubCollapsed(n.data, memberCount.get(n.id) ?? 0)
+            hubUsesGrid(n.data, memberCount.get(n.id) ?? 0)
         )
         .map((n) => n.id)
     );
-    if (!collapsed.size) return board.nodes;
+    if (!gridded.size) return board.nodes;
     return board.nodes.map((n) =>
-      n.parentId && collapsed.has(n.parentId) ? { ...n, hidden: true } : n
+      n.parentId && gridded.has(n.parentId) ? { ...n, hidden: true } : n
     );
   }, [board.nodes]);
 
