@@ -432,44 +432,27 @@ function BoardCanvasInner() {
     [getNodes, setViewport]
   );
 
+  // Holds the latest cleanDesk (defined later in the component) so the load
+  // effect — which appears before it — can call it without a TDZ reference.
+  const cleanDeskRef = useRef<(() => void) | null>(null);
   useEffect(() => {
     if (hydratedProject !== activeProjectId) return; // wait for the real board
     if (focusedProject.current === activeProjectId) return;
     focusedProject.current = activeProjectId;
-    // RECOVER strays: a bad recenter can fling a box thousands of px off-canvas
-    // ("unknown space"). Pull any extreme top-level outlier back beside the
-    // content so it's never lost and can't poison the framing.
-    setBoard((prev) => {
-      const top = prev.nodes.filter((n) => !n.parentId);
-      if (top.length < 3) return prev;
-      const med = (vals: number[]) => {
-        const s = [...vals].sort((a, b) => a - b);
-        return s[Math.floor(s.length / 2)] ?? 0;
-      };
-      const mx = med(top.map((n) => n.position.x));
-      const my = med(top.map((n) => n.position.y));
-      const STRAY = 25000;
-      let moved = 0;
-      const nodes = prev.nodes.map((n) => {
-        if (n.parentId) return n;
-        if (Math.abs(n.position.x - mx) > STRAY || Math.abs(n.position.y - my) > STRAY) {
-          moved++;
-          return { ...n, position: { x: mx + 60 + moved * 48, y: my + 60 + moved * 48 } };
-        }
-        return n;
-      });
-      return moved ? { ...prev, nodes } : prev;
-    });
-    // delay so React Flow has measured the freshly-loaded nodes before fitting
+    // On load, LINE EVERYTHING UP: each brain's wired boxes/sources snap into its
+    // own row-band (this also pulls any stray off-canvas box back into the
+    // layout), then frame the result. Falls back to a plain fit if there's
+    // nothing to tidy.
     const t = setTimeout(() => {
       try {
-        fitToFill(600);
+        if (cleanDeskRef.current) cleanDeskRef.current();
+        else fitToFill(600);
       } catch (e) {
-        console.error('focus-on-load fitToFill', e);
+        console.error('focus-on-load', e);
       }
-    }, 350);
+    }, 400);
     return () => clearTimeout(t);
-  }, [hydratedProject, activeProjectId, board.nodes, fitToFill, setBoard]);
+  }, [hydratedProject, activeProjectId, board.nodes, fitToFill]);
 
   // RESEARCH MODE is a dedicated full-screen overlay (ResearchOverlay), rendered
   // below — it covers the whole canvas, so nothing here needs to change.
@@ -1789,6 +1772,8 @@ function BoardCanvasInner() {
     };
     requestAnimationFrame(tick);
   }, [board, media, setBoard, fitView]);
+  // Expose the latest cleanDesk to the (earlier) load-focus effect.
+  cleanDeskRef.current = cleanDesk;
 
   // Cursor spotlight: a faint radial light that follows the pointer, painted
   // BEHIND the dot grid (ReactFlow's pane is transparent). Direct style

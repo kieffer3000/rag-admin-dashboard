@@ -1,7 +1,7 @@
 'use client';
 
 import { memo, useMemo, useRef, useState } from 'react';
-import { Handle, Position, useStore, type NodeProps } from '@xyflow/react';
+import { Handle, Position, type NodeProps } from '@xyflow/react';
 import { cn } from '@/lib/utils';
 import { MEDIA_TYPES } from '@/lib/rag/media-config';
 import {
@@ -46,7 +46,7 @@ import { useBoard } from '@/lib/rag/board/store';
 function HubNodeInner({ id, data, selected }: NodeProps) {
   const d = data as HubData;
   const { projectMedia, media, deleteMedia } = useRag();
-  const { updateBoardNodeData, removeBoardNode, toggleHubCollapse, undockMember, stashBox } =
+  const { board, updateBoardNodeData, removeBoardNode, toggleHubCollapse, undockMember, stashBox } =
     useBoard();
   const [editing, setEditing] = useState(false);
   // Grid virtualization: render ONLY the rows in view (a 3000-tile box would
@@ -55,22 +55,23 @@ function HubNodeInner({ id, data, selected }: NodeProps) {
   // O(1) media lookups for tiles (avoid an O(n) find per tile across 1000s).
   const mediaById = useMemo(() => new Map(media.map((m) => [m.id, m])), [media]);
 
-  // Docked members (joined node-id~type~mediaId keeps the selector's equality
-  // check cheap while giving the per-tile actions the real NODE id to act on).
-  const memberKey = useStore((s) =>
-    d.mediaType === 'everything'
-      ? ''
-      : s.nodes
-          .filter((n) => n.parentId === id)
-          .map((n) => `${n.id}~${n.type ?? ''}~${(n.data as any).mediaId ?? ''}`)
-          .join('|')
+  // Docked members from the BOARD store (not React Flow's) so the hub re-renders
+  // only when nodes actually change — NOT on every viewport pan/zoom frame, which
+  // (with thousands of members) was rebuilding a huge string per frame and made
+  // the canvas flicker during the load fit animation.
+  const members = useMemo(
+    () =>
+      d.mediaType === 'everything'
+        ? ([] as { nodeId: string; nodeType: string; mediaId: string }[])
+        : board.nodes
+            .filter((n) => n.parentId === id)
+            .map((n) => ({
+              nodeId: n.id,
+              nodeType: (n.type ?? '') as string,
+              mediaId: ((n.data as { mediaId?: string }).mediaId ?? '') as string
+            })),
+    [board.nodes, id, d.mediaType]
   );
-  const members = memberKey
-    ? memberKey.split('|').map((p) => {
-        const [nodeId, nodeType, mediaId] = p.split('~');
-        return { nodeId, nodeType, mediaId };
-      })
-    : [];
   const memberIds = members.map((m) => m.mediaId).filter(Boolean);
   const memberCount = members.length;
   /** Distinct media types inside — the tray's "family portrait" dots. */
