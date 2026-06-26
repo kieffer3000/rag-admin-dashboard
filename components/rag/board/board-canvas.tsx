@@ -2327,6 +2327,10 @@ function BoardCanvasInner() {
         }}
       />
       <ArtifactBrainPicker />
+      {/* Build stamp — confirm you're on the latest code at a glance. */}
+      <div className="pointer-events-none absolute bottom-1.5 right-2 z-50 rounded bg-black/55 px-2 py-0.5 font-mono text-[10px] text-amber-300/90">
+        build {process.env.NEXT_PUBLIC_BUILD ?? 'dev'}
+      </div>
       <BoardChest
         placedIds={placedIds}
         saveStatus={saveStatus}
