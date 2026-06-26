@@ -623,7 +623,7 @@ function BrainNodeInner({ id, data, selected }: NodeProps) {
       // OPINE PATH: an artifact (right plug) is wired → the corpus reasons ABOUT
       // it (critique/assist), grounded + cited per the Citations toggle. Otherwise
       // the normal RAG Q&A path. Both reuse the same footnote pipeline + UI.
-      const r = dbgHasArtifact
+      const r = scope.artifact
         ? await opineBrain(
             q,
             scope.items,
