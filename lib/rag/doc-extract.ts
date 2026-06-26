@@ -84,19 +84,28 @@ export async function extractDocumentText(
     lowerName.endsWith('.docx');
   const isEpub = mime === 'application/epub+zip' || lowerName.endsWith('.epub');
   const isTxt = mime.startsWith('text/') || lowerName.endsWith('.txt') || lowerName.endsWith('.md');
-  if (!isPdf && !isDocx && !isEpub && !isTxt) {
-    return { ok: false, note: `Unsupported file type ${mime || lowerName}. Use PDF, DOCX, EPUB, TXT, or MD.` };
+  const isAudio =
+    mime.startsWith('audio/') || /\.(mp3|wav|m4a|aac|ogg|flac|webm)$/.test(lowerName);
+  if (!isPdf && !isDocx && !isEpub && !isTxt && !isAudio) {
+    return { ok: false, note: `Unsupported file type ${mime || lowerName}. Use PDF, DOCX, EPUB, TXT, MD, or an audio file.` };
   }
 
   const buf = Buffer.from(await file.arrayBuffer());
   let text = '';
   try {
-    if (isPdf) text = await extractPdf(new Uint8Array(buf), ocr);
+    if (isAudio) {
+      // Audio → transcript via Gemini (multimodal), so you can summarize/organize
+      // an interview as an artifact without indexing it.
+      const { transcribeAudio } = await import('@/lib/rag/generate');
+      text = await transcribeAudio(new Uint8Array(buf), mime || 'audio/mpeg');
+    } else if (isPdf) text = await extractPdf(new Uint8Array(buf), ocr);
     else if (isDocx) text = await extractDocx(buf);
     else if (isEpub) text = await extractEpub(buf);
     else text = buf.toString('utf-8');
   } catch (e: any) {
-    return { ok: false, note: `Could not read the document: ${e?.message ?? 'parse error'}` };
+    return { ok: false, note: isAudio
+      ? `Could not transcribe the audio: ${e?.message ?? 'error'} (very large files may exceed the inline limit).`
+      : `Could not read the document: ${e?.message ?? 'parse error'}` };
   }
 
   text = text.trim();

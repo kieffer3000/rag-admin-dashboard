@@ -49,7 +49,7 @@ export function ArtifactDialog({
   const [title, setTitle] = useState('');
   const [url, setUrl] = useState('');
   const [body, setBody] = useState('');
-  const [file, setFile] = useState<File | null>(null);
+  const [files, setFiles] = useState<File[]>([]);
   const [ocr, setOcr] = useState(false);
   const [dragOver, setDragOver] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -61,14 +61,21 @@ export function ArtifactDialog({
     setTitle('');
     setUrl('');
     setBody('');
-    setFile(null);
+    setFiles([]);
     setOcr(false);
     setErr(null);
     setBusy(false);
   }
 
+  function addFiles(list: FileList | null) {
+    if (!list || !list.length) return;
+    const incoming = Array.from(list);
+    setFiles((prev) => [...prev, ...incoming]);
+    if (!title && incoming[0]) setTitle(incoming[0].name.replace(/\.[^.]+$/, ''));
+  }
+
   const canSubmit =
-    (method === 'file' && !!file) ||
+    (method === 'file' && files.length > 0) ||
     (method === 'website' && url.trim().length > 0) ||
     (method === 'text' && body.trim().length > 0);
 
@@ -100,20 +107,32 @@ export function ArtifactDialog({
           image: j.image
         });
         done();
-      } else if (file) {
-        const fd = new FormData();
-        fd.append('file', file);
-        if (ocr) fd.append('ocr', 'true');
-        const res = await fetch('/api/extract-file', { method: 'POST', body: fd });
-        const j = await res.json();
-        if (!j.ok) {
-          setErr(j.note || 'Could not read that file.');
-          setBusy(false);
-          return;
+      } else if (files.length) {
+        // Extract every file (audio is transcribed) and fuse into ONE artifact —
+        // multiple files become a single working doc the brain reasons over.
+        const parts: string[] = [];
+        for (const f of files) {
+          const fd = new FormData();
+          fd.append('file', f);
+          if (ocr) fd.append('ocr', 'true');
+          const res = await fetch('/api/extract-file', { method: 'POST', body: fd });
+          const j = await res.json();
+          if (!j.ok) {
+            setErr(`${f.name}: ${j.note || 'could not read this file.'}`);
+            setBusy(false);
+            return;
+          }
+          parts.push(
+            files.length > 1 ? `--- FILE: ${f.name} ---\n\n${j.text ?? ''}` : (j.text ?? '')
+          );
         }
         onCreate({
-          title: title.trim() || file.name.replace(/\.[^.]+$/, ''),
-          content: j.text ?? ''
+          title:
+            title.trim() ||
+            (files.length === 1
+              ? files[0].name.replace(/\.[^.]+$/, '')
+              : `${files.length} files`),
+          content: parts.join('\n\n')
         });
         done();
       }
@@ -185,11 +204,7 @@ export function ArtifactDialog({
                 onDrop={(e) => {
                   e.preventDefault();
                   setDragOver(false);
-                  const f = e.dataTransfer.files?.[0];
-                  if (f) {
-                    setFile(f);
-                    if (!title) setTitle(f.name.replace(/\.[^.]+$/, ''));
-                  }
+                  addFiles(e.dataTransfer.files);
                 }}
                 onClick={() => fileRef.current?.click()}
                 className={cn(
@@ -202,30 +217,44 @@ export function ArtifactDialog({
                 <input
                   ref={fileRef}
                   type="file"
-                  accept=".pdf,.docx,.epub,.txt,.md,text/*,application/pdf"
+                  multiple
+                  accept=".pdf,.docx,.epub,.txt,.md,.mp3,.wav,.m4a,.aac,.ogg,.flac,.webm,text/*,application/pdf,audio/*"
                   className="hidden"
                   onChange={(e) => {
-                    const f = e.target.files?.[0];
-                    if (f) {
-                      setFile(f);
-                      if (!title) setTitle(f.name.replace(/\.[^.]+$/, ''));
-                    }
+                    addFiles(e.target.files);
                     e.target.value = '';
                   }}
                 />
                 <UploadCloud className="mb-2 h-7 w-7 text-muted-foreground" />
-                <p className="text-sm font-medium">Drop a file or click to browse</p>
-                <p className="mt-1 text-[11px] text-muted-foreground">PDF · DOCX · EPUB · TXT · MD</p>
+                <p className="text-sm font-medium">Drop files or click to browse</p>
+                <p className="mt-1 text-[11px] text-muted-foreground">
+                  PDF · DOCX · EPUB · TXT · MD · audio (mp3/wav/m4a) · multiple OK
+                </p>
               </div>
-              {file && (
-                <div className="flex items-center justify-between gap-2 rounded-lg bg-indigo-500/10 px-3 py-1.5 text-[12px] font-medium text-indigo-600 dark:text-indigo-400">
-                  <span className="flex min-w-0 items-center gap-1.5">
-                    <FileText className="h-3.5 w-3.5 shrink-0" />
-                    <span className="truncate">{file.name}</span>
-                  </span>
-                  <button onClick={() => setFile(null)} className="opacity-70 hover:opacity-100">
-                    <X className="h-3.5 w-3.5" />
-                  </button>
+              {files.length > 0 && (
+                <div className="space-y-1">
+                  {files.map((f, i) => (
+                    <div
+                      key={`${f.name}-${i}`}
+                      className="flex items-center justify-between gap-2 rounded-lg bg-indigo-500/10 px-3 py-1.5 text-[12px] font-medium text-indigo-600 dark:text-indigo-400"
+                    >
+                      <span className="flex min-w-0 items-center gap-1.5">
+                        <FileText className="h-3.5 w-3.5 shrink-0" />
+                        <span className="truncate">{f.name}</span>
+                        {/^audio\//.test(f.type) && (
+                          <span className="shrink-0 rounded-full bg-indigo-500/20 px-1.5 text-[10px]">
+                            transcribe
+                          </span>
+                        )}
+                      </span>
+                      <button
+                        onClick={() => setFiles((prev) => prev.filter((_, j) => j !== i))}
+                        className="opacity-70 hover:opacity-100"
+                      >
+                        <X className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  ))}
                 </div>
               )}
               <label className="flex cursor-pointer select-none items-start gap-2 text-[12px] text-muted-foreground">

@@ -151,6 +151,64 @@ export async function generateText(prompt: string, opts: GenerateOpts = {}): Pro
   throw new Error(`generateText failed after ${MAX_RETRY} attempts: ${lastErr}`);
 }
 
+/**
+ * Transcribe an audio file with Gemini (natively multimodal — no Whisper). The
+ * bytes ride inline (base64) in one request, so this suits short-to-medium clips
+ * (Gemini's inline payload cap is ~20MB / ~roughly an hour of compressed audio);
+ * bigger files should go through the resumable File API. Returns clean transcript
+ * text with speaker turns where distinguishable.
+ */
+export async function transcribeAudio(bytes: Uint8Array, mimeType: string): Promise<string> {
+  const model = process.env.RAG_TRANSCRIBE_MODEL ?? 'gemini-2.5-flash';
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey()}`;
+  const data = Buffer.from(bytes).toString('base64');
+  const body = {
+    contents: [
+      {
+        role: 'user',
+        parts: [
+          { inlineData: { mimeType: mimeType || 'audio/mpeg', data } },
+          {
+            text: 'Transcribe this audio in full as clean, readable text. Where distinct speakers are distinguishable, label turns (e.g. "Speaker 1:"). Output ONLY the transcript — no preamble, no commentary.'
+          }
+        ]
+      }
+    ],
+    generationConfig: { temperature: 0, maxOutputTokens: 8192 }
+  };
+  let lastErr = '';
+  for (let attempt = 0; attempt < MAX_RETRY; attempt++) {
+    try {
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+      });
+      if (res.ok) {
+        const j = await res.json();
+        const parts = j?.candidates?.[0]?.content?.parts ?? [];
+        const text = parts
+          .map((p: { text?: string }) => (typeof p.text === 'string' ? p.text : ''))
+          .join('')
+          .trim();
+        if (text) return text;
+        lastErr = `empty candidate (finish: ${j?.candidates?.[0]?.finishReason ?? '?'})`;
+      } else {
+        lastErr = `HTTP ${res.status}`;
+        if (res.status !== 429 && res.status < 500) {
+          throw new Error(`${lastErr}: ${(await res.text()).slice(0, 200)}`);
+        }
+      }
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : 'fetch error';
+      lastErr = msg;
+      if (!/HTTP (429|5\d\d)/.test(msg) && !/fetch|network|timeout/i.test(msg)) throw e;
+    }
+    await sleep(500 * 2 ** attempt);
+  }
+  throw new Error(`transcribeAudio failed after ${MAX_RETRY} attempts: ${lastErr}`);
+}
+
 /** Parse a JSON object out of model output, tolerating ```json fences / stray prose. */
 export function parseJsonObject<T = Record<string, unknown>>(raw: string): T | null {
   if (!raw) return null;
