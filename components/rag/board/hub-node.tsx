@@ -1,6 +1,6 @@
 'use client';
 
-import { memo, useState } from 'react';
+import { memo, useMemo, useRef, useState } from 'react';
 import { Handle, Position, useStore, type NodeProps } from '@xyflow/react';
 import { cn } from '@/lib/utils';
 import { MEDIA_TYPES } from '@/lib/rag/media-config';
@@ -49,6 +49,11 @@ function HubNodeInner({ id, data, selected }: NodeProps) {
   const { updateBoardNodeData, removeBoardNode, toggleHubCollapse, undockMember, stashBox } =
     useBoard();
   const [editing, setEditing] = useState(false);
+  // Grid virtualization: render ONLY the rows in view (a 3000-tile box would
+  // otherwise mount 3000 <img> nodes at once and hang the tab).
+  const [scrollTop, setScrollTop] = useState(0);
+  // O(1) media lookups for tiles (avoid an O(n) find per tile across 1000s).
+  const mediaById = useMemo(() => new Map(media.map((m) => [m.id, m])), [media]);
 
   // Docked members (joined node-id~type~mediaId keeps the selector's equality
   // check cheap while giving the per-tile actions the real NODE id to act on).
@@ -72,7 +77,7 @@ function HubNodeInner({ id, data, selected }: NodeProps) {
   const memberTypes = [
     ...new Set(
       memberIds
-        .map((mid) => media.find((m) => m.id === mid)?.type)
+        .map((mid) => mediaById.get(mid)?.type)
         .filter(Boolean) as MediaType[]
     )
   ];
@@ -100,6 +105,25 @@ function HubNodeInner({ id, data, selected }: NodeProps) {
       : { ...HUB_MINI_SIZE }
     : hubSize(memberCount);
   const cols = hubCols(memberCount);
+
+  // Virtualized DOM-grid window — fixed-height tiles make the math deterministic.
+  // Only the rows intersecting the viewport (+ a small buffer) are rendered.
+  const gridCols = gridExpanded ? 4 : 3;
+  const GRID_TILE_H = 44;
+  const GRID_GAP = 6;
+  const gridRowH = GRID_TILE_H + GRID_GAP;
+  const gridTotalRows = Math.ceil(members.length / gridCols);
+  const gridViewportH =
+    (gridExpanded ? HUB_EXPANDED_SIZE.height : HUB_MINI_SIZE.height) - HUB_HEADER_H - 16;
+  const gridFirstRow = Math.max(0, Math.floor(scrollTop / gridRowH) - 2);
+  const gridLastRow = Math.min(
+    gridTotalRows,
+    Math.ceil((scrollTop + gridViewportH) / gridRowH) + 2
+  );
+  const gridWindow = members.slice(
+    gridFirstRow * gridCols,
+    Math.min(members.length, gridLastRow * gridCols)
+  );
   const indexedAll = projectMedia.filter((m) => m.status === 'indexed').length;
 
   // Open "parking spaces" in the grid — dashed ghost tiles that say "drop
@@ -183,12 +207,19 @@ function HubNodeInner({ id, data, selected }: NodeProps) {
           preview you can scroll, instead of eating the screen. */}
       {cluster && usesGrid && (
         <div
+          onScroll={(e) => setScrollTop((e.currentTarget as HTMLDivElement).scrollTop)}
           style={{ top: HUB_HEADER_H - 2, bottom: 6 }}
           className="nodrag nowheel scroll-clean absolute inset-x-1.5 overflow-y-auto rounded-[13px] bg-[#eef1f5] p-1.5 dark:bg-black/30"
         >
-          <div className={cn('grid gap-1.5', gridExpanded ? 'grid-cols-4' : 'grid-cols-3')}>
-            {members.map(({ nodeId, nodeType, mediaId }) => {
-              const m = mediaId ? media.find((x) => x.id === mediaId) : undefined;
+          {/* spacer sized to ALL rows; only the windowed tiles are mounted, offset
+              to the right scroll position — so a 3000-item box renders ~30 tiles. */}
+          <div style={{ height: gridTotalRows * gridRowH, position: 'relative' }}>
+            <div
+              style={{ position: 'absolute', top: gridFirstRow * gridRowH, left: 0, right: 0 }}
+              className={cn('grid gap-1.5', gridExpanded ? 'grid-cols-4' : 'grid-cols-3')}
+            >
+            {gridWindow.map(({ nodeId, nodeType, mediaId }) => {
+              const m = mediaId ? mediaById.get(mediaId) : undefined;
               const isSource = nodeType === 'chip';
               // "Open" the original when it has a real URL (YouTube/website, or
               // an image source). Indexed-only types (doc/audio/text) have none.
@@ -200,7 +231,8 @@ function HubNodeInner({ id, data, selected }: NodeProps) {
                 <div
                   key={nodeId}
                   title={m?.name}
-                  className="group/tile relative aspect-video overflow-hidden rounded-md bg-black/[0.06] ring-1 ring-black/[0.05] dark:bg-white/[0.06]"
+                  style={{ height: GRID_TILE_H }}
+                  className="group/tile relative overflow-hidden rounded-md bg-black/[0.06] ring-1 ring-black/[0.05] dark:bg-white/[0.06]"
                 >
                   {m?.thumbnail ? (
                     <img
@@ -278,6 +310,7 @@ function HubNodeInner({ id, data, selected }: NodeProps) {
                 </div>
               );
             })}
+            </div>
           </div>
         </div>
       )}
