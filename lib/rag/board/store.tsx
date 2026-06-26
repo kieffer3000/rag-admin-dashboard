@@ -305,6 +305,19 @@ export function BoardProvider({ children }: { children: ReactNode }) {
           (!dbData || (localData.savedAt ?? 0) > (dbData.savedAt ?? 0))
         )
           data = localData;
+        // RECOVERY/SAFETY: a BLANK snapshot (≤1 node, no edges, no chat) must
+        // never hide a REAL board, even if its timestamp is newer — that's how a
+        // stray autosave from another window/incognito wiped boards. Prefer
+        // whichever source actually has content.
+        const isBlank = (d: any) =>
+          !d ||
+          ((Array.isArray(d.nodes) ? d.nodes.length : 0) <= 1 &&
+            (Array.isArray(d.edges) ? d.edges.length : 0) === 0 &&
+            !Object.values(d.brainMessages ?? {}).some(
+              (a: any) => Array.isArray(a) && a.length > 0
+            ));
+        if (isBlank(data) && !isBlank(localData)) data = localData;
+        if (isBlank(data) && !isBlank(dbData)) data = dbData;
         {
           if (!cancelled && data) {
             if (Array.isArray(data.media)) hydrateMedia(data.media, pid);
@@ -432,6 +445,19 @@ export function BoardProvider({ children }: { children: ReactNode }) {
     const pid = pidRef.current;
     if (!hydrated.current.has(pid)) return;
     const doc = buildDocRef.current();
+    // SAFETY: never let a BLANK board overwrite a saved one. A lone unwired brain
+    // (or zero nodes) with no edges and no chat = a fresh/load-race default, NOT
+    // a real board the user built. Skip the cloud save so it can't clobber the
+    // good copy in the DB (this was wiping boards on project-switch/incognito).
+    const nodeCount = Array.isArray(doc.nodes) ? doc.nodes.length : 0;
+    const edgeCount = Array.isArray(doc.edges) ? doc.edges.length : 0;
+    const hasChat = Object.values(doc.brainMessages ?? {}).some(
+      (arr) => Array.isArray(arr) && arr.length > 0
+    );
+    if (nodeCount <= 1 && edgeCount === 0 && !hasChat) {
+      setSaveStatus('saved');
+      return;
+    }
     latestDoc.current = { pid, doc };
     dirty.current = false;
     writeLocal(pid, doc);
@@ -476,6 +502,13 @@ export function BoardProvider({ children }: { children: ReactNode }) {
       const pid = pidRef.current;
       if (!hydrated.current.has(pid)) return;
       const doc = buildDocRef.current();
+      // Same SAFETY as persistNow: a blank board never overwrites a saved one.
+      const nodeCount = Array.isArray(doc.nodes) ? doc.nodes.length : 0;
+      const edgeCount = Array.isArray(doc.edges) ? doc.edges.length : 0;
+      const hasChat = Object.values(doc.brainMessages ?? {}).some(
+        (arr) => Array.isArray(arr) && arr.length > 0
+      );
+      if (nodeCount <= 1 && edgeCount === 0 && !hasChat) return;
       latestDoc.current = { pid, doc };
       dirty.current = false;
       writeLocal(pid, doc); // sync, always succeeds
