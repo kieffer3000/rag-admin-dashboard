@@ -38,6 +38,32 @@ export async function PUT(req: Request) {
   }
 
   await ensureBoardSchema();
+
+  // ANTI-SHRINK GUARD: never let a much SMALLER board overwrite a bigger saved
+  // one. A stale-tab autosave, a load race, or a restore can submit a board with
+  // far fewer media records / nodes than what's stored — that's an accidental
+  // clobber, not an intentional bulk delete, and it wiped boards/source-lists.
+  // Reject the write and keep the larger copy.
+  const scope = scopeOf(orgId, userId);
+  const inc = data as { nodes?: unknown[]; media?: unknown[] };
+  const incMedia = Array.isArray(inc.media) ? inc.media.length : 0;
+  const incNodes = Array.isArray(inc.nodes) ? inc.nodes.length : 0;
+  const exRows = await sql`
+    SELECT data FROM board_state WHERE scope=${scope} AND project_id=${projectId}`;
+  const ex = exRows[0]?.data as { nodes?: unknown[]; media?: unknown[] } | undefined;
+  if (ex) {
+    const exMedia = Array.isArray(ex.media) ? ex.media.length : 0;
+    const exNodes = Array.isArray(ex.nodes) ? ex.nodes.length : 0;
+    const mediaShrank = exMedia > 100 && incMedia < exMedia * 0.5;
+    const nodesShrank = exNodes > 3 && incNodes <= 1;
+    if (mediaShrank || nodesShrank) {
+      return Response.json(
+        { ok: false, rejected: 'anti-shrink', exMedia, incMedia, exNodes, incNodes },
+        { status: 200 }
+      );
+    }
+  }
+
   await sql`
     INSERT INTO board_state (scope, project_id, user_id, data, updated_at)
     VALUES (${scopeOf(orgId, userId)}, ${projectId}, ${userId}, ${JSON.stringify(data)}::jsonb, now())

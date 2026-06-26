@@ -40,10 +40,9 @@ const nextId = (prefix: string) => `${prefix}${++boardIdCounter}`;
 // silently. localStorage GUARANTEES the board survives a refresh on this
 // device, so a user can never lose their work to a backend hiccup.
 const LS_PREFIX = 'answersdoc_board_v2_';
-// TEMP recovery lock: when true, ALL board saves are disabled, so an imported
-// board can't be clobbered by an open tab's autosave/flush during recovery.
-// Set back to false once the gold board is confirmed loaded.
-const BOARD_RECOVERY_READONLY = true;
+// Recovery lock (off): protection now lives SERVER-SIDE in /api/board PUT
+// (anti-shrink guard), which works regardless of client code version.
+const BOARD_RECOVERY_READONLY = false;
 function readLocal(pid: string): any | null {
   try {
     const s = localStorage.getItem(LS_PREFIX + pid);
