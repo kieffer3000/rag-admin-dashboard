@@ -26,7 +26,7 @@ import {
   ExternalLink,
   ArrowUpRight,
   Trash2,
-  Minimize2
+  Minus
 } from 'lucide-react';
 import { useRag } from '@/lib/rag/store';
 import { useBoard } from '@/lib/rag/board/store';
@@ -272,17 +272,32 @@ function HubNodeInner({ id, data, selected }: NodeProps) {
         </div>
       )}
 
-      {/* remove this box / hide the Everything hub (pieces undock, never lost) */}
-      <button
-        title={everything ? 'Hide the Everything hub' : 'Remove this box (pieces stay on the board)'}
-        onClick={(e) => {
-          e.stopPropagation();
-          removeBoardNode(id);
-        }}
-        className="nodrag absolute -right-2 -top-2 z-10 flex h-5 w-5 items-center justify-center rounded-full bg-card text-muted-foreground/60 opacity-0 shadow-[0_1px_4px_rgb(0_0_0/0.14)] transition-opacity hover:text-foreground group-hover:opacity-100"
-      >
-        <X className="h-3 w-3" />
-      </button>
+      {/* top-right controls: MINIMIZE the box to the dock menu (saved, recallable)
+          + remove it. Both appear on hover. */}
+      <div className="nodrag absolute -right-2 -top-2 z-10 flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+        {cluster && (
+          <button
+            title="Minimize box to the dock menu — it stays saved; bring it back from the 📦 menu"
+            onClick={(e) => {
+              e.stopPropagation();
+              stashBox(id);
+            }}
+            className="flex h-5 w-5 items-center justify-center rounded-full bg-card text-muted-foreground/70 shadow-[0_1px_4px_rgb(0_0_0/0.14)] transition-colors hover:text-accent"
+          >
+            <Minus className="h-3 w-3" />
+          </button>
+        )}
+        <button
+          title={everything ? 'Hide the Everything hub' : 'Remove this box (pieces stay on the board)'}
+          onClick={(e) => {
+            e.stopPropagation();
+            removeBoardNode(id);
+          }}
+          className="flex h-5 w-5 items-center justify-center rounded-full bg-card text-muted-foreground/60 shadow-[0_1px_4px_rgb(0_0_0/0.14)] transition-colors hover:text-foreground"
+        >
+          <X className="h-3 w-3" />
+        </button>
+      </div>
 
       {/* rim header — the box's grab handle / lip; a hairline divider separates
           it from the recessed well below */}
@@ -341,18 +356,6 @@ function HubNodeInner({ id, data, selected }: NodeProps) {
         <span className="shrink-0 rounded-full bg-black/[0.05] px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground dark:bg-white/[0.07]">
           {everything ? `${indexedAll} sources` : memberCount}
         </span>
-        {cluster && (
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              stashBox(id);
-            }}
-            title="Park box in the dock — it's saved; bring it back from the bottom menu"
-            className="nodrag flex h-5 w-5 shrink-0 items-center justify-center rounded-md text-muted-foreground/60 transition-colors hover:bg-black/[0.06] hover:text-foreground"
-          >
-            <Minimize2 className="h-3.5 w-3.5" />
-          </button>
-        )}
         {cluster && memberCount > 0 && (
           <button
             onClick={(e) => {
