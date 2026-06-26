@@ -598,6 +598,9 @@ function BrainNodeInner({ id, data, selected }: NodeProps) {
     let citations: Awaited<ReturnType<typeof askBrain>>['citations'] = [];
     let noMatch = false;
     let suggestedQuestions: string[] = [];
+    // TEMP DIAGNOSTIC: capture the exact branch decision at ask-time.
+    const dbgHasArtifact = !!scope.artifact;
+    const dbgArtChars = scope.artifact?.content?.trim().length ?? 0;
     try {
       // Recent turns → lets the server rewrite a follow-up ("his street")
       // into a standalone retrieval query. Strip HTML (answers are HTML for
@@ -620,7 +623,7 @@ function BrainNodeInner({ id, data, selected }: NodeProps) {
       // OPINE PATH: an artifact (right plug) is wired → the corpus reasons ABOUT
       // it (critique/assist), grounded + cited per the Citations toggle. Otherwise
       // the normal RAG Q&A path. Both reuse the same footnote pipeline + UI.
-      const r = scope.artifact
+      const r = dbgHasArtifact
         ? await opineBrain(
             q,
             scope.items,
@@ -657,6 +660,12 @@ function BrainNodeInner({ id, data, selected }: NodeProps) {
       citations = [];
       noMatch = true;
     }
+
+    // TEMP DIAGNOSTIC banner — shows the EXACT branch taken at ask-time so we can
+    // see whether the brain saw the artifact. Remove once the path is confirmed.
+    content =
+      `<p style="font-size:11px;color:#f0a000;background:rgba(240,160,0,0.08);padding:4px 8px;border-radius:6px;margin:0 0 10px">[diag] artifact ${dbgHasArtifact ? `DETECTED (${dbgArtChars.toLocaleString()} chars) → OPINE` : 'NOT detected → generic Q&A'} · ${scope.items.length} sources</p>` +
+      content;
 
     streamText(
       content,
