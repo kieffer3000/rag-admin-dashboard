@@ -320,7 +320,19 @@ export function BoardProvider({ children }: { children: ReactNode }) {
         if (isBlank(data) && !isBlank(dbData)) data = dbData;
         {
           if (!cancelled && data) {
-            if (Array.isArray(data.media)) hydrateMedia(data.media, pid);
+            // Hydrate the source list from BOTH snapshots (union) — hydrateMedia
+            // merges by id, so a LARGER media list in either the DB or local copy
+            // is never hidden by a smaller "winning" layout snapshot. (A board
+            // restore once shrank the media list this way.)
+            const mediaUnion = [
+              ...(Array.isArray((dbData as { media?: unknown[] })?.media)
+                ? ((dbData as { media: unknown[] }).media as MediaItem[])
+                : []),
+              ...(Array.isArray((localData as { media?: unknown[] })?.media)
+                ? ((localData as { media: unknown[] }).media as MediaItem[])
+                : [])
+            ];
+            if (mediaUnion.length) hydrateMedia(mediaUnion, pid);
             bumpCounterFrom([
               ...(data.nodes ?? []).map((n: { id: string }) => n.id),
               ...(data.edges ?? []).map((e: { id: string }) => e.id)
