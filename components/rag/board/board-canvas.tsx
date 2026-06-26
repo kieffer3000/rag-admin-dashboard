@@ -2387,6 +2387,9 @@ function BoardCanvasInner() {
         binHot={binHot}
         dockRef={dockRef}
         onDeleteSelected={onDeleteSelected}
+        onFocusBox={(hubId) =>
+          fitView({ nodes: [{ id: hubId }], duration: 450, padding: 0.3 })
+        }
         onRecallMedia={recallMedia}
         onPlaceMedia={(mediaId) => {
           if (placedIds.has(mediaId)) return; // no duplicate sources

@@ -59,9 +59,12 @@ export function BoardChest({
   binRef,
   binHot,
   onDeleteSelected,
+  onFocusBox,
   dockRef
 }: {
   placedIds: Set<string>;
+  /** Pan/zoom the canvas to an on-canvas box (hub) by id. */
+  onFocusBox?: (hubId: string) => void;
   onPlaceMedia: (mediaId: string) => void;
   onPlaceAgent: (agent: { agentId: string; name: string; icon?: string; text: string }) => void;
   onRecallMedia: (mediaId: string) => void;
@@ -77,6 +80,12 @@ export function BoardChest({
   const { board, unstashBrain, unstashBox } = useBoard();
   const stashedBrains = board.stashedBrains ?? [];
   const stashedBoxes = board.stashedBoxes ?? [];
+  // Boxes currently ON the canvas (so the dock is a registry of ALL boxes, not
+  // just parked ones — you can see them and jump to any).
+  const canvasBoxes = board.nodes.filter(
+    (n) => n.type === 'hub' && (n.data as { mediaType?: string })?.mediaType === 'cluster'
+  );
+  const totalBoxes = canvasBoxes.length + stashedBoxes.length;
   const [open, setOpen] = useState<string | null>(null);
   const [q, setQ] = useState('');
   const rootRef = useRef<HTMLDivElement>(null);
@@ -175,7 +184,7 @@ export function BoardChest({
                 : open === 'brains'
                 ? 'click to bring one back to the canvas'
                 : open === 'boxes'
-                ? 'click to bring one back to the canvas'
+                ? 'on canvas → jump · parked → restore'
                 : `${byType.get(open as MediaType)?.length ?? 0} produced · drag onto board`}
             </span>
             <button
@@ -269,7 +278,7 @@ export function BoardChest({
                   ))
                 )}
               </>
-            ) : panelItems.length === 0 ? (
+            ) : open !== 'boxes' && panelItems.length === 0 ? (
               <p className="px-2 py-3 text-center text-[12px] text-muted-foreground/60">
                 Nothing here yet.
               </p>
@@ -301,31 +310,82 @@ export function BoardChest({
                 );
               })
             ) : open === 'boxes' ? (
-              (panelItems as typeof stashedBoxes).map((s) => {
-                const count = s.children.filter((c) => c.type === 'chip').length;
-                return (
-                  <div
-                    key={s.node.id}
-                    onClick={() => {
-                      unstashBox(s.node.id);
-                      setOpen(null);
-                    }}
-                    title="Bring this box back to the canvas (its pieces + wiring restored)"
-                    className="group flex cursor-pointer items-center gap-2.5 rounded-[10px] px-2 py-1.5 transition-colors hover:bg-[rgb(var(--hairline)/0.05)]"
-                  >
-                    <Package className="h-4 w-4 shrink-0 text-accent" />
-                    <span className="min-w-0 flex-1">
-                      <span className="block truncate text-[12.5px] font-medium">
-                        {String(s.node.data?.name ?? 'Box')}
-                      </span>
-                      <span className="block text-[10.5px] text-muted-foreground/65">
-                        {count} source{count === 1 ? '' : 's'} · click to restore
-                      </span>
-                    </span>
-                    <RotateCcw className="h-3.5 w-3.5 shrink-0 text-muted-foreground/50 group-hover:text-accent" />
-                  </div>
+              (() => {
+                const canvasMatch = canvasBoxes.filter((b) =>
+                  String((b.data as { name?: string })?.name ?? 'Box')
+                    .toLowerCase()
+                    .includes(query)
                 );
-              })
+                const parkedMatch = stashedBoxes.filter((s) =>
+                  String(s.node.data?.name ?? 'Box').toLowerCase().includes(query)
+                );
+                if (canvasMatch.length === 0 && parkedMatch.length === 0) {
+                  return (
+                    <p className="px-2 py-3 text-center text-[12px] text-muted-foreground/60">
+                      No boxes yet — group sources into a box on the canvas (or from
+                      the Library → Send to box).
+                    </p>
+                  );
+                }
+                return (
+                  <>
+                    {canvasMatch.map((b) => {
+                      const count = board.nodes.filter(
+                        (n) => n.parentId === b.id && n.type === 'chip'
+                      ).length;
+                      return (
+                        <div
+                          key={b.id}
+                          onClick={() => {
+                            onFocusBox?.(b.id);
+                            setOpen(null);
+                          }}
+                          title="Jump to this box on the canvas"
+                          className="group flex cursor-pointer items-center gap-2.5 rounded-[10px] px-2 py-1.5 transition-colors hover:bg-[rgb(var(--hairline)/0.05)]"
+                        >
+                          <Package className="h-4 w-4 shrink-0 text-accent" />
+                          <span className="min-w-0 flex-1">
+                            <span className="block truncate text-[12.5px] font-medium">
+                              {String((b.data as { name?: string })?.name ?? 'Box')}
+                            </span>
+                            <span className="block text-[10.5px] text-muted-foreground/65">
+                              {count} source{count === 1 ? '' : 's'} · on canvas · click to jump
+                            </span>
+                          </span>
+                          <span className="shrink-0 text-[10px] font-medium text-emerald-600">
+                            ●
+                          </span>
+                        </div>
+                      );
+                    })}
+                    {parkedMatch.map((s) => {
+                      const count = s.children.filter((c) => c.type === 'chip').length;
+                      return (
+                        <div
+                          key={s.node.id}
+                          onClick={() => {
+                            unstashBox(s.node.id);
+                            setOpen(null);
+                          }}
+                          title="Bring this parked box back to the canvas (pieces + wiring restored)"
+                          className="group flex cursor-pointer items-center gap-2.5 rounded-[10px] px-2 py-1.5 transition-colors hover:bg-[rgb(var(--hairline)/0.05)]"
+                        >
+                          <Package className="h-4 w-4 shrink-0 text-muted-foreground/70" />
+                          <span className="min-w-0 flex-1">
+                            <span className="block truncate text-[12.5px] font-medium">
+                              {String(s.node.data?.name ?? 'Box')}
+                            </span>
+                            <span className="block text-[10.5px] text-muted-foreground/65">
+                              {count} source{count === 1 ? '' : 's'} · parked · click to restore
+                            </span>
+                          </span>
+                          <RotateCcw className="h-3.5 w-3.5 shrink-0 text-muted-foreground/50 group-hover:text-accent" />
+                        </div>
+                      );
+                    })}
+                  </>
+                );
+              })()
             ) : (
               (panelItems as typeof projectMedia).map((m) => {
                 const placed = placedIds.has(m.id);
@@ -478,9 +538,9 @@ export function BoardChest({
           )}
         >
           <Package className="h-[18px] w-[18px] text-accent" strokeWidth={2.25} />
-          {stashedBoxes.length > 0 && (
+          {totalBoxes > 0 && (
             <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-foreground px-1 text-[9px] font-bold text-background">
-              {stashedBoxes.length}
+              {totalBoxes}
             </span>
           )}
         </button>
