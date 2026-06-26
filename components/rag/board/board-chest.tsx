@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { cn } from '@/lib/utils';
 import { useRag } from '@/lib/rag/store';
-import { useBoard } from '@/lib/rag/board/store';
+import { useBoard, useSaveStatus } from '@/lib/rag/board/store';
 import { MEDIA_TYPES, MEDIA_TYPE_ORDER } from '@/lib/rag/media-config';
 import { MediaIcon } from '@/components/rag/shared';
 import { MediaType } from '@/lib/rag/types';
@@ -54,7 +54,6 @@ export function BoardChest({
   onPlaceMedia,
   onPlaceAgent,
   onRecallMedia,
-  saveStatus,
   onSave,
   binRef,
   binHot,
@@ -68,7 +67,6 @@ export function BoardChest({
   onPlaceMedia: (mediaId: string) => void;
   onPlaceAgent: (agent: { agentId: string; name: string; icon?: string; text: string }) => void;
   onRecallMedia: (mediaId: string) => void;
-  saveStatus: 'saved' | 'saving' | 'local';
   onSave: () => void;
   binRef: RefObject<HTMLButtonElement | null>;
   binHot: boolean;
@@ -78,6 +76,7 @@ export function BoardChest({
 }) {
   const { projectMedia, deleteMedia, agents, addAgent } = useRag();
   const { board, unstashBrain, unstashBox } = useBoard();
+  const saveStatus = useSaveStatus(); // isolated store → flips don't re-render the board
   const stashedBrains = board.stashedBrains ?? [];
   const stashedBoxes = board.stashedBoxes ?? [];
   // Boxes currently ON the canvas (so the dock is a registry of ALL boxes, not

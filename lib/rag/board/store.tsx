@@ -13,9 +13,33 @@ import {
   useMemo,
   useEffect,
   useRef,
+  useSyncExternalStore,
   ReactNode
 } from 'react';
 import { useRag } from '../store';
+
+// ---- Save status lives in a TINY external store, NOT the board context. Its
+// saving↔saved flips happen on every save/keystroke; if it were a context field
+// it would re-render every node + open dialog on each flip (the "flicker every
+// few seconds"). useSaveStatus() subscribes ONLY the save indicator. ----
+type SaveStatus = 'saved' | 'saving' | 'local';
+let _saveStatus: SaveStatus = 'saved';
+const _saveListeners = new Set<() => void>();
+function setSaveStatus(s: SaveStatus) {
+  if (_saveStatus === s) return;
+  _saveStatus = s;
+  _saveListeners.forEach((l) => l());
+}
+export function useSaveStatus(): SaveStatus {
+  return useSyncExternalStore(
+    (cb) => {
+      _saveListeners.add(cb);
+      return () => _saveListeners.delete(cb);
+    },
+    () => _saveStatus,
+    () => _saveStatus
+  );
+}
 import { ChatMessage, MediaItem } from '../types';
 import {
   BoardNode,
@@ -214,9 +238,8 @@ interface BoardCtxState {
   /** Brain currently in full-screen Research Mode (distraction-free), or null. */
   researchBrainId: string | null;
   setResearchBrainId: (id: string | null) => void;
-  /** Persistence status for the save indicator. */
-  saveStatus: 'saved' | 'saving' | 'local';
-  /** Force an immediate save (the manual Save button). */
+  /** Force an immediate save (the manual Save button). saveStatus itself is read
+   *  via the separate useSaveStatus() hook so it never re-renders the board. */
   saveNow: () => void;
 }
 
@@ -238,7 +261,6 @@ export function BoardProvider({ children }: { children: ReactNode }) {
    *  clobber fresh local work (e.g. a note typed before the fetch resolved). */
   const touched = useRef<Set<string>>(new Set());
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const [saveStatus, setSaveStatus] = useState<'saved' | 'saving' | 'local'>('saved');
   /** Latest serialized doc per project — for synchronous flush on page-hide. */
   const latestDoc = useRef<{ pid: string; doc: any } | null>(null);
 
@@ -1114,7 +1136,6 @@ export function BoardProvider({ children }: { children: ReactNode }) {
     hydratedProject,
     researchBrainId,
     setResearchBrainId,
-    saveStatus,
     saveNow
   };
 

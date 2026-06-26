@@ -205,7 +205,7 @@ const FILL_MAX_ZOOM = 2;
 const FILL_MIN_ZOOM = 0.2;
 
 function BoardCanvasInner() {
-  const { board, setBoard, setBoardSilent, nextBoardId, busyBrains, saveStatus, saveNow, removeBoardNode, connectArtifactToBrain, setBrainPicker, hydratedProject, researchBrainId, setResearchBrainId } =
+  const { board, setBoard, setBoardSilent, nextBoardId, busyBrains, saveNow, removeBoardNode, connectArtifactToBrain, setBrainPicker, hydratedProject, researchBrainId, setResearchBrainId } =
     useBoard();
   const { media, projectMedia, addMedia, updateMedia, deleteMedia, activeProjectId, activeProject, pendingBox, setPendingBox } = useRag();
 
@@ -2408,7 +2408,6 @@ function BoardCanvasInner() {
       </div>
       <BoardChest
         placedIds={placedIds}
-        saveStatus={saveStatus}
         onSave={saveNow}
         binRef={binRef}
         binHot={binHot}
