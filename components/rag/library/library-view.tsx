@@ -15,13 +15,21 @@ import { Plus, Search, MessagesSquare, X, Library as LibraryIcon, Boxes, ArrowDo
 import Link from 'next/link';
 
 type Filter = 'all' | MediaType;
-type Sort = 'date-desc' | 'date-asc' | 'name-asc' | 'name-desc';
+type Sort = 'import-desc' | 'import-asc' | 'date-desc' | 'date-asc' | 'name-asc' | 'name-desc';
 const SORTS: { key: Sort; label: string }[] = [
-  { key: 'date-desc', label: 'Newest first' },
-  { key: 'date-asc', label: 'Oldest first' },
+  { key: 'import-desc', label: 'Import order (newest)' },
+  { key: 'import-asc', label: 'Import order (oldest)' },
+  { key: 'date-desc', label: 'Date — newest first' },
+  { key: 'date-asc', label: 'Date — oldest first' },
   { key: 'name-asc', label: 'Name A–Z' },
   { key: 'name-desc', label: 'Name Z–A' }
 ];
+// Media ids are assigned sequentially at import (m1109, m1362, …), so the
+// trailing number is a reliable import-order key even when `date` is missing.
+function importKey(id: string): number {
+  const m = /(\d+)\s*$/.exec(id);
+  return m ? parseInt(m[1], 10) : 0;
+}
 
 export function LibraryView() {
   const { media, selectedIds, toggleSelect, selectAll, clearSelection, activeProject, addSourcesToProject, setPendingBox } =
@@ -29,7 +37,7 @@ export function LibraryView() {
   const router = useRouter();
   const [filter, setFilter] = useState<Filter>('all');
   const [query, setQuery] = useState('');
-  const [sort, setSort] = useState<Sort>('date-desc');
+  const [sort, setSort] = useState<Sort>('import-desc');
   const [uploadOpen, setUploadOpen] = useState(false);
   const [lastIndex, setLastIndex] = useState<number | null>(null);
   const isAdmin = useIsAdmin();
@@ -47,8 +55,12 @@ export function LibraryView() {
       (a.date || '').localeCompare(b.date || '');
     const byName = (a: { name: string }, b: { name: string }) =>
       a.name.localeCompare(b.name);
+    const byImport = (a: { id: string }, b: { id: string }) =>
+      importKey(a.id) - importKey(b.id);
     const sorted = [...list];
-    if (sort === 'date-desc') sorted.sort((a, b) => byDate(b, a));
+    if (sort === 'import-desc') sorted.sort((a, b) => byImport(b, a));
+    else if (sort === 'import-asc') sorted.sort(byImport);
+    else if (sort === 'date-desc') sorted.sort((a, b) => byDate(b, a));
     else if (sort === 'date-asc') sorted.sort(byDate);
     else if (sort === 'name-asc') sorted.sort(byName);
     else sorted.sort((a, b) => byName(b, a));
