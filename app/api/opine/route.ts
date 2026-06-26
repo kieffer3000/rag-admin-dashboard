@@ -35,9 +35,15 @@ export async function POST(req: Request) {
   const sourceIds: string[] = Array.isArray(body.source_ids)
     ? body.source_ids.filter((s: unknown) => typeof s === 'string' && s)
     : [];
-  if (sourceIds.length === 0) {
+  // Either a corpus OR an artifact must be wired. No corpus + an artifact →
+  // ARTIFACT-ONLY mode (no Pinecone; the file rides in the model's context).
+  const hasArtifactInput =
+    !!body.artifact &&
+    ((typeof body.artifact.content === 'string' && body.artifact.content.trim() !== '') ||
+      (typeof body.artifact.url === 'string' && body.artifact.url.trim() !== ''));
+  if (sourceIds.length === 0 && !hasArtifactInput) {
     return Response.json(
-      { error: 'source_ids are required (wire a corpus to the brain)' },
+      { error: 'Wire a knowledge base or an artifact to the brain.' },
       { status: 400 }
     );
   }

@@ -223,6 +223,10 @@ export async function synthesizeOpine(args: {
 }): Promise<string> {
   const { instruction, artifact, references, pool, plan, citations, grounding, guides, conversation } = args;
 
+  // ARTIFACT-ONLY: no corpus wired, but an artifact (file/doc/audio transcript)
+  // is present → work straight from it in context, like a normal LLM with files.
+  const artifactOnly = pool.length === 0 && !!artifact;
+
   const poolText = pool.length
     ? pool.map((c, i) => `[${i + 1}] (source: ${c.source_name})\n${c.text}`).join('\n\n')
     : '(no corpus excerpts retrieved)';
@@ -231,13 +235,15 @@ export async function synthesizeOpine(args: {
     ? `${artifact.title ? `TITLE: ${artifact.title}\n` : ''}${artifact.url ? `URL: ${artifact.url}\n` : ''}${artifact.content.slice(0, MAX_ARTIFACT_CHARS)}`
     : '(no artifact attached)';
 
-  const citationRule =
-    citations === 'on'
+  const citationRule = artifactOnly
+    ? 'There is no corpus, so do NOT include any bracketed [n] citation markers or a sources list. When useful, refer to the artifact by quoting or naming the part you mean.'
+    : citations === 'on'
       ? 'After each claim that draws on the corpus, cite the supporting excerpt number(s) inline like [1] or [2]. Cite ONLY the numbered CORPUS EXCERPTS. Never cite the artifact or the references.'
       : 'Do NOT include any bracketed [n] citation markers or a sources list. Write clean prose. (You are still bound by the corpus — you simply do not show footnotes.)';
 
-  const groundingRule =
-    grounding === 'hybrid'
+  const groundingRule = artifactOnly
+    ? 'Work directly from the ARTIFACT (the user\'s file/document/transcript) in front of you. Carry out the instruction using its actual content, plus your own general knowledge where helpful. There is no corpus to cite — this is a direct read of their file.'
+    : grounding === 'hybrid'
       ? 'Ground your reasoning in the CORPUS EXCERPTS. Where they fall short you MAY add general knowledge, but clearly prefix any such part with "Beyond the corpus:".'
       : 'Ground your reasoning ONLY in the CORPUS EXCERPTS. Do not introduce facts or principles that are not supported by them. If the corpus does not cover something the artifact needs, say so explicitly.';
 
@@ -246,7 +252,9 @@ export async function synthesizeOpine(args: {
     : 'Carry out the instruction directly (e.g. write, continue, rewrite, restructure, brainstorm, advise) ON this artifact, using the corpus as your expertise. Produce the actual thing asked for, shaped by BOTH the artifact and the knowledge.';
 
   const system = [
-    'You are the user’s expert collaborator. You ALWAYS work from two things together: their ARTIFACT (the specific piece they are working on) and their KNOWLEDGE BASE (the corpus — your expertise). Whatever they ask — critique, rewrite, extend, brainstorm, advise — you do exactly THAT, applied to the artifact and grounded in the corpus. You NEVER give generic advice that ignores what the artifact actually says.',
+    artifactOnly
+      ? 'You are the user’s expert collaborator working directly with the FILE(S) they gave you (a document, transcript, or notes). Whatever they ask — summarize, organize, extract key points, rewrite, answer questions — you do exactly THAT using the actual content of their file. You NEVER give generic advice that ignores what the file actually says.'
+      : 'You are the user’s expert collaborator. You ALWAYS work from two things together: their ARTIFACT (the specific piece they are working on) and their KNOWLEDGE BASE (the corpus — your expertise). Whatever they ask — critique, rewrite, extend, brainstorm, advise — you do exactly THAT, applied to the artifact and grounded in the corpus. You NEVER give generic advice that ignores what the artifact actually says.',
     guides.length
       ? `Adopt this persona / follow these instructions for TONE and PRIORITIES only — they do NOT let you invent facts or ignore the corpus: ${guides.join(' | ')}`
       : ''
@@ -296,7 +304,11 @@ export async function runOpine(args: {
     guides: args.guides
   });
 
-  const pool = await retrieveForProbes(plan.probes, args.namespace, args.sourceIds);
+  // No corpus wired → ARTIFACT-ONLY mode: skip Pinecone entirely and reason from
+  // the artifact(s) in the model's context window, like a plain LLM with files.
+  const pool = args.sourceIds.length
+    ? await retrieveForProbes(plan.probes, args.namespace, args.sourceIds)
+    : [];
   const topScore = pool.length ? Math.max(...pool.map((c) => c.score)) : null;
 
   const answer = await synthesizeOpine({

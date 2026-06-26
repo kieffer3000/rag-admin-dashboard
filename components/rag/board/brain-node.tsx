@@ -598,9 +598,6 @@ function BrainNodeInner({ id, data, selected }: NodeProps) {
     let citations: Awaited<ReturnType<typeof askBrain>>['citations'] = [];
     let noMatch = false;
     let suggestedQuestions: string[] = [];
-    // TEMP DIAGNOSTIC: capture the exact branch decision at ask-time.
-    const dbgHasArtifact = !!scope.artifact;
-    const dbgArtChars = scope.artifact?.content?.trim().length ?? 0;
     try {
       // Recent turns → lets the server rewrite a follow-up ("his street")
       // into a standalone retrieval query. Strip HTML (answers are HTML for
@@ -660,12 +657,6 @@ function BrainNodeInner({ id, data, selected }: NodeProps) {
       citations = [];
       noMatch = true;
     }
-
-    // TEMP DIAGNOSTIC banner — shows the EXACT branch taken at ask-time so we can
-    // see whether the brain saw the artifact. Remove once the path is confirmed.
-    content =
-      `<p style="font-size:11px;color:#f0a000;background:rgba(240,160,0,0.08);padding:4px 8px;border-radius:6px;margin:0 0 10px">[diag] artifact ${dbgHasArtifact ? `DETECTED (${dbgArtChars.toLocaleString()} chars) → OPINE` : 'NOT detected → generic Q&A'} · ${scope.items.length} sources</p>` +
-      content;
 
     streamText(
       content,
@@ -1208,7 +1199,9 @@ function BrainNodeInner({ id, data, selected }: NodeProps) {
                 ? 'Transcribing…'
                 : listening
                   ? 'Listening…'
-                  : 'Ask your wired sources…'
+                  : scope.artifact && scope.items.length === 0
+                    ? 'Ask about your artifact…'
+                    : 'Ask your wired sources…'
             }
             className="max-h-44 min-h-[30px] flex-1 resize-none bg-transparent py-1 text-[14px] outline-none placeholder:text-muted-foreground/50"
           />
