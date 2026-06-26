@@ -201,6 +201,10 @@ interface BoardCtxState {
   stashBrain: (brainId: string) => void;
   /** Bring a stashed brain back to the canvas (restores position + wiring). */
   unstashBrain: (brainId: string) => void;
+  /** Park a box (hub + its pieces) in the Chest (off-canvas), recallable later. */
+  stashBox: (hubId: string) => void;
+  /** Bring a stashed box back to the canvas with its pieces + wiring. */
+  unstashBox: (hubId: string) => void;
   /** Brains with a query in flight — their inbound edges march. */
   busyBrains: Set<string>;
   setBrainBusy: (brainId: string, busy: boolean) => void;
@@ -386,7 +390,8 @@ export function BoardProvider({ children }: { children: ReactNode }) {
                 [pid]: {
                   nodes,
                   edges: data.edges ?? [],
-                  stashedBrains: data.stashedBrains ?? []
+                  stashedBrains: data.stashedBrains ?? [],
+                  stashedBoxes: data.stashedBoxes ?? []
                 }
               }));
             if (data.brainMessages)
@@ -425,6 +430,7 @@ export function BoardProvider({ children }: { children: ReactNode }) {
       nodes: board.nodes,
       edges: board.edges,
       stashedBrains: stashed,
+      stashedBoxes: board.stashedBoxes ?? [],
       brainMessages: msgs,
       // Persist source METADATA only — never the full text (a book can be
       // megabytes; it would blow the ~5MB localStorage quota and silently
@@ -849,6 +855,57 @@ export function BoardProvider({ children }: { children: ReactNode }) {
     [setBoard]
   );
 
+  // Park a whole box (hub + its docked pieces + touching edges) in the Chest.
+  const stashBox = useCallback(
+    (hubId: string) => {
+      setBoard((prev) => {
+        const node = prev.nodes.find((n) => n.id === hubId && n.type === 'hub');
+        if (!node) return prev;
+        const children = prev.nodes.filter((n) => n.parentId === hubId);
+        const childIds = new Set(children.map((c) => c.id));
+        const touchesBox = (e: { source: string; target: string }) =>
+          e.source === hubId ||
+          e.target === hubId ||
+          childIds.has(e.source) ||
+          childIds.has(e.target);
+        const edges = prev.edges.filter(touchesBox);
+        return {
+          ...prev,
+          nodes: prev.nodes.filter((n) => n.id !== hubId && n.parentId !== hubId),
+          edges: prev.edges.filter((e) => !touchesBox(e)),
+          stashedBoxes: [...(prev.stashedBoxes ?? []), { node, children, edges }]
+        };
+      });
+    },
+    [setBoard]
+  );
+
+  const unstashBox = useCallback(
+    (hubId: string) => {
+      setBoard((prev) => {
+        const stash = prev.stashedBoxes ?? [];
+        const entry = stash.find((s) => s.node.id === hubId);
+        if (!entry) return prev;
+        const restored = new Set([
+          ...prev.nodes.map((n) => n.id),
+          entry.node.id,
+          ...entry.children.map((c) => c.id)
+        ]);
+        // restore only edges whose BOTH endpoints exist after recall
+        const edges = entry.edges.filter(
+          (e) => restored.has(e.source) && restored.has(e.target)
+        );
+        return {
+          ...prev,
+          nodes: [...prev.nodes, entry.node, ...entry.children],
+          edges: [...prev.edges, ...edges],
+          stashedBoxes: stash.filter((s) => s.node.id !== hubId)
+        };
+      });
+    },
+    [setBoard]
+  );
+
   const unsnapPiece = useCallback(
     (nodeId: string) => {
       setBoard((prev) => {
@@ -1049,6 +1106,8 @@ export function BoardProvider({ children }: { children: ReactNode }) {
     unsnapPiece,
     stashBrain,
     unstashBrain,
+    stashBox,
+    unstashBox,
     busyBrains,
     setBrainBusy,
     nextBoardId: nextId,

@@ -17,6 +17,7 @@ import {
   CloudOff,
   Brain,
   Bot,
+  Package,
   Plus
 } from 'lucide-react';
 import {
@@ -73,8 +74,9 @@ export function BoardChest({
   dockRef?: RefObject<HTMLDivElement | null>;
 }) {
   const { projectMedia, deleteMedia, agents, addAgent } = useRag();
-  const { board, unstashBrain } = useBoard();
+  const { board, unstashBrain, unstashBox } = useBoard();
   const stashedBrains = board.stashedBrains ?? [];
+  const stashedBoxes = board.stashedBoxes ?? [];
   const [open, setOpen] = useState<string | null>(null);
   const [q, setQ] = useState('');
   const rootRef = useRef<HTMLDivElement>(null);
@@ -139,6 +141,10 @@ export function BoardChest({
       ? stashedBrains.filter((s) =>
           String(s.node.data?.name ?? 'Brain').toLowerCase().includes(query)
         )
+      : open === 'boxes'
+      ? stashedBoxes.filter((s) =>
+          String(s.node.data?.name ?? 'Box').toLowerCase().includes(query)
+        )
       : open
       ? (byType.get(open as MediaType) ?? []).filter((m) =>
           m.name.toLowerCase().includes(query)
@@ -159,12 +165,16 @@ export function BoardChest({
                 ? 'Agents'
                 : open === 'brains'
                 ? 'Parked brains'
+                : open === 'boxes'
+                ? 'Parked boxes'
                 : MEDIA_TYPES[open as MediaType].plural}
             </span>
             <span className="text-[11px] text-muted-foreground/60">
               {open === 'agent'
                 ? 'drag a persona onto the board'
                 : open === 'brains'
+                ? 'click to bring one back to the canvas'
+                : open === 'boxes'
                 ? 'click to bring one back to the canvas'
                 : `${byType.get(open as MediaType)?.length ?? 0} produced · drag onto board`}
             </span>
@@ -284,6 +294,32 @@ export function BoardChest({
                         {s.edges.length
                           ? `${s.edges.length} wire${s.edges.length > 1 ? 's' : ''} · click to restore`
                           : 'click to restore'}
+                      </span>
+                    </span>
+                    <RotateCcw className="h-3.5 w-3.5 shrink-0 text-muted-foreground/50 group-hover:text-accent" />
+                  </div>
+                );
+              })
+            ) : open === 'boxes' ? (
+              (panelItems as typeof stashedBoxes).map((s) => {
+                const count = s.children.filter((c) => c.type === 'chip').length;
+                return (
+                  <div
+                    key={s.node.id}
+                    onClick={() => {
+                      unstashBox(s.node.id);
+                      setOpen(null);
+                    }}
+                    title="Bring this box back to the canvas (its pieces + wiring restored)"
+                    className="group flex cursor-pointer items-center gap-2.5 rounded-[10px] px-2 py-1.5 transition-colors hover:bg-[rgb(var(--hairline)/0.05)]"
+                  >
+                    <Package className="h-4 w-4 shrink-0 text-accent" />
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-[12.5px] font-medium">
+                        {String(s.node.data?.name ?? 'Box')}
+                      </span>
+                      <span className="block text-[10.5px] text-muted-foreground/65">
+                        {count} source{count === 1 ? '' : 's'} · click to restore
                       </span>
                     </span>
                     <RotateCcw className="h-3.5 w-3.5 shrink-0 text-muted-foreground/50 group-hover:text-accent" />
@@ -430,6 +466,24 @@ export function BoardChest({
             </span>
           </button>
         )}
+
+        {/* Parked boxes — minimize a box to here; click to bring it back. Always
+            visible so you can SEE your boxes are saved, even with none parked. */}
+        <button
+          onClick={() => toggle('boxes')}
+          title="Parked boxes — minimize a box to here, click to bring one back"
+          className={cn(
+            'relative flex h-10 w-10 items-center justify-center rounded-full bg-accent/[0.08] transition-all dark:bg-accent/[0.14]',
+            open === 'boxes' ? 'ring-2 ring-accent' : 'hover:brightness-95'
+          )}
+        >
+          <Package className="h-[18px] w-[18px] text-accent" strokeWidth={2.25} />
+          {stashedBoxes.length > 0 && (
+            <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-foreground px-1 text-[9px] font-bold text-background">
+              {stashedBoxes.length}
+            </span>
+          )}
+        </button>
 
         <div className="mx-0.5 h-7 w-px bg-[rgb(var(--hairline)/0.12)]" />
         {/* save status / force-save */}

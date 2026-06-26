@@ -97,11 +97,21 @@ export interface StashedBrain {
   edges: BoardEdge[];
 }
 
+/** A box (hub) parked in the Chest dock — its hub node, the child pieces docked
+ *  inside it, and the edges that touched it, so recall restores it intact. */
+export interface StashedBox {
+  node: BoardNode;
+  children: BoardNode[];
+  edges: BoardEdge[];
+}
+
 export interface BoardState {
   nodes: BoardNode[];
   edges: BoardEdge[];
   /** Brains parked in the Chest dock (off-canvas), recallable later. */
   stashedBrains?: StashedBrain[];
+  /** Boxes parked in the Chest dock (off-canvas), recallable later. */
+  stashedBoxes?: StashedBox[];
 }
 
 // ---- chip / hub geometry (compact "puzzle" tiling, 2 columns) ----

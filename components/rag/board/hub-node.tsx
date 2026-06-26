@@ -25,7 +25,8 @@ import {
   ChevronDown,
   ExternalLink,
   ArrowUpRight,
-  Trash2
+  Trash2,
+  Minimize2
 } from 'lucide-react';
 import { useRag } from '@/lib/rag/store';
 import { useBoard } from '@/lib/rag/board/store';
@@ -42,7 +43,7 @@ import { useBoard } from '@/lib/rag/board/store';
 function HubNodeInner({ id, data, selected }: NodeProps) {
   const d = data as HubData;
   const { projectMedia, media, deleteMedia } = useRag();
-  const { updateBoardNodeData, removeBoardNode, toggleHubCollapse, undockMember } =
+  const { updateBoardNodeData, removeBoardNode, toggleHubCollapse, undockMember, stashBox } =
     useBoard();
   const [editing, setEditing] = useState(false);
 
@@ -340,6 +341,18 @@ function HubNodeInner({ id, data, selected }: NodeProps) {
         <span className="shrink-0 rounded-full bg-black/[0.05] px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground dark:bg-white/[0.07]">
           {everything ? `${indexedAll} sources` : memberCount}
         </span>
+        {cluster && (
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              stashBox(id);
+            }}
+            title="Park box in the dock — it's saved; bring it back from the bottom menu"
+            className="nodrag flex h-5 w-5 shrink-0 items-center justify-center rounded-md text-muted-foreground/60 transition-colors hover:bg-black/[0.06] hover:text-foreground"
+          >
+            <Minimize2 className="h-3.5 w-3.5" />
+          </button>
+        )}
         {cluster && memberCount > 0 && (
           <button
             onClick={(e) => {
