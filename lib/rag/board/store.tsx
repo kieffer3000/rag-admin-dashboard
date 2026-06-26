@@ -40,6 +40,10 @@ const nextId = (prefix: string) => `${prefix}${++boardIdCounter}`;
 // silently. localStorage GUARANTEES the board survives a refresh on this
 // device, so a user can never lose their work to a backend hiccup.
 const LS_PREFIX = 'answersdoc_board_v2_';
+// TEMP recovery lock: when true, ALL board saves are disabled, so an imported
+// board can't be clobbered by an open tab's autosave/flush during recovery.
+// Set back to false once the gold board is confirmed loaded.
+const BOARD_RECOVERY_READONLY = true;
 function readLocal(pid: string): any | null {
   try {
     const s = localStorage.getItem(LS_PREFIX + pid);
@@ -454,6 +458,7 @@ export function BoardProvider({ children }: { children: ReactNode }) {
    *  doc is stringified — called on a timer / on chat / on page-hide, never per
    *  pointer-move. */
   const persistNow = useCallback(() => {
+    if (BOARD_RECOVERY_READONLY) return;
     const pid = pidRef.current;
     if (!hydrated.current.has(pid)) return;
     const doc = buildDocRef.current();
@@ -511,6 +516,7 @@ export function BoardProvider({ children }: { children: ReactNode }) {
   // latest positions/edits are saved even though we only persist every 60s. ----
   useEffect(() => {
     const flush = () => {
+      if (BOARD_RECOVERY_READONLY) return;
       const pid = pidRef.current;
       if (!hydrated.current.has(pid)) return;
       const doc = buildDocRef.current();
