@@ -3,6 +3,7 @@ import { put } from '@vercel/blob';
 import { indexText } from '@/lib/rag/index-core';
 import { nsForUser } from '@/lib/rag/namespace';
 import { extractPdfViaCloudConvert } from '@/lib/rag/cloudconvert';
+import { transcribeViaMake } from '@/lib/rag/transcribe';
 
 // Document ingestion (PDF / DOCX / TXT). Text extraction is deterministic
 // parsing (NOT an LLM), done in-route, then handed to the SAME text pipeline
@@ -113,9 +114,12 @@ export async function POST(req: Request) {
     lowerName.endsWith('.docx');
   const isEpub = mime === 'application/epub+zip' || lowerName.endsWith('.epub');
   const isTxt = mime.startsWith('text/') || lowerName.endsWith('.txt') || lowerName.endsWith('.md');
-  if (!isPdf && !isDocx && !isEpub && !isTxt) {
+  // Audio sources are transcribed (Make CloudConvert→Whisper) then indexed like
+  // any other text — so an uploaded recording becomes a searchable RAG source.
+  const isAudio = mime.startsWith('audio/') || /\.(mp3|wav|m4a|aac|ogg|flac|webm)$/.test(lowerName);
+  if (!isPdf && !isDocx && !isEpub && !isTxt && !isAudio) {
     return Response.json(
-      { error: `Unsupported document type ${mime || lowerName}. Use PDF, DOCX, EPUB, TXT, or MD.` },
+      { error: `Unsupported type ${mime || lowerName}. Use PDF, DOCX, EPUB, TXT, MD, or audio (mp3/wav/m4a).` },
       { status: 415 }
     );
   }
@@ -125,7 +129,7 @@ export async function POST(req: Request) {
   // 1) Store the original so the source can be opened later (optional, cheap).
   let sourceUrl: string | undefined;
   if (process.env.BLOB_READ_WRITE_TOKEN) {
-    const ext = isPdf ? 'pdf' : isDocx ? 'docx' : isEpub ? 'epub' : 'txt';
+    const ext = isPdf ? 'pdf' : isDocx ? 'docx' : isEpub ? 'epub' : isAudio ? (lowerName.match(/\.([a-z0-9]+)$/)?.[1] ?? 'm4a') : 'txt';
     try {
       const blob = await put(`docs/${userId}/${sourceId}.${ext}`, buf, {
         access: 'public',
@@ -140,13 +144,14 @@ export async function POST(req: Request) {
   // 2) Extract text (deterministic).
   let text = '';
   try {
-    if (isPdf) text = await extractPdf(new Uint8Array(buf), ocr);
+    if (isAudio) text = await transcribeViaMake(new Uint8Array(buf), (file as File).name ?? 'audio', mime || 'audio/mpeg');
+    else if (isPdf) text = await extractPdf(new Uint8Array(buf), ocr);
     else if (isDocx) text = await extractDocx(buf);
     else if (isEpub) text = await extractEpub(buf);
     else text = buf.toString('utf-8');
   } catch (e: any) {
     return Response.json(
-      { ok: false, error: `Could not read the document: ${e?.message ?? 'parse error'}`, source_url: sourceUrl },
+      { ok: false, error: `${isAudio ? 'Could not transcribe the audio' : 'Could not read the document'}: ${e?.message ?? 'parse error'}`, source_url: sourceUrl },
       { status: 422 }
     );
   }
@@ -168,7 +173,7 @@ export async function POST(req: Request) {
     const r = await indexText({
       sourceId,
       name,
-      type: 'document',
+      type: isAudio ? 'audio' : 'document',
       text,
       namespace: nsForUser(userId)
     });

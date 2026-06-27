@@ -119,8 +119,9 @@ export function UploadDialog({
       for (const file of files) {
         const type = inferFileType(file.name);
         const nm = single && name.trim() ? name.trim() : file.name.replace(/\.[^.]+$/, '');
-        // document + image have real index routes; audio has none yet → simulate.
-        if (type === 'document' || type === 'image') {
+        // document + image + audio all have real index routes (audio → index-doc,
+        // which transcribes via Make CloudConvert→Whisper, then indexes the text).
+        if (type === 'document' || type === 'image' || type === 'audio') {
           const id = addMedia(
             { type, name: nm, description: description.trim(), date, content: '', source: file.name },
             { simulate: false }
