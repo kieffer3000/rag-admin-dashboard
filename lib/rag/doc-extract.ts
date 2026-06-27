@@ -94,17 +94,17 @@ export async function extractDocumentText(
   let text = '';
   try {
     if (isAudio) {
-      // Audio → transcript via Gemini (multimodal), so you can summarize/organize
-      // an interview as an artifact without indexing it.
-      const { transcribeAudio } = await import('@/lib/rag/generate');
-      text = await transcribeAudio(new Uint8Array(buf), mime || 'audio/mpeg');
+      // Audio → transcript via the dedicated Make CloudConvert→Whisper route
+      // (NEVER inline). It compresses, caps at 3h, and returns clean text.
+      const { transcribeViaMake } = await import('@/lib/rag/transcribe');
+      text = await transcribeViaMake(new Uint8Array(buf), filename, mime || 'audio/mpeg');
     } else if (isPdf) text = await extractPdf(new Uint8Array(buf), ocr);
     else if (isDocx) text = await extractDocx(buf);
     else if (isEpub) text = await extractEpub(buf);
     else text = buf.toString('utf-8');
   } catch (e: any) {
     return { ok: false, note: isAudio
-      ? `Could not transcribe the audio: ${e?.message ?? 'error'} (very large files may exceed the inline limit).`
+      ? `Could not transcribe the audio: ${e?.message ?? 'error'}`
       : `Could not read the document: ${e?.message ?? 'parse error'}` };
   }
 

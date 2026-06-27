@@ -5,7 +5,10 @@ const isPublicRoute = createRouteMatcher([
   '/sign-in(.*)',
   '/sign-up(.*)',
   '/not-authorized',
-  '/api/webhooks(.*)'
+  '/api/webhooks(.*)',
+  // Server-to-server (Make ingest → Nova captioner). Clerk-exempt; the route
+  // enforces its own CAPTION_WEBHOOK_SECRET shared-secret header instead.
+  '/api/caption-image'
 ]);
 
 // Private app — only these emails may use it (comma-separated override via

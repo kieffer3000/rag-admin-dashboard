@@ -48,6 +48,71 @@ export async function POST(req: Request) {
     );
   }
 
+  // ── Make relay (opt-in via env) ────────────────────────────────────────────
+  // When MAKE_OPINE_WEBHOOK_URL is set, hand the artifact pipeline to the Make
+  // scenario instead of running it in-code. The artifact PLUG already routed us
+  // here (brain-node ~line 623); Make's internal Router branches by `kind`
+  // (web/text/audio) and — in Stage 2 — by whether sources are wired. We pass the
+  // RAW url for a website artifact so Make fetches the FULL html (head + schema)
+  // rather than the readable-text we'd otherwise strip (which is exactly what an
+  // SEO audit needs). NOTE: board audio is already transcribed upstream → it
+  // arrives as `content` (kind:'text'); to exercise the CloudConvert→Whisper
+  // audio route, POST raw audio to the webhook directly (kind:'audio').
+  const MAKE_URL = process.env.MAKE_OPINE_WEBHOOK_URL;
+  if (MAKE_URL) {
+    const a = (body.artifact ?? {}) as { url?: unknown; content?: unknown; title?: unknown };
+    const aUrl = typeof a.url === 'string' ? a.url.trim() : '';
+    const aContent = typeof a.content === 'string' ? a.content : '';
+    try {
+      const mres = await fetch(MAKE_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          kind: aUrl ? 'web' : 'text',
+          instruction: body.instruction,
+          url: aUrl || undefined,
+          content: aContent || undefined,
+          title: typeof a.title === 'string' ? a.title : undefined,
+          model: typeof body.model === 'string' ? body.model : undefined,
+          source_ids: sourceIds,
+          namespace: nsForUser(userId),
+          citations: body.citations === 'off' ? 'off' : 'on',
+          grounding: body.grounding === 'hybrid' ? 'hybrid' : 'cited'
+        })
+      });
+      const text = await mres.text();
+      if (!mres.ok) {
+        return Response.json(
+          { error: `Make relay failed (${mres.status})`, detail: text.slice(0, 500) },
+          { status: 502 }
+        );
+      }
+      // Stage 1 → Make returns a plain-text answer; Stage 2 → JSON { answer, … }.
+      let out: Record<string, unknown> = { answer: text };
+      try {
+        const j = JSON.parse(text);
+        if (j && typeof j === 'object' && 'answer' in j) out = j as Record<string, unknown>;
+      } catch {
+        /* plain text answer */
+      }
+      return Response.json({
+        answer: typeof out.answer === 'string' ? out.answer : text,
+        citations: [],
+        raw_citations: out.raw_citations ?? null,
+        used_sources: out.used_sources ?? null,
+        topScore: typeof out.topScore === 'number' ? out.topScore : null,
+        noMatch: Boolean(out.noMatch),
+        suggestedQuestions: []
+      });
+    } catch (e) {
+      return Response.json(
+        { error: e instanceof Error ? e.message : 'Make relay error' },
+        { status: 502 }
+      );
+    }
+  }
+  // ── end Make relay ─────────────────────────────────────────────────────────
+
   // RIGHT plug — the artifact, carried whole, NEVER indexed. Present when it has
   // content OR a URL; if content is empty but a URL is set, the server loads the
   // page text here (with the JS-render fallback) so Opine works even if the node
