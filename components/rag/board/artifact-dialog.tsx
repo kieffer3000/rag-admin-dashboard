@@ -108,23 +108,39 @@ export function ArtifactDialog({
         });
         done();
       } else if (files.length) {
-        // Extract every file (audio is transcribed) and fuse into ONE artifact —
-        // multiple files become a single working doc the brain reasons over.
+        // Extract every file and fuse into ONE artifact. Audio is transcribed
+        // CLIENT-side (presigned CloudConvert→Azure MAI — any size, no 4.5MB cap)
+        // with [M:SS] markers; everything else uses deterministic extraction.
         const parts: string[] = [];
         for (const f of files) {
-          const fd = new FormData();
-          fd.append('file', f);
-          if (ocr) fd.append('ocr', 'true');
-          const res = await fetch('/api/extract-file', { method: 'POST', body: fd });
-          const j = await res.json();
-          if (!j.ok) {
-            setErr(`${f.name}: ${j.note || 'could not read this file.'}`);
-            setBusy(false);
-            return;
+          let fileText = '';
+          const isAudio =
+            /^audio\//.test(f.type) || /\.(mp3|wav|m4a|aac|ogg|flac|webm)$/i.test(f.name);
+          if (isAudio) {
+            const { transcribeAudioDetailed, timestampedTranscript } = await import(
+              '@/lib/rag/board/dictation'
+            );
+            const d = await transcribeAudioDetailed(f);
+            fileText = timestampedTranscript(d);
+            if (!fileText.trim()) {
+              setErr(`${f.name}: no speech was detected.`);
+              setBusy(false);
+              return;
+            }
+          } else {
+            const fd = new FormData();
+            fd.append('file', f);
+            if (ocr) fd.append('ocr', 'true');
+            const res = await fetch('/api/extract-file', { method: 'POST', body: fd });
+            const j = await res.json();
+            if (!j.ok) {
+              setErr(`${f.name}: ${j.note || 'could not read this file.'}`);
+              setBusy(false);
+              return;
+            }
+            fileText = j.text ?? '';
           }
-          parts.push(
-            files.length > 1 ? `--- FILE: ${f.name} ---\n\n${j.text ?? ''}` : (j.text ?? '')
-          );
+          parts.push(files.length > 1 ? `--- FILE: ${f.name} ---\n\n${fileText}` : fileText);
         }
         onCreate({
           title:

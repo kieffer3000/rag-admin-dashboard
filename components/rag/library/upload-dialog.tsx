@@ -119,9 +119,34 @@ export function UploadDialog({
       for (const file of files) {
         const type = inferFileType(file.name);
         const nm = single && name.trim() ? name.trim() : file.name.replace(/\.[^.]+$/, '');
-        // document + image + audio all have real index routes (audio → index-doc,
-        // which transcribes via Make CloudConvert→Whisper, then indexes the text).
-        if (type === 'document' || type === 'image' || type === 'audio') {
+        // Audio → transcribe CLIENT-side (auto inline for small, presigned
+        // CloudConvert→Azure MAI for large — any size, no 4.5MB cap), with [M:SS]
+        // timestamps, then index the transcript as a normal text source.
+        if (type === 'audio') {
+          const id = addMedia(
+            { type, name: nm, description: description.trim(), date, content: '', source: file.name },
+            { simulate: false }
+          );
+          jobs.push({
+            id,
+            run: async () => {
+              const { transcribeAudioDetailed, timestampedTranscript } = await import(
+                '@/lib/rag/board/dictation'
+              );
+              const d = await transcribeAudioDetailed(file);
+              const text = timestampedTranscript(d);
+              if (!text.trim()) throw new Error('No speech was detected in the audio.');
+              const r = await fetch('/api/index', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ source_id: id, name: nm, type: 'audio', text })
+              });
+              const j = await r.json().catch(() => ({}));
+              if (!r.ok || j.status !== 'indexed') throw new Error(j?.error ?? 'index failed');
+              updateMedia(id, { status: 'indexed', chunks: j.chunks });
+            }
+          });
+        } else if (type === 'document' || type === 'image') {
           const id = addMedia(
             { type, name: nm, description: description.trim(), date, content: '', source: file.name },
             { simulate: false }
