@@ -76,6 +76,10 @@ export async function POST(req: Request) {
           model: typeof body.model === 'string' ? body.model : undefined,
           source_ids: sourceIds,
           namespace: nsForUser(userId),
+          // The ROBOT (persona/instructions) + reference exemplars — forward them
+          // so the relay path behaves like the in-code path (don't drop the bot).
+          guides: Array.isArray(body.guides) ? body.guides : [],
+          references: Array.isArray(body.references) ? body.references : [],
           citations: body.citations === 'off' ? 'off' : 'on',
           grounding: body.grounding === 'hybrid' ? 'hybrid' : 'cited'
         })
