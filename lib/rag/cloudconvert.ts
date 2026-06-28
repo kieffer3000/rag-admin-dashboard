@@ -201,7 +201,7 @@ export async function captureWebsiteText(url: string): Promise<string> {
 // MAI bills by duration, not size, so this is purely to beat the size limit +
 // shrink the server-side fetch — mirrors the old AnswersDoc m4a@25k trick.
 
-const AUDIO_BITRATE = Number(process.env.AUDIO_COMPRESS_BITRATE ?? 32); // kbps
+const AUDIO_BITRATE = Number(process.env.AUDIO_COMPRESS_BITRATE ?? 16); // kbps — 16k keeps a 3h file under Whisper's 25MB/request cap
 
 /** Create a CloudConvert job that compresses an uploaded audio file → MP3.
  *  Returns the jobId + the presigned upload form for the client to PUT into. */

@@ -1,17 +1,23 @@
 import { auth } from '@clerk/nextjs/server';
 import { pollAudioCompressedUrl } from '@/lib/rag/cloudconvert';
 
-// Speech-to-text proxy → Microsoft MAI-Transcribe-1.5 (Foundry LLM Speech API).
-// Contract per learn.microsoft.com/.../mai-transcribe (api-version 2025-10-15):
-//   POST {resource}.cognitiveservices.azure.com/speechtotext/transcriptions:transcribe
-//   header  Ocp-Apim-Subscription-Key: <key>
-//   body    multipart/form-data: audio=@file  +  definition={...JSON}
-//   audio   WAV / MP3 / FLAC, < 300 MB
-// `phraseList.phrases` = entity biasing (we pass the brain's wired source names).
-// NOTE: MAI-Transcribe is in public preview.
+// Speech-to-text → OpenAI Whisper (whisper-1). MULTILINGUAL: auto-detects ~99
+// languages (no locale config), returns text + per-segment timestamps + the
+// detected language (response_format: verbose_json). One transcriber for the
+// whole app — file uploads (RAG/artifact) and the mic voice-notes.
+//
+// Two input modes:
+//  - inline `audio` File — short clips, under Vercel's ~4.5 MB body cap (the mic
+//    button is hard-capped at 2 min, so it always fits here).
+//  - `ccJobId` — a CloudConvert audio-compress job the client uploaded to
+//    directly (long audio); we fetch the compressed file server-side (no cap).
+//    Compressed @16 kbps so even a 3 h recording stays under Whisper's 25 MB cap.
 
 export const runtime = 'nodejs';
-export const maxDuration = 300; // long-audio: CloudConvert poll + MAI transcription
+export const maxDuration = 300;
+
+const WHISPER_URL = 'https://api.openai.com/v1/audio/transcriptions';
+const MODEL = process.env.WHISPER_MODEL ?? 'whisper-1';
 
 export async function POST(req: Request) {
   const { userId } = await auth();
@@ -19,24 +25,16 @@ export async function POST(req: Request) {
     return Response.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  const key = process.env.MAI_TRANSCRIBE_API_KEY;
-  const endpoint = process.env.MAI_TRANSCRIBE_ENDPOINT;
-  if (!key || !endpoint) {
+  const apiKey = process.env.OPENAI_API_KEY;
+  if (!apiKey) {
     return Response.json(
-      {
-        error:
-          'Transcription not configured — set MAI_TRANSCRIBE_API_KEY and MAI_TRANSCRIBE_ENDPOINT (Foundry Speech resource).'
-      },
+      { error: 'Transcription not configured — set OPENAI_API_KEY.' },
       { status: 503 }
     );
   }
 
   const inForm = await req.formData();
 
-  // Two input modes:
-  //  - inline `audio` File — short clips, under Vercel's ~4.5 MB body cap
-  //  - `ccJobId` — a CloudConvert audio-compress job the client uploaded to
-  //    directly (long audio); we fetch the compressed MP3 server-side (no cap)
   const ccJobId = String(inForm.get('ccJobId') ?? '').trim();
   let audioBlob: Blob;
   let audioName = 'audio.wav';
@@ -44,10 +42,7 @@ export async function POST(req: Request) {
   if (ccJobId) {
     const url = await pollAudioCompressedUrl(ccJobId);
     if (!url) {
-      return Response.json(
-        { error: 'Audio compression failed or timed out.' },
-        { status: 502 }
-      );
+      return Response.json({ error: 'Audio compression failed or timed out.' }, { status: 502 });
     }
     const got = await fetch(url).catch(() => null);
     if (!got || !got.ok) {
@@ -60,8 +55,7 @@ export async function POST(req: Request) {
     if (!(audio instanceof File)) {
       return Response.json({ error: 'audio file is required' }, { status: 400 });
     }
-    // A bare WAV header is 44 bytes — anything near that captured no audio (mic
-    // permission race, AudioContext suspended, or a tap-too-fast recording).
+    // A bare WAV header is 44 bytes — anything near that captured no audio.
     if (audio.size < 2048) {
       return Response.json(
         {
@@ -75,54 +69,38 @@ export async function POST(req: Request) {
     audioName = audio.name || 'audio.wav';
   }
 
-  let phrases: string[] = [];
+  // Optional biasing: wired source names nudge recognition of domain terms
+  // (Whisper's `prompt` is a soft hint, ≤ ~224 tokens — we cap the text).
+  let prompt = '';
   const raw = inForm.get('phrases');
   if (typeof raw === 'string') {
     try {
       const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed)) phrases = parsed.filter((p) => typeof p === 'string');
+      if (Array.isArray(parsed)) {
+        prompt = parsed
+          .filter((p) => typeof p === 'string')
+          .slice(0, 50)
+          .join(', ')
+          .slice(0, 800);
+      }
     } catch {
       /* ignore malformed phrase list */
     }
   }
 
-  const model = process.env.MAI_TRANSCRIBE_MODEL ?? 'mai-transcribe-1.5';
-  // The Foundry fast-transcription envelope requires `locales`; omitting it is a
-  // common cause of a 400. Default en-US; override via MAI_TRANSCRIBE_LOCALES
-  // (comma-separated, e.g. "en-US,es-ES").
-  const locales = (process.env.MAI_TRANSCRIBE_LOCALES ?? 'en-US')
-    .split(',')
-    .map((s) => s.trim())
-    .filter(Boolean);
-  const definition: Record<string, unknown> = {
-    locales,
-    enhancedMode: { enabled: true, model }
-  };
-  // phraseList only supported on mai-transcribe-1.5. Azure rejects (400) any
-  // context keyword longer than 50 chars — our source names (YouTube titles,
-  // long doc names) routinely exceed that — so trim each to 50, drop empties,
-  // de-dupe, and cap at 50 entries.
-  if (phrases.length && model === 'mai-transcribe-1.5') {
-    const cleaned = Array.from(
-      new Set(phrases.map((p) => p.trim().slice(0, 50)).filter(Boolean))
-    ).slice(0, 50);
-    if (cleaned.length) definition.phraseList = { phrases: cleaned };
-  }
-
-  const apiVersion = process.env.MAI_TRANSCRIBE_API_VERSION ?? '2025-10-15';
-  const url = endpoint.includes('transcriptions:transcribe')
-    ? endpoint
-    : `${endpoint.replace(/\/$/, '')}/speechtotext/transcriptions:transcribe?api-version=${apiVersion}`;
-
   const outForm = new FormData();
-  outForm.append('audio', audioBlob, audioName);
-  outForm.append('definition', JSON.stringify(definition));
+  outForm.append('file', audioBlob, audioName);
+  outForm.append('model', MODEL);
+  // verbose_json → text + segment timestamps + the auto-detected language.
+  outForm.append('response_format', 'verbose_json');
+  if (prompt) outForm.append('prompt', prompt);
+  // NO `language` field → Whisper auto-detects, so it works in any language.
 
   let res: Response;
   try {
-    res = await fetch(url, {
+    res = await fetch(WHISPER_URL, {
       method: 'POST',
-      headers: { 'Ocp-Apim-Subscription-Key': key }, // fetch sets multipart boundary
+      headers: { Authorization: `Bearer ${apiKey}` }, // fetch sets the multipart boundary
       body: outForm
     });
   } catch {
@@ -130,43 +108,32 @@ export async function POST(req: Request) {
   }
 
   if (!res.ok) {
-    const detail = await res.text().catch(() => '');
-    // Surface Azure's actual reason in the message (not just the status) so the
-    // client alert tells us WHY — a bare "returned 400" hides the real cause.
-    const trimmed = detail.replace(/\s+/g, ' ').trim().slice(0, 240);
-    console.error(`[transcribe] upstream ${res.status}: ${trimmed}`);
+    const detail = (await res.text().catch(() => '')).replace(/\s+/g, ' ').trim().slice(0, 240);
+    console.error(`[transcribe] whisper ${res.status}: ${detail}`);
     return Response.json(
       {
-        error: trimmed
-          ? `Transcription service returned ${res.status}: ${trimmed}`
-          : `Transcription service returned ${res.status}`,
-        detail: trimmed
+        error: detail
+          ? `Transcription returned ${res.status}: ${detail}`
+          : `Transcription returned ${res.status}`,
+        detail
       },
       { status: 502 }
     );
   }
 
   const data = await res.json().catch(() => ({}));
-  // Fast-transcription shape is combinedPhrases[].text; stay defensive.
-  const text =
-    (Array.isArray(data.combinedPhrases)
-      ? data.combinedPhrases.map((p: { text?: string }) => p.text).filter(Boolean).join(' ')
-      : '') ||
-    data.text ||
-    data.displayText ||
-    '';
+  const text = ((data.text as string) ?? '').trim();
 
-  // Per-phrase timestamps (offsetMilliseconds) — combinedPhrases carries no
-  // timing, but phrases[] does. Surfacing these lets audio sources be indexed
-  // with [MM:SS] markers so citations can point to the moment in the recording.
-  const segments = Array.isArray(data.phrases)
-    ? data.phrases
-        .map((p: { offsetMilliseconds?: number; text?: string }) => ({
-          offsetMs: typeof p.offsetMilliseconds === 'number' ? p.offsetMilliseconds : 0,
-          text: (p.text ?? '').trim()
+  // Whisper verbose_json segments carry start/end in SECONDS → ms for our [M:SS]
+  // markers, so audio chunks keep their timecode and citations point to the moment.
+  const segments = Array.isArray(data.segments)
+    ? (data.segments as Array<{ start?: number; text?: string }>)
+        .map((s) => ({
+          offsetMs: Math.round((typeof s.start === 'number' ? s.start : 0) * 1000),
+          text: (s.text ?? '').trim()
         }))
-        .filter((s: { text: string }) => s.text)
+        .filter((s) => s.text)
     : [];
 
-  return Response.json({ text, segments });
+  return Response.json({ text, segments, language: data.language });
 }
