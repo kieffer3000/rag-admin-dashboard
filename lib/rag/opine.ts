@@ -21,7 +21,10 @@ import { embedText } from '@/lib/rag/embed';
 import { generateText, parseJsonObject } from '@/lib/rag/generate';
 
 const MAX_POOL_CHARS = Number(process.env.OPINE_MAX_POOL_CHARS ?? 28000);
-const MAX_ARTIFACT_CHARS = Number(process.env.OPINE_MAX_ARTIFACT_CHARS ?? 24000);
+// Carries a FULL artifact into context per query (so every follow-up sees the
+// whole thing). 200k chars ≈ a full 3-hour transcript (~27k words) + timestamps
+// ≈ ~45k tokens — comfortable inside Gemini 2.5 Pro's 1M-token window.
+const MAX_ARTIFACT_CHARS = Number(process.env.OPINE_MAX_ARTIFACT_CHARS ?? 200000);
 const TOPK_PER_PROBE = Number(process.env.OPINE_TOPK_PER_PROBE ?? 6);
 const MAX_PROBES = Number(process.env.OPINE_MAX_PROBES ?? 8);
 // Conductor = a small/fast model with THINKING OFF for reliable JSON fan-out
