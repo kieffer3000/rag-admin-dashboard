@@ -152,9 +152,9 @@ export async function generateText(prompt: string, opts: GenerateOpts = {}): Pro
 }
 
 // NOTE: inline Gemini audio transcription (transcribeAudio) was REMOVED — a
-// mechanical STT job must never ride an LLM. All audio now goes through the
-// dedicated Make CloudConvert→Whisper route (lib/rag/transcribe.ts →
-// MAKE_TRANSCRIBE_WEBHOOK_URL), inserted into the artifact and RAG scenarios.
+// mechanical STT job must never ride an LLM. All audio now transcribes via
+// OpenAI Whisper (app-direct, /api/transcribe + dictation.ts) — multilingual,
+// with the presigned CloudConvert path for files over the ~4.5 MB body cap.
 
 /** Parse a JSON object out of model output, tolerating ```json fences / stray prose. */
 export function parseJsonObject<T = Record<string, unknown>>(raw: string): T | null {
