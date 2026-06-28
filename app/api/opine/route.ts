@@ -81,7 +81,11 @@ export async function POST(req: Request) {
           guides: Array.isArray(body.guides) ? body.guides : [],
           references: Array.isArray(body.references) ? body.references : [],
           citations: body.citations === 'off' ? 'off' : 'on',
-          grounding: body.grounding === 'hybrid' ? 'hybrid' : 'cited'
+          grounding: body.grounding === 'hybrid' ? 'hybrid' : 'cited',
+          // Conversation for follow-ups. The COMPLETE organized JSON ships to Make
+          // so it can run the Conductor + synthesis with any bot — the app does no
+          // reasoning here, only assembles the payload (ASIC-only in-app rule).
+          history: Array.isArray(body.history) ? body.history.slice(-HISTORY_MAX_MESSAGES) : []
         })
       });
       const text = await mres.text();
