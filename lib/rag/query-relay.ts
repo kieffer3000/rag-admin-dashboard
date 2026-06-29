@@ -17,6 +17,18 @@ export interface PublicAnswer {
   citations: PublicCitation[];
 }
 
+/** The public API is citation-FREE: strip the citation highlights and inline
+ *  [n] footnote markers the answer model adds, WITHOUT touching real bracketed
+ *  content like [Free] or [Tips] (only numeric markers go). */
+function stripCitations(html: string): string {
+  return (html ?? '')
+    // unwrap citation highlights, keep the text
+    .replace(/<\/?mark[^>]*>/gi, '')
+    // remove [2], [1, 2], [1-3], and consecutive [1][2] + any leading space
+    .replace(/\s*\[\d+(?:\s*[,;–-]\s*\d+)*\](?:\s*\[\d+(?:\s*[,;–-]\s*\d+)*\])*/g, '')
+    .trim();
+}
+
 /** Make wraps scenario output in varying envelopes; dig out the JSON payload. */
 function unwrap(json: unknown): Record<string, unknown> {
   let cur: unknown = json;
@@ -114,5 +126,5 @@ export async function relayPublicQuery(input: RelayInput): Promise<PublicAnswer>
     .sort((a, b) => (b.score ?? 0) - (a.score ?? 0))
     .slice(0, 10);
 
-  return { answer: String(data.answer ?? ''), citations };
+  return { answer: stripCitations(String(data.answer ?? '')), citations };
 }

@@ -201,15 +201,17 @@ export async function POST(req: Request) {
   }
 
   try {
-    const conversationArr = Array.isArray(body.conversation) ? body.conversation : [];
-    const conversation = conversationArr
-      .map((t) => {
-        const turn = t as { role?: string; content?: string };
-        if (!turn || typeof turn.content !== 'string') return '';
-        return `${turn.role === 'assistant' ? 'A' : 'Q'}: ${turn.content}`;
-      })
-      .filter(Boolean)
-      .slice(-10)
+    // Preformat the recent conversation EXACTLY like the in-app brain
+    // (/api/query): last 30 turns as "User:/Assistant:" lines, so Make's
+    // follow-up expander resolves "explain further" against real context.
+    const conversation = (Array.isArray(body.conversation) ? body.conversation : [])
+      .filter(
+        (t): t is { role?: string; content: string } =>
+          !!t && typeof (t as { content?: unknown }).content === 'string' &&
+          (t as { content: string }).content.trim().length > 0
+      )
+      .slice(-30)
+      .map((t) => `${t.role === 'assistant' ? 'Assistant' : 'User'}: ${t.content}`)
       .join('\n');
 
     // Speed: locked to the connection's setting UNLESS the publisher allowed the

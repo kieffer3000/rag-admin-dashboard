@@ -174,6 +174,32 @@ export default function EmbedChatPage() {
       >
         <span style={{ fontSize: 18 }}>🏛️</span>
         <strong style={{ fontSize: 14 }}>{bank || 'Ask the knowledge base'}</strong>
+        {msgs.length > 0 && (
+          <button
+            type="button"
+            onClick={() => {
+              setMsgs([]);
+              setQ('');
+            }}
+            title="Start a new conversation"
+            style={{
+              marginLeft: 'auto',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 5,
+              border: 'none',
+              borderRadius: 999,
+              padding: '4px 11px',
+              fontSize: 12,
+              fontWeight: 600,
+              cursor: 'pointer',
+              background: 'rgba(255,255,255,0.18)',
+              color: '#fff'
+            }}
+          >
+            <span style={{ fontSize: 13, lineHeight: 1 }}>＋</span> New chat
+          </button>
+        )}
       </div>
 
       {/* transcript */}
