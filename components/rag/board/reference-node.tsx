@@ -20,7 +20,7 @@ function ReferenceNodeInner({ id, data, selected, parentId }: NodeProps) {
     return (
       <div
         style={{ width: CHIP_W, height: CHIP_H }}
-        title={d.title || 'Reference'}
+        title={d.title || 'Example'}
         className={cn(
           'relative flex items-center gap-2 overflow-hidden rounded-[11px] bg-card px-3 ring-1 ring-black/[0.04] dark:ring-white/[0.06]',
           'shadow-[0_1px_2px_rgb(0_0_0/0.10)]',
@@ -31,7 +31,7 @@ function ReferenceNodeInner({ id, data, selected, parentId }: NodeProps) {
         <BookOpen className="h-3.5 w-3.5 shrink-0 text-violet-600" />
         <span className="min-w-0 flex-1 leading-tight">
           <span className="block text-[11px] font-semibold text-violet-700 dark:text-violet-400">
-            Reference
+            Example
           </span>
           <span className="block truncate text-[10px] text-muted-foreground/70">
             {d.title?.trim() || d.content?.trim()?.slice(0, 40) || 'empty'}
@@ -60,7 +60,7 @@ function ReferenceNodeInner({ id, data, selected, parentId }: NodeProps) {
       <div className="flex shrink-0 cursor-grab items-center gap-1.5 bg-violet-500/[0.08] px-3 py-1.5 active:cursor-grabbing">
         <BookOpen className="h-3 w-3 text-violet-600" />
         <span className="text-[11px] font-semibold text-violet-700 dark:text-violet-400">
-          Reference
+          Example
         </span>
         <span className="ml-auto text-[9px] uppercase tracking-wide text-muted-foreground/50">
           example · not indexed
@@ -85,7 +85,7 @@ function ReferenceNodeInner({ id, data, selected, parentId }: NodeProps) {
       <textarea
         value={d.content ?? ''}
         onChange={(e) => updateBoardNodeData(id, { content: e.target.value })}
-        placeholder="Paste the example / template / clue to steer the brain by…"
+        placeholder="Paste the example / template / clue to steer the Answers Bank by…"
         className="nodrag block min-h-0 w-full flex-1 resize-none bg-transparent px-3 py-2 text-[12px] leading-relaxed outline-none placeholder:text-muted-foreground/40"
       />
       {/* Connector on the LEFT — references sit to the right of the brain. */}

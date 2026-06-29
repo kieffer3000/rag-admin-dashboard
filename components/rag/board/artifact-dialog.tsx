@@ -179,12 +179,12 @@ export function ArtifactDialog({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <FileText className="h-5 w-5 text-indigo-500" />
-            {kind === 'reference' ? 'Add a reference' : 'Add an artifact'}
+            {kind === 'reference' ? 'Add an Example' : 'Add a Draft'}
           </DialogTitle>
           <DialogDescription>
             {kind === 'reference' ? (
               <>
-                An <em>exemplar</em> — a target or clue the brain learns from (shapes the
+                An <em>exemplar</em> — a target or clue the Answers Bank learns from (shapes the
                 answer, <strong>not cited, never indexed</strong>). Upload a file, load a
                 webpage, or paste text.
               </>

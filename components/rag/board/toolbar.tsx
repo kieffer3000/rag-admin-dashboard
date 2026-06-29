@@ -441,8 +441,8 @@ export function BoardToolbar(p: BoardToolbarProps) {
           />
           <RailDivider />
           <RailButton
-            label="New brain"
-            desc="Add a brain (chat) node. Wire sources or boxes into it and ask — it answers only from what's connected, with citations."
+            label="New Answers Bank"
+            desc="Add an Answers Bank (chat) node. Wire sources or boxes into it and ask — it answers only from what's connected, with citations."
             accent
             icon={<Brain className="h-[17px] w-[17px]" />}
             onClick={p.onAddBrain}
@@ -521,7 +521,7 @@ export function BoardToolbar(p: BoardToolbarProps) {
           />
           <RailButton
             label="Everything hub"
-            desc="A shortcut that wires every indexed source in this project into a brain at once."
+            desc="A shortcut that wires every indexed source in this project into an Answers Bank at once."
             icon={<Sparkles className="h-[17px] w-[17px] text-accent" />}
             onClick={p.onAddEverything}
           />
@@ -534,7 +534,7 @@ export function BoardToolbar(p: BoardToolbarProps) {
           />
           <RailButton
             label="Context note"
-            desc="A scratch instruction wired into a brain as prompt context — steers the answer but is never indexed."
+            desc="A scratch instruction wired into an Answers Bank as prompt context — steers the answer but is never indexed."
             icon={<Type className="h-[17px] w-[17px]" />}
             onClick={p.onAddText}
           />
@@ -546,21 +546,21 @@ export function BoardToolbar(p: BoardToolbarProps) {
           />
           <RailDivider />
           <RailButton
-            label="Artifact"
-            desc="Your working doc (article, webpage, draft). Wire it to a brain WITH a corpus → the brain opines on it. Carried whole, never indexed."
+            label="Draft"
+            desc="Your working doc (article, webpage, draft). Wire it to an Answers Bank WITH a Library → it opines on it. Carried whole, never indexed."
             icon={<FileText className="h-[17px] w-[17px]" />}
             onClick={p.onAddArtifact}
           />
           <RailButton
-            label="Reference"
-            desc="An example or template to steer the brain by ('make it like this'). Guides Opine judgment; never indexed, never cited."
+            label="Examples"
+            desc="A sample or template to steer the answer by ('make it like this'). Guides judgment; never indexed, never cited."
             icon={<BookOpen className="h-[17px] w-[17px]" />}
             onClick={p.onAddReference}
           />
           <RailDivider />
           <RailButton
             label="Clean desk"
-            desc="Untangle: snaps every piece to its plug around each brain — sources left, references top, artifact right, robot bottom — so no wires cross."
+            desc="Untangle: snaps every piece to its plug around each Answers Bank — Library left, Examples top, Draft right, Persona bottom — so no wires cross."
             icon={<Wand2 className="h-[17px] w-[17px]" />}
             onClick={p.onCleanDesk}
           />
@@ -1032,7 +1032,7 @@ export function BoardToolbar(p: BoardToolbarProps) {
             </DialogTitle>
             <DialogDescription>
               {uploadStep === 'type'
-                ? 'These get read, indexed, and stored so any brain can search and cite them — forever.'
+                ? 'These get read, indexed, and stored so any Answers Bank can search and cite them — forever.'
                 : 'Pick how this should live in your workspace. Tap the ? on any card for a fuller explanation.'}
             </DialogDescription>
           </DialogHeader>
@@ -1046,7 +1046,7 @@ export function BoardToolbar(p: BoardToolbarProps) {
                 title="Library"
                 sub="Long-term knowledge · indexed forever"
                 desc="Books, lectures, images, audio you'll come back to again and again."
-                long="Choose this for anything you want remembered permanently and searched across. It's chunked, embedded, and stored in your vector database, so any brain can retrieve and cite exact passages — even months later. Best for research libraries, full books, course transcripts, and large document sets. Slower to add (it's processed once), instant to query forever."
+                long="Choose this for anything you want remembered permanently and searched across. It's chunked, embedded, and stored in your vector database, so any Answers Bank can retrieve and cite exact passages — even months later. Best for research libraries, full books, course transcripts, and large document sets. Slower to add (it's processed once), instant to query forever."
                 expanded={helpKind === 'rag'}
                 onToggleHelp={() =>
                   setHelpKind(helpKind === 'rag' ? null : 'rag')
@@ -1060,7 +1060,7 @@ export function BoardToolbar(p: BoardToolbarProps) {
                 title="Draft"
                 sub="Working doc · short-term"
                 desc="A draft, article, or page for a quick project — carried whole, not indexed."
-                long="Choose this when you're actively working ON a document and want a brain to read it in full and opine — rewrite, critique, summarize, or answer about it. It's held complete in the brain's context (not chunked or stored long-term), so the brain sees every word. Best for the article you're drafting, a webpage you're editing, or a transcript you're analyzing right now. It leaves memory when you remove it."
+                long="Choose this when you're actively working ON a document and want an Answers Bank to read it in full and opine — rewrite, critique, summarize, or answer about it. It's held complete in the Answers Bank's context (not chunked or stored long-term), so it sees every word. Best for the article you're drafting, a webpage you're editing, or a transcript you're analyzing right now. It leaves memory when you remove it."
                 expanded={helpKind === 'artifact'}
                 onToggleHelp={() =>
                   setHelpKind(helpKind === 'artifact' ? null : 'artifact')
@@ -1078,8 +1078,8 @@ export function BoardToolbar(p: BoardToolbarProps) {
                 text="text-violet-500"
                 title="Examples"
                 sub="Style samples · never indexed"
-                desc="A template or example that shows a brain the style or shape you want."
-                long="Choose this to steer HOW a brain answers without it becoming a source. References are exemplars — 'make it like this' — that shape tone, format, and judgment but are never indexed and never cited. Best for a sample whose style you want matched, a rubric, or a 'good answer' to imitate. Pair it with a Working doc and a corpus for the sharpest results."
+                desc="A template or example that shows an Answers Bank the style or shape you want."
+                long="Choose this to steer HOW an Answers Bank answers without it becoming a source. Examples are exemplars — 'make it like this' — that shape tone, format, and judgment but are never indexed and never cited. Best for a sample whose style you want matched, a rubric, or a 'good answer' to imitate. Pair it with a Draft and a Library for the sharpest results."
                 expanded={helpKind === 'reference'}
                 onToggleHelp={() =>
                   setHelpKind(helpKind === 'reference' ? null : 'reference')

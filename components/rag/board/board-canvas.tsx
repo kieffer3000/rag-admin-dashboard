@@ -577,7 +577,7 @@ function BoardCanvasInner() {
           return !!s && (s.type === 'prompt' || s.type === 'agent');
         });
         if (hasRobot) {
-          window.alert('Only one robot (agent or prompt) can connect to a brain. Unplug the current one first.');
+          window.alert('Only one Persona (agent or prompt) can connect to an Answers Bank. Unplug the current one first.');
           return;
         }
       }
@@ -2262,7 +2262,7 @@ function BoardCanvasInner() {
           // Up to 5 brains per board — one per subject/angle in a project.
           const brainCount = board.nodes.filter((n) => n.type === 'brain').length;
           if (brainCount >= 5) {
-            window.alert('You can have up to 5 brains on a board.');
+            window.alert('You can have up to 5 Answers Banks on a board.');
             return;
           }
           pushNode({
@@ -2271,7 +2271,7 @@ function BoardCanvasInner() {
             position: centerPos(),
             width: 500,
             height: 600,
-            data: { name: `Brain ${brainCount + 1}` }
+            data: { name: `Answers Bank ${brainCount + 1}` }
           });
         }}
         onAddText={() =>
@@ -2441,7 +2441,7 @@ function BoardCanvasInner() {
           else if (brains.length > 1) setBrainPicker({ artId });
           else
             window.alert(
-              'Add a brain to the board first — an artifact must be connected to a brain.'
+              'Add an Answers Bank to the board first — a Draft must be connected to an Answers Bank.'
             );
         }}
       />

@@ -33,7 +33,7 @@ import {
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu';
 import {
-  Brain,
+  Landmark,
   ArrowUp,
   Loader2,
   Unplug,
@@ -711,7 +711,7 @@ function BrainNodeInner({ id, data, selected }: NodeProps) {
   /** Export the transcript. Markdown (.md), plain text (.txt), Word (.doc via
    *  an HTML blob), or Print → the browser's Save-as-PDF. */
   function exportConversation(format: 'md' | 'txt' | 'doc' | 'pdf') {
-    const title = d.name || 'answersDoc Brain';
+    const title = d.name || 'Answers Bank';
     // The already-rendered chart/diagram SVGs, in DOM (= message) order, so the
     // export shows real charts instead of raw ```chart JSON.
     const graphics = scrollRef.current
@@ -901,7 +901,7 @@ function BrainNodeInner({ id, data, selected }: NodeProps) {
           <Maximize2 className="h-[15px] w-[15px]" />
         </BrainBarBtn>
         <BrainBarBtn
-          title="Zoom to this brain"
+          title="Zoom to this Answers Bank"
           label="Zoom"
           onClick={() =>
             fitView({ nodes: [{ id }], duration: 420, padding: 0.12, maxZoom: 1.4 })
@@ -919,7 +919,7 @@ function BrainNodeInner({ id, data, selected }: NodeProps) {
         </BrainBarBtn>
         <span className="mx-0.5 h-4 w-px bg-[rgb(var(--hairline)/0.18)]" />
         <BrainBarBtn
-          title="Send to Chest — tuck this brain away"
+          title="Send to Chest — tuck this Answers Bank away"
           label="Chest"
           onClick={() => stashBrain(id)}
         >
@@ -951,7 +951,7 @@ function BrainNodeInner({ id, data, selected }: NodeProps) {
               headerColor.chip
             )}
           >
-            <Brain className="h-4 w-4" />
+            <Landmark className="h-4 w-4" />
           </div>
           <div className="min-w-0 flex-1 leading-tight">
             {renaming ? (
@@ -1079,14 +1079,14 @@ function BrainNodeInner({ id, data, selected }: NodeProps) {
             onClick={() => {
               if (
                 window.confirm(
-                  'Delete this brain and its conversation? This cannot be undone. (Wired sources are not deleted.)'
+                  'Delete this Answers Bank and its conversation? This cannot be undone. (Wired sources are not deleted.)'
                 )
               ) {
                 clearBrainMessages(id);
                 removeBoardNode(id);
               }
             }}
-            title="Delete this brain"
+            title="Delete this Answers Bank"
             className="nodrag flex h-6 w-6 items-center justify-center rounded-[8px] text-muted-foreground/60 transition-colors hover:bg-red-500/10 hover:text-red-600"
           >
             <Trash2 className="h-3.5 w-3.5" />
@@ -1107,7 +1107,7 @@ function BrainNodeInner({ id, data, selected }: NodeProps) {
               className="w-52 border-black/10 bg-popover/90 shadow-[0_10px_34px_-6px_rgb(0_0_0/0.28)] backdrop-blur-xl dark:border-white/10"
             >
               <DropdownMenuItem onClick={() => setRenaming(true)} className="gap-2.5">
-                <Pencil className="h-4 w-4 text-foreground/70" /> Rename brain
+                <Pencil className="h-4 w-4 text-foreground/70" /> Rename Answers Bank
               </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem
@@ -1180,7 +1180,7 @@ function BrainNodeInner({ id, data, selected }: NodeProps) {
           <div className="flex flex-1 flex-col items-center justify-center gap-3 py-4 text-center">
             <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-accent/[0.07] text-accent/70">
               {wired ? (
-                <Brain className="h-5 w-5" />
+                <Landmark className="h-5 w-5" />
               ) : (
                 <Unplug className="h-5 w-5" />
               )}
@@ -1195,7 +1195,7 @@ function BrainNodeInner({ id, data, selected }: NodeProps) {
             {!wired && (
               <p className="-mt-1.5 max-w-[260px] text-[11.5px] leading-relaxed text-muted-foreground/55">
                 Drag a wire from a chip, a box, or the Everything hub into this
-                brain. You can still draft a question below.
+                Answers Bank. You can still draft a question below.
               </p>
             )}
             {/* suggested starter prompts — fill the composer (don't auto-send) */}

@@ -81,7 +81,7 @@ function TextNodeInner({ id, data, selected, parentId }: NodeProps) {
       <textarea
         value={d.text}
         onChange={(e) => updateBoardNodeData(id, { text: e.target.value })}
-        placeholder="Goal, instructions, extra context for the brain…"
+        placeholder="Goal, instructions, extra context for the Answers Bank…"
         className="nodrag block min-h-0 w-full flex-1 resize-none bg-transparent px-3 py-2 text-[12px] leading-relaxed outline-none placeholder:text-muted-foreground/40"
       />
       <Handle

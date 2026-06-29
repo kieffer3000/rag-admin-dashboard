@@ -37,9 +37,9 @@ export function ArtifactBrainPicker() {
     <Dialog open onOpenChange={(o) => !o && setBrainPicker(null)}>
       <DialogContent className="max-w-sm border-indigo-500/30">
         <DialogHeader>
-          <DialogTitle>{isCut ? 'Where should this artifact go?' : 'Connect artifact to a brain'}</DialogTitle>
+          <DialogTitle>{isCut ? 'Where should this Draft go?' : 'Connect Draft to an Answers Bank'}</DialogTitle>
           <DialogDescription>
-            An artifact always belongs to one brain. Pick the brain it should be wired to
+            A Draft always belongs to one Answers Bank. Pick the Answers Bank it should be wired to
             {isCut ? ', or delete it.' : '.'}
           </DialogDescription>
         </DialogHeader>
@@ -51,7 +51,7 @@ export function ArtifactBrainPicker() {
               className="flex items-center gap-2 rounded-lg border border-border px-3 py-2 text-left text-[13px] font-medium transition-colors hover:border-indigo-500/50 hover:bg-indigo-500/[0.06]"
             >
               <Brain className="h-4 w-4 text-indigo-500" />
-              {(b.data?.name as string) || 'Brain'}
+              {(b.data?.name as string) || 'Answers Bank'}
             </button>
           ))}
           {brains.length === 0 && (

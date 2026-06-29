@@ -138,7 +138,7 @@ export function AgentEditDialog() {
             Edit agent
           </DialogTitle>
           <DialogDescription>
-            The persona that steers <em>how</em> this brain answers — its system prompt
+            The persona that steers <em>how</em> this Answers Bank answers — its system prompt
             rides into the brain&apos;s guidance. Never a source, never indexed.
           </DialogDescription>
         </DialogHeader>
@@ -263,7 +263,7 @@ export function AgentEditDialog() {
             <Textarea
               value={text}
               onChange={(e) => setText(e.target.value)}
-              placeholder="How should the brain answer? Tone, priorities, persona, format…"
+              placeholder="How should the Answers Bank answer? Tone, priorities, persona, format…"
               className="min-h-[180px] font-mono text-[12.5px] leading-relaxed"
             />
           </div>

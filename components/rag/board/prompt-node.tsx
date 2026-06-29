@@ -38,7 +38,7 @@ function PromptNodeInner({ id, data, selected, parentId }: NodeProps) {
 
   function edit(e: React.MouseEvent) {
     e.stopPropagation();
-    const next = window.prompt('Instruction for the brain:', text);
+    const next = window.prompt('Instruction for the Answers Bank:', text);
     if (next !== null) updateBoardNodeData(id, { text: next });
   }
 
@@ -81,7 +81,7 @@ function PromptNodeInner({ id, data, selected, parentId }: NodeProps) {
     >
       {duplicate && (
         <span
-          title="Duplicate instruction — already on the board. A brain applies it once."
+          title="Duplicate instruction — already on the board. An Answers Bank applies it once."
           className="absolute -right-1.5 -top-1.5 z-10 rounded-full bg-foreground/70 px-1.5 py-0.5 text-[8.5px] font-bold uppercase tracking-wide text-background"
         >
           dup

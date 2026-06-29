@@ -147,7 +147,7 @@ export function BoardChest({
       ? agents.filter((a) => a.name.toLowerCase().includes(query))
       : open === 'brains'
       ? stashedBrains.filter((s) =>
-          String(s.node.data?.name ?? 'Brain').toLowerCase().includes(query)
+          String(s.node.data?.name ?? 'Answers Bank').toLowerCase().includes(query)
         )
       : open === 'boxes'
       ? stashedBoxes.filter((s) =>
@@ -172,7 +172,7 @@ export function BoardChest({
               {open === 'agent'
                 ? 'Agents'
                 : open === 'brains'
-                ? 'Parked brains'
+                ? 'Parked Answers Banks'
                 : open === 'boxes'
                 ? 'Parked boxes'
                 : MEDIA_TYPES[open as MediaType].plural}
@@ -290,13 +290,13 @@ export function BoardChest({
                       unstashBrain(s.node.id);
                       setOpen(null);
                     }}
-                    title="Bring this brain back to the canvas (chats + wiring restored)"
+                    title="Bring this Answers Bank back to the canvas (chats + wiring restored)"
                     className="group flex cursor-pointer items-center gap-2.5 rounded-[10px] px-2 py-1.5 transition-colors hover:bg-[rgb(var(--hairline)/0.05)]"
                   >
                     <Brain className="h-4 w-4 shrink-0 text-indigo-500" />
                     <span className="min-w-0 flex-1">
                       <span className="block truncate text-[12.5px] font-medium">
-                        {String(s.node.data?.name ?? 'Brain')}
+                        {String(s.node.data?.name ?? 'Answers Bank')}
                       </span>
                       <span className="block text-[10.5px] text-muted-foreground/65">
                         {s.edges.length
@@ -513,7 +513,7 @@ export function BoardChest({
         {stashedBrains.length > 0 && (
           <button
             onClick={() => toggle('brains')}
-            title="Parked brains — click to bring one back to the canvas"
+            title="Parked Answers Banks — click to bring one back to the canvas"
             className={cn(
               'relative flex h-10 w-10 items-center justify-center rounded-full bg-indigo-50 transition-all dark:bg-indigo-500/[0.12]',
               open === 'brains' ? 'ring-2 ring-accent' : 'hover:brightness-95'

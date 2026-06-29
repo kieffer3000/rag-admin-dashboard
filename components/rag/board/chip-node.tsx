@@ -156,7 +156,7 @@ function ChipNodeInner({ id, data, selected, parentId }: NodeProps) {
       )}
       {duplicate && (
         <span
-          title="Duplicate — this source is already on the board. A brain only counts it once."
+          title="Duplicate — this source is already on the board. An Answers Bank only counts it once."
           className="absolute -right-1.5 -top-1.5 z-10 rounded-full bg-foreground/70 px-1.5 py-0.5 text-[8.5px] font-bold uppercase tracking-wide text-background"
         >
           dup

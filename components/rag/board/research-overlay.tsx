@@ -455,7 +455,7 @@ export function ResearchOverlay({
               <p className="mt-1.5 max-w-md text-[14px] text-muted-foreground">
                 {scopeCount > 0
                   ? `Ask anything across your ${scopeCount} wired source${scopeCount === 1 ? '' : 's'}. Every answer is cited.`
-                  : 'No sources wired yet — exit and connect sources to this brain first.'}
+                  : 'No sources wired yet — exit and connect sources to this Answers Bank first.'}
               </p>
             </div>
           ) : (

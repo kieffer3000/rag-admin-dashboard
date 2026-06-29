@@ -106,7 +106,7 @@ function ArtifactNodeInner({ id, data, selected, parentId }: NodeProps) {
     return (
       <div
         style={{ width: CHIP_W, height: CHIP_H }}
-        title={d.title || 'Artifact'}
+        title={d.title || 'Draft'}
         className={cn(
           'relative flex items-center gap-2 overflow-hidden rounded-[11px] bg-card px-3 ring-1 ring-black/[0.04] dark:ring-white/[0.06]',
           'shadow-[0_1px_2px_rgb(0_0_0/0.10)]',
@@ -117,7 +117,7 @@ function ArtifactNodeInner({ id, data, selected, parentId }: NodeProps) {
         <FileText className="h-3.5 w-3.5 shrink-0 text-indigo-600" />
         <span className="min-w-0 flex-1 leading-tight">
           <span className="block text-[11px] font-semibold text-indigo-700 dark:text-indigo-400">
-            Artifact
+            Draft
           </span>
           <span className="block truncate text-[10px] text-muted-foreground/70">
             {d.title?.trim() || d.content?.trim()?.slice(0, 40) || 'empty'}
@@ -146,7 +146,7 @@ function ArtifactNodeInner({ id, data, selected, parentId }: NodeProps) {
       <div className="flex shrink-0 cursor-grab items-center gap-1.5 bg-indigo-500/[0.08] px-3 py-1.5 active:cursor-grabbing">
         <FileText className="h-3 w-3 text-indigo-600" />
         <span className="text-[11px] font-semibold text-indigo-700 dark:text-indigo-400">
-          Artifact
+          Draft
         </span>
         {/* Truth indicator — is there text for the brain to opine on? */}
         {loading ? (
@@ -155,7 +155,7 @@ function ArtifactNodeInner({ id, data, selected, parentId }: NodeProps) {
           </span>
         ) : hasText ? (
           <span
-            title={`${contentLen.toLocaleString()} characters loaded — the brain can opine on this`}
+            title={`${contentLen.toLocaleString()} characters loaded — the Answers Bank can opine on this`}
             className="flex items-center gap-0.5 text-[9px] font-semibold text-emerald-600 dark:text-emerald-400"
           >
             <Check className="h-2.5 w-2.5" />
@@ -163,7 +163,7 @@ function ArtifactNodeInner({ id, data, selected, parentId }: NodeProps) {
           </span>
         ) : (
           <span
-            title="No readable text yet — Load a URL or paste text, or the brain will fall back to generic answers"
+            title="No readable text yet — Load a URL or paste text, or the Answers Bank will fall back to generic answers"
             className="flex items-center gap-0.5 text-[9px] font-semibold text-amber-600 dark:text-amber-400"
           >
             <AlertCircle className="h-2.5 w-2.5" /> empty
