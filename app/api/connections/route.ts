@@ -42,8 +42,14 @@ export async function POST(req: Request) {
     );
   }
   const allowedOrigins = Array.isArray(body.allowedOrigins)
-    ? (body.allowedOrigins as unknown[]).filter((s): s is string => typeof s === 'string')
+    ? (body.allowedOrigins as unknown[]).filter((s): s is string => typeof s === 'string' && s.trim().length > 0)
     : [];
+  if (allowedOrigins.length === 0) {
+    return Response.json(
+      { error: 'Add at least one allowed website — the key is locked to that domain.' },
+      { status: 400 }
+    );
+  }
 
   const created = await createConnection({
     scope: scopeOf(orgId, userId),
@@ -54,6 +60,7 @@ export async function POST(req: Request) {
     answerMode: body.answerMode === 'hybrid' ? 'hybrid' : 'cited',
     model: typeof body.model === 'string' ? body.model : '',
     speed: typeof body.speed === 'string' ? body.speed : 'detailed',
+    allowSpeedChoice: body.allowSpeedChoice === true,
     allowedOrigins
   });
 
@@ -87,6 +94,8 @@ export async function PATCH(req: Request) {
     answerMode: typeof body.answerMode === 'string' ? body.answerMode : undefined,
     model: typeof body.model === 'string' ? body.model : undefined,
     speed: typeof body.speed === 'string' ? body.speed : undefined,
+    allowSpeedChoice:
+      typeof body.allowSpeedChoice === 'boolean' ? body.allowSpeedChoice : undefined,
     label: typeof body.label === 'string' ? body.label : undefined,
     allowedOrigins: Array.isArray(body.allowedOrigins)
       ? (body.allowedOrigins as unknown[]).filter((s): s is string => typeof s === 'string')

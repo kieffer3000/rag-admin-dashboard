@@ -23,6 +23,9 @@ export interface ConnectionRow {
   answer_mode: string;
   model: string;
   speed: string;
+  /** When true the embed widget shows a Fast/Normal/Research picker; otherwise
+   *  it's locked to `speed`. */
+  allow_speed_choice: boolean;
   allowed_origins: string[];
   key_prefix: string;
   created_at: string;
@@ -44,6 +47,7 @@ async function ensureSchema() {
       answer_mode text NOT NULL DEFAULT 'cited',
       model text NOT NULL DEFAULT '',
       speed text NOT NULL DEFAULT 'detailed',
+      allow_speed_choice boolean NOT NULL DEFAULT false,
       allowed_origins jsonb NOT NULL DEFAULT '[]'::jsonb,
       key_hash text NOT NULL,
       key_prefix text NOT NULL,
@@ -52,9 +56,24 @@ async function ensureSchema() {
       calls integer NOT NULL DEFAULT 0
     )
   `;
+  // Idempotent add for tables created before this column existed.
+  await sql`ALTER TABLE connections ADD COLUMN IF NOT EXISTS allow_speed_choice boolean NOT NULL DEFAULT false`;
   await sql`CREATE INDEX IF NOT EXISTS connections_key_hash_idx ON connections (key_hash)`;
   await sql`CREATE INDEX IF NOT EXISTS connections_scope_idx ON connections (scope)`;
   ensured = true;
+}
+
+/** Normalize a user-typed website to a strict browser origin (scheme://host[:port]),
+ *  defaulting to https. Returns '' if it can't be parsed. */
+function normOrigin(s: string): string {
+  let v = (s ?? '').trim().toLowerCase();
+  if (!v) return '';
+  if (!/^https?:\/\//.test(v)) v = 'https://' + v;
+  try {
+    return new URL(v).origin;
+  } catch {
+    return '';
+  }
 }
 
 const hashKey = (key: string) => createHash('sha256').update(key).digest('hex');
@@ -77,6 +96,7 @@ export interface CreateConnectionInput {
   answerMode?: string;
   model?: string;
   speed?: string;
+  allowSpeedChoice?: boolean;
   allowedOrigins?: string[];
 }
 
@@ -89,19 +109,20 @@ export async function createConnection(
   const id = newId();
   const { key, prefix } = newKey();
   const sourceIds = (input.sourceIds ?? []).filter((s) => typeof s === 'string');
-  const origins = (input.allowedOrigins ?? [])
-    .map((o) => o.trim().toLowerCase())
-    .filter(Boolean);
+  const origins = Array.from(
+    new Set((input.allowedOrigins ?? []).map(normOrigin).filter(Boolean))
+  );
   const answerMode = input.answerMode === 'hybrid' ? 'hybrid' : 'cited';
   const speed =
     input.speed === 'fast' || input.speed === 'research' ? input.speed : 'detailed';
+  const allowSpeedChoice = !!input.allowSpeedChoice;
   await sql`
     INSERT INTO connections
-      (id, scope, user_id, label, namespace, source_ids, answer_mode, model, speed, allowed_origins, key_hash, key_prefix)
+      (id, scope, user_id, label, namespace, source_ids, answer_mode, model, speed, allow_speed_choice, allowed_origins, key_hash, key_prefix)
     VALUES
       (${id}, ${input.scope}, ${input.userId}, ${input.label || 'Untitled'},
        ${input.namespace}, ${JSON.stringify(sourceIds)}::jsonb, ${answerMode},
-       ${input.model ?? ''}, ${speed}, ${JSON.stringify(origins)}::jsonb,
+       ${input.model ?? ''}, ${speed}, ${allowSpeedChoice}, ${JSON.stringify(origins)}::jsonb,
        ${hashKey(key)}, ${prefix})
   `;
   const rows = await sql`SELECT * FROM connections WHERE id=${id}`;
@@ -129,7 +150,7 @@ export async function deleteConnection(scope: string, id: string): Promise<void>
 export async function updateConnectionSources(
   scope: string,
   id: string,
-  patch: { sourceIds?: string[]; answerMode?: string; model?: string; speed?: string; label?: string; allowedOrigins?: string[] }
+  patch: { sourceIds?: string[]; answerMode?: string; model?: string; speed?: string; allowSpeedChoice?: boolean; label?: string; allowedOrigins?: string[] }
 ): Promise<void> {
   if (!sql) return;
   await ensureSchema();
@@ -138,13 +159,18 @@ export async function updateConnectionSources(
   const cur = rowOf(existing[0]);
   const sourceIds = patch.sourceIds ?? cur.source_ids;
   const answerMode = (patch.answerMode ?? cur.answer_mode) === 'hybrid' ? 'hybrid' : 'cited';
-  const origins = patch.allowedOrigins ?? cur.allowed_origins;
+  const origins = patch.allowedOrigins
+    ? Array.from(new Set(patch.allowedOrigins.map(normOrigin).filter(Boolean)))
+    : cur.allowed_origins;
+  const allowSpeedChoice =
+    patch.allowSpeedChoice === undefined ? cur.allow_speed_choice : !!patch.allowSpeedChoice;
   await sql`
     UPDATE connections SET
       source_ids=${JSON.stringify(sourceIds)}::jsonb,
       answer_mode=${answerMode},
       model=${patch.model ?? cur.model},
       speed=${patch.speed ?? cur.speed},
+      allow_speed_choice=${allowSpeedChoice},
       label=${patch.label ?? cur.label},
       allowed_origins=${JSON.stringify(origins)}::jsonb
     WHERE scope=${scope} AND id=${id}
@@ -177,6 +203,7 @@ function rowOf(r: Record<string, unknown>): ConnectionRow {
     answer_mode: String(r.answer_mode ?? 'cited'),
     model: String(r.model ?? ''),
     speed: String(r.speed ?? 'detailed'),
+    allow_speed_choice: r.allow_speed_choice === true || r.allow_speed_choice === 't',
     allowed_origins: arr(r.allowed_origins),
     key_prefix: String(r.key_prefix ?? ''),
     created_at: String(r.created_at ?? ''),

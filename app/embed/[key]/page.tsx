@@ -27,11 +27,35 @@ export default function EmbedChatPage() {
   const [q, setQ] = useState('');
   const [busy, setBusy] = useState(false);
   const [bank, setBank] = useState('');
+  const [allowSpeed, setAllowSpeed] = useState(false);
+  const [speed, setSpeed] = useState<'fast' | 'detailed' | 'research'>('detailed');
   const endRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [msgs, busy]);
+
+  // Pull the widget config (label + whether to offer the speed picker).
+  useEffect(() => {
+    if (!apiKey) return;
+    fetch('/api/v1/ask', { headers: { Authorization: `Bearer ${apiKey}` } })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((cfg) => {
+        if (!cfg) return;
+        if (cfg.bank) setBank(cfg.bank);
+        setAllowSpeed(!!cfg.allowSpeedChoice);
+        if (cfg.defaultSpeed === 'fast' || cfg.defaultSpeed === 'research' || cfg.defaultSpeed === 'detailed') {
+          setSpeed(cfg.defaultSpeed);
+        }
+      })
+      .catch(() => {});
+  }, [apiKey]);
+
+  const SPEEDS: { id: 'fast' | 'detailed' | 'research'; label: string }[] = [
+    { id: 'fast', label: 'Fast' },
+    { id: 'detailed', label: 'Normal' },
+    { id: 'research', label: 'Research' }
+  ];
 
   async function ask(question: string) {
     const text = question.trim();
@@ -44,7 +68,7 @@ export default function EmbedChatPage() {
       const res = await fetch('/api/v1/ask', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
-        body: JSON.stringify({ question: text, conversation: history })
+        body: JSON.stringify({ question: text, conversation: history, speed })
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error || 'Request failed');
@@ -148,13 +172,46 @@ export default function EmbedChatPage() {
         <div ref={endRef} />
       </div>
 
+      {/* speed picker — only when the publisher allows the choice */}
+      {allowSpeed && (
+        <div
+          style={{
+            flexShrink: 0,
+            display: 'flex',
+            gap: 4,
+            padding: '8px 12px 0',
+            background: '#fff'
+          }}
+        >
+          {SPEEDS.map((s) => (
+            <button
+              key={s.id}
+              type="button"
+              onClick={() => setSpeed(s.id)}
+              style={{
+                border: 'none',
+                borderRadius: 999,
+                padding: '3px 11px',
+                fontSize: 11.5,
+                fontWeight: 600,
+                cursor: 'pointer',
+                background: speed === s.id ? '#4f46e5' : '#eef2ff',
+                color: speed === s.id ? '#fff' : '#4338ca'
+              }}
+            >
+              {s.label}
+            </button>
+          ))}
+        </div>
+      )}
+
       {/* composer */}
       <form
         onSubmit={(e) => {
           e.preventDefault();
           ask(q);
         }}
-        style={{ flexShrink: 0, display: 'flex', gap: 8, padding: 12, borderTop: '1px solid #ececf0', background: '#fff' }}
+        style={{ flexShrink: 0, display: 'flex', gap: 8, padding: 12, borderTop: allowSpeed ? 'none' : '1px solid #ececf0', background: '#fff' }}
       >
         <input
           value={q}

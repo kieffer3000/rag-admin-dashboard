@@ -47,9 +47,18 @@ export function ConnectDialog({
   const [loading, setLoading] = useState(false);
   const [creating, setCreating] = useState(false);
   const [origins, setOrigins] = useState('');
+  // Widget answer-mode: a fixed speed, or 'choice' = let the end-user pick.
+  const [widgetMode, setWidgetMode] = useState<'fast' | 'detailed' | 'research' | 'choice'>(
+    speed === 'fast' || speed === 'research' ? (speed as 'fast' | 'research') : 'detailed'
+  );
   const [freshKey, setFreshKey] = useState<string | null>(null);
   const [copied, setCopied] = useState<string | null>(null);
   const origin = typeof window !== 'undefined' ? window.location.origin : '';
+  const hasRag = sourceIds.length > 0;
+  const parsedOrigins = origins
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -83,11 +92,9 @@ export function ConnectDialog({
           sourceIds,
           answerMode,
           model,
-          speed,
-          allowedOrigins: origins
-            .split(',')
-            .map((s) => s.trim())
-            .filter(Boolean)
+          speed: widgetMode === 'choice' ? 'detailed' : widgetMode,
+          allowSpeedChoice: widgetMode === 'choice',
+          allowedOrigins: parsedOrigins
         })
       });
       const data = await res.json();
@@ -112,7 +119,14 @@ export function ConnectDialog({
     await fetch('/api/connections', {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id, sourceIds, answerMode, model, speed })
+      body: JSON.stringify({
+        id,
+        sourceIds,
+        answerMode,
+        model,
+        speed: widgetMode === 'choice' ? 'detailed' : widgetMode,
+        allowSpeedChoice: widgetMode === 'choice'
+      })
     });
     await load();
     window.alert(`Re-synced — this key now answers from the Bank's current ${sourceIds.length} sources.`);
@@ -147,31 +161,81 @@ export function ConnectDialog({
 
         <div className="space-y-4">
           {/* create */}
-          <div className="rounded-xl border border-accent/20 bg-accent/[0.04] p-3">
-            <div className="flex flex-wrap items-end gap-2">
-              <div className="flex-1 space-y-1.5">
-                <Label className="flex items-center gap-1.5 text-[12px]">
-                  <Globe className="h-3.5 w-3.5" /> Allowed website(s) — optional
-                </Label>
-                <Input
-                  value={origins}
-                  onChange={(e) => setOrigins(e.target.value)}
-                  placeholder="https://my-seo-dashboard.com  (blank = any site)"
-                  className="h-9 text-[12.5px]"
-                />
-              </div>
-              <Button
-                onClick={create}
-                disabled={creating || sourceIds.length === 0}
-                className="h-9 bg-accent text-white hover:bg-accent/90"
-              >
-                {creating ? 'Creating…' : 'Create connection key'}
-              </Button>
-            </div>
-            {sourceIds.length === 0 && (
-              <p className="mt-2 text-[11.5px] text-amber-600">
-                Wire at least one source into this Bank first.
+          <div className="space-y-3 rounded-xl border border-accent/20 bg-accent/[0.04] p-3">
+            {!hasRag ? (
+              // Gate: a key is useless without a knowledge base to answer FROM.
+              <p className="flex items-start gap-2 rounded-lg bg-amber-500/10 px-3 py-2 text-[12.5px] text-amber-700 dark:text-amber-300">
+                <span>🔌</span>
+                <span>
+                  Connect a <strong>Library</strong> (your knowledge base / database) to this
+                  Answers Bank before creating a key — there&apos;s nothing to answer from yet.
+                </span>
               </p>
+            ) : (
+              <>
+                {/* required domain lock */}
+                <div className="space-y-1.5">
+                  <Label className="flex items-center gap-1.5 text-[12px]">
+                    <Globe className="h-3.5 w-3.5" /> Allowed website
+                    <span className="text-red-500">*</span>
+                  </Label>
+                  <Input
+                    value={origins}
+                    onChange={(e) => setOrigins(e.target.value)}
+                    placeholder="https://my-seo-dashboard.com   (comma-separate several)"
+                    className="h-9 text-[12.5px]"
+                  />
+                  <p className="text-[11px] text-muted-foreground/70">
+                    Required. The key + widget only work on this domain — it can&apos;t be used
+                    anywhere else.
+                  </p>
+                </div>
+
+                {/* widget answer mode */}
+                <div className="space-y-1.5">
+                  <Label className="text-[12px]">Answer mode in the widget</Label>
+                  <div className="flex flex-wrap gap-1.5">
+                    {(
+                      [
+                        { id: 'fast', label: '⚡ Fast only' },
+                        { id: 'detailed', label: '🔍 Normal only' },
+                        { id: 'research', label: '🔭 Research only' },
+                        { id: 'choice', label: '🎚️ Let users choose' }
+                      ] as const
+                    ).map((m) => (
+                      <button
+                        key={m.id}
+                        type="button"
+                        onClick={() => setWidgetMode(m.id)}
+                        className={
+                          'rounded-full px-2.5 py-1 text-[11.5px] font-semibold transition-colors ' +
+                          (widgetMode === m.id
+                            ? 'bg-accent text-white'
+                            : 'bg-card text-muted-foreground ring-1 ring-black/[0.06] hover:text-foreground dark:ring-white/[0.08]')
+                        }
+                      >
+                        {m.label}
+                      </button>
+                    ))}
+                  </div>
+                  <p className="text-[11px] text-muted-foreground/70">
+                    Lock everyone to one speed, or let the people using the widget pick Fast /
+                    Normal / Research themselves.
+                  </p>
+                </div>
+
+                <Button
+                  onClick={create}
+                  disabled={creating || parsedOrigins.length === 0}
+                  className="h-9 w-full bg-accent text-white hover:bg-accent/90"
+                >
+                  {creating
+                    ? 'Creating…'
+                    : parsedOrigins.length === 0
+                      ? 'Add an allowed website to continue'
+                      : 'Create connection key'}
+                </Button>
+              </>
             )}
           </div>
 

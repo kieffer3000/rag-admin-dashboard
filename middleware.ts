@@ -1,5 +1,6 @@
 import { clerkMiddleware, createRouteMatcher, clerkClient } from '@clerk/nextjs/server';
 import { NextResponse } from 'next/server';
+import { allowedOriginsForKey } from '@/lib/rag/embed-origins';
 
 const isPublicRoute = createRouteMatcher([
   '/sign-in(.*)',
@@ -32,6 +33,19 @@ const PLAN_SLUGS = ['pro', 'team'];
 
 export default clerkMiddleware(async (auth, req) => {
   const { userId, has } = await auth();
+
+  // Embed widget: frame-LOCK it to the key's allowed domains so a browser
+  // refuses to render the widget on any other site (the real "can't use it
+  // outside that domain"). Unknown key / DB error → 'none' (fail closed).
+  if (req.nextUrl.pathname.startsWith('/embed/')) {
+    const key = decodeURIComponent(req.nextUrl.pathname.split('/')[2] ?? '');
+    const origins = await allowedOriginsForKey(key);
+    const ancestors = origins && origins.length > 0 ? origins.join(' ') : "'none'";
+    const res = NextResponse.next();
+    res.headers.set('Content-Security-Policy', `frame-ancestors ${ancestors}`);
+    res.headers.delete('X-Frame-Options'); // CSP is authoritative; avoid a DENY clash
+    return res;
+  }
 
   // Signed-in users hitting auth pages go home.
   if (userId && /^\/sign-(in|up)/.test(req.nextUrl.pathname)) {

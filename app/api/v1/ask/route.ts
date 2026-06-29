@@ -27,22 +27,45 @@ function rateLimited(id: string): boolean {
   return b.n > RATE;
 }
 
-/** CORS headers for a given request origin against a connection's allowlist.
- *  Empty allowlist = open (`*`). Otherwise only echo an allowed origin. */
-function corsHeaders(origin: string | null, allowed: string[]): Record<string, string> {
+function selfOriginOf(req: Request): string {
+  const host = req.headers.get('host') ?? '';
+  const proto = req.headers.get('x-forwarded-proto') ?? 'https';
+  return host ? `${proto}://${host}`.toLowerCase() : '';
+}
+
+/** Decide whether a browser request's Origin is allowed for this connection.
+ *  - No Origin (server-to-server curl): allowed — the secret key is the credential.
+ *  - Same-origin (the embed widget served from this app): always allowed.
+ *  - Otherwise the Origin must be in the connection's allowlist.
+ *  Returns the CORS headers + a boolean. */
+function resolveCors(
+  origin: string | null,
+  selfOrigin: string,
+  allowed: string[]
+): { ok: boolean; headers: Record<string, string> } {
+  const o = (origin ?? '').toLowerCase();
+  let ok = true;
   let allowOrigin = '*';
-  if (allowed.length > 0) {
-    const o = (origin ?? '').toLowerCase();
-    allowOrigin = o && allowed.includes(o) ? origin! : 'null';
+  if (o) {
+    if (o === selfOrigin || allowed.includes(o)) {
+      allowOrigin = origin!;
+    } else {
+      ok = false;
+      allowOrigin = 'null';
+    }
   }
   return {
-    'Access-Control-Allow-Origin': allowOrigin,
-    'Access-Control-Allow-Methods': 'POST, OPTIONS',
-    'Access-Control-Allow-Headers': 'Content-Type, Authorization, x-api-key',
-    'Access-Control-Max-Age': '86400',
-    Vary: 'Origin'
+    ok,
+    headers: {
+      'Access-Control-Allow-Origin': allowOrigin,
+      'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+      'Access-Control-Allow-Headers': 'Content-Type, Authorization, x-api-key',
+      'Access-Control-Max-Age': '86400',
+      Vary: 'Origin'
+    }
   };
 }
+const openCors = (origin: string | null) => resolveCors(origin, '', []).headers;
 
 function keyFrom(req: Request, body: Record<string, unknown>): string {
   const auth = req.headers.get('authorization') ?? '';
@@ -54,12 +77,32 @@ function keyFrom(req: Request, body: Record<string, unknown>): string {
 }
 
 export async function OPTIONS(req: Request) {
-  // Preflight — we don't know the key's allowlist yet, so reflect permissively;
-  // the actual POST re-checks against the resolved connection.
-  return new Response(null, {
-    status: 204,
-    headers: corsHeaders(req.headers.get('origin'), [])
-  });
+  // Preflight — reflect permissively; the actual GET/POST re-checks the Origin
+  // against the resolved connection's allowlist.
+  return new Response(null, { status: 204, headers: openCors(req.headers.get('origin')) });
+}
+
+// Lightweight public config for the embed widget (no question): the Bank's
+// label, whether to show the speed picker, and the default speed.
+export async function GET(req: Request) {
+  const origin = req.headers.get('origin');
+  const key = keyFrom(req, {});
+  const conn = key ? await getConnectionByKey(key) : null;
+  if (!conn) {
+    return Response.json({ error: 'Invalid or revoked API key.' }, { status: 401, headers: openCors(origin) });
+  }
+  const { ok, headers } = resolveCors(origin, selfOriginOf(req), conn.allowed_origins);
+  if (!ok) {
+    return Response.json({ error: 'Origin not allowed for this key.' }, { status: 403, headers });
+  }
+  return Response.json(
+    {
+      bank: conn.label,
+      allowSpeedChoice: conn.allow_speed_choice,
+      defaultSpeed: conn.speed
+    },
+    { headers }
+  );
 }
 
 export async function POST(req: Request) {
@@ -75,7 +118,7 @@ export async function POST(req: Request) {
   if (!key) {
     return Response.json(
       { error: 'Missing API key. Send Authorization: Bearer <key>.' },
-      { status: 401, headers: corsHeaders(origin, []) }
+      { status: 401, headers: openCors(origin) }
     );
   }
 
@@ -83,16 +126,21 @@ export async function POST(req: Request) {
   if (!conn) {
     return Response.json(
       { error: 'Invalid or revoked API key.' },
-      { status: 401, headers: corsHeaders(origin, []) }
+      { status: 401, headers: openCors(origin) }
     );
   }
 
-  const cors = corsHeaders(origin, conn.allowed_origins);
-  // Origin lock: if the connection pins origins and this one isn't allowed, deny
-  // (covers the embed widget being lifted onto an unauthorized site).
-  if (conn.allowed_origins.length > 0 && cors['Access-Control-Allow-Origin'] === 'null') {
+  // Origin lock — deny browser calls from a domain that isn't allowed (covers the
+  // widget being lifted onto an unauthorized site, or the key used from another
+  // origin's JS). Server-to-server calls (no Origin) pass — the key is the secret.
+  const { ok: originOk, headers: cors } = resolveCors(
+    origin,
+    selfOriginOf(req),
+    conn.allowed_origins
+  );
+  if (!originOk) {
     return Response.json(
-      { error: 'Origin not allowed for this key.' },
+      { error: 'This key is locked to another website and cannot be used from here.' },
       { status: 403, headers: cors }
     );
   }
@@ -130,13 +178,22 @@ export async function POST(req: Request) {
       .slice(-10)
       .join('\n');
 
+    // Speed: locked to the connection's setting UNLESS the publisher allowed the
+    // widget to choose — then honour a valid client-supplied speed (research can
+    // cost more, so it's opt-in by the publisher).
+    const reqSpeed = typeof body.speed === 'string' ? body.speed : '';
+    const validSpeeds = ['fast', 'detailed', 'research'];
+    const speed = (
+      conn.allow_speed_choice && validSpeeds.includes(reqSpeed) ? reqSpeed : conn.speed
+    ) as 'fast' | 'detailed' | 'research';
+
     const result = await relayPublicQuery({
       question,
       namespace: conn.namespace,
       sourceIds: conn.source_ids,
       answerMode: conn.answer_mode === 'hybrid' ? 'hybrid' : 'cited',
       model: conn.model,
-      speed: (conn.speed as 'fast' | 'detailed' | 'research') ?? 'detailed',
+      speed: speed ?? 'detailed',
       conversation
     });
 
