@@ -1701,10 +1701,12 @@ function BoardCanvasInner() {
     }
     if (blocks.length < 2) return;
 
-    const COL_GAP = 110;
+    // Generous gaps so each brain's OUTSIDE plug labels (Library/Examples/Draft/
+    // Persona) have room and never overlap the docked pieces.
+    const COL_GAP = 150;
     const ROW_GAP = 28;
-    const SIDE_GAP = 46; // gap between a brain and its top/bottom docked row
-    const BAND_GAP = 72;
+    const SIDE_GAP = 78; // gap between a brain and its top/bottom docked row
+    const BAND_GAP = 84;
     const TOP = 80;
     const LEFT = 80;
 

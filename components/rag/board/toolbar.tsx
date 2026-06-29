@@ -1043,8 +1043,8 @@ export function BoardToolbar(p: BoardToolbarProps) {
                 icon={LibraryBig}
                 tint="bg-accent/10"
                 text="text-accent"
-                title="Long-term memory"
-                sub="RAG · indexed forever"
+                title="Library"
+                sub="Long-term knowledge · indexed forever"
                 desc="Books, lectures, images, audio you'll come back to again and again."
                 long="Choose this for anything you want remembered permanently and searched across. It's chunked, embedded, and stored in your vector database, so any brain can retrieve and cite exact passages — even months later. Best for research libraries, full books, course transcripts, and large document sets. Slower to add (it's processed once), instant to query forever."
                 expanded={helpKind === 'rag'}
@@ -1057,8 +1057,8 @@ export function BoardToolbar(p: BoardToolbarProps) {
                 icon={FileText}
                 tint="bg-indigo-500/10"
                 text="text-indigo-500"
-                title="Working doc"
-                sub="Artifact · short-term"
+                title="Draft"
+                sub="Working doc · short-term"
                 desc="A draft, article, or page for a quick project — carried whole, not indexed."
                 long="Choose this when you're actively working ON a document and want a brain to read it in full and opine — rewrite, critique, summarize, or answer about it. It's held complete in the brain's context (not chunked or stored long-term), so the brain sees every word. Best for the article you're drafting, a webpage you're editing, or a transcript you're analyzing right now. It leaves memory when you remove it."
                 expanded={helpKind === 'artifact'}
@@ -1076,8 +1076,8 @@ export function BoardToolbar(p: BoardToolbarProps) {
                 icon={BookOpen}
                 tint="bg-violet-500/10"
                 text="text-violet-500"
-                title="Supporting document"
-                sub="Reference · an example or guide"
+                title="Examples"
+                sub="Style samples · never indexed"
                 desc="A template or example that shows a brain the style or shape you want."
                 long="Choose this to steer HOW a brain answers without it becoming a source. References are exemplars — 'make it like this' — that shape tone, format, and judgment but are never indexed and never cited. Best for a sample whose style you want matched, a rubric, or a 'good answer' to imitate. Pair it with a Working doc and a corpus for the sharpest results."
                 expanded={helpKind === 'reference'}
