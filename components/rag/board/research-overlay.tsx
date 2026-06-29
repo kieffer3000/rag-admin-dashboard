@@ -436,7 +436,13 @@ export function ResearchOverlay({
       </header>
 
       {/* messages — a "document page" floating on a desk (Word/Docs feel) */}
-      <div ref={scrollRef} className="scroll-brain min-h-0 flex-1 overflow-y-auto px-4 py-8">
+      {/* translateZ(0) promotes the scroll area to its own GPU layer so scrolling
+          COMPOSITES instead of repainting the tall card's 44px shadow every frame
+          (the cause of the read-mode flicker). */}
+      <div
+        ref={scrollRef}
+        className="scroll-brain min-h-0 flex-1 overflow-y-auto px-4 py-8 [transform:translateZ(0)]"
+      >
         <div className="mx-auto flex w-full max-w-[820px] flex-col gap-6 rounded-2xl border border-[rgb(var(--hairline)/0.1)] bg-card px-6 py-9 shadow-[0_10px_44px_rgb(0_0_0/0.13)] sm:px-12 sm:py-11 [&_.rag-html]:font-serif [&_.rag-html]:text-[16.5px] [&_.rag-html]:leading-[1.7]">
           {messages.length === 0 ? (
             <div className="flex flex-col items-center justify-center pt-24 text-center">
