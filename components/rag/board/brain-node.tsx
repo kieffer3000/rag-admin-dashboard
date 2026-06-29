@@ -883,6 +883,7 @@ function BrainNodeInner({ id, data, selected }: NodeProps) {
       >
         <BrainBarBtn
           title="Fullscreen — fill the screen for reading"
+          label="Fullscreen"
           onClick={() => {
             const { zoom } = getViewport();
             resizeBoardNode(
@@ -901,6 +902,7 @@ function BrainNodeInner({ id, data, selected }: NodeProps) {
         </BrainBarBtn>
         <BrainBarBtn
           title="Zoom to this brain"
+          label="Zoom"
           onClick={() =>
             fitView({ nodes: [{ id }], duration: 420, padding: 0.12, maxZoom: 1.4 })
           }
@@ -909,6 +911,7 @@ function BrainNodeInner({ id, data, selected }: NodeProps) {
         </BrainBarBtn>
         <BrainBarBtn
           title="Research mode — full-screen, distraction-free"
+          label="Research"
           accent
           onClick={() => setResearchBrainId(id)}
         >
@@ -917,6 +920,7 @@ function BrainNodeInner({ id, data, selected }: NodeProps) {
         <span className="mx-0.5 h-4 w-px bg-[rgb(var(--hairline)/0.18)]" />
         <BrainBarBtn
           title="Send to Chest — tuck this brain away"
+          label="Chest"
           onClick={() => stashBrain(id)}
         >
           <Archive className="h-[15px] w-[15px]" />
@@ -1575,14 +1579,16 @@ function BrainNodeInner({ id, data, selected }: NodeProps) {
   );
 }
 
-/** One icon button in the brain's floating hover bar. */
+/** One labelled button in the brain's floating hover bar. */
 function BrainBarBtn({
   title,
+  label,
   onClick,
   accent,
   children
 }: {
   title: string;
+  label: string;
   onClick: () => void;
   accent?: boolean;
   children: React.ReactNode;
@@ -1596,13 +1602,14 @@ function BrainBarBtn({
         onClick();
       }}
       className={cn(
-        'nodrag flex h-7 w-7 items-center justify-center rounded-full transition-colors',
+        'nodrag flex h-7 items-center gap-1 rounded-full px-2 text-[12px] font-semibold transition-colors',
         accent
           ? 'text-accent hover:bg-accent hover:text-white'
-          : 'text-muted-foreground/75 hover:bg-black/[0.05] hover:text-foreground dark:hover:bg-white/[0.07]'
+          : 'text-muted-foreground/80 hover:bg-black/[0.05] hover:text-foreground dark:hover:bg-white/[0.07]'
       )}
     >
       {children}
+      {label}
     </button>
   );
 }
