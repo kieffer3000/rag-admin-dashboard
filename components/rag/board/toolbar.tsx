@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { cn } from '@/lib/utils';
 import { useRag } from '@/lib/rag/store';
 import { MEDIA_TYPES } from '@/lib/rag/media-config';
@@ -131,6 +131,10 @@ function dedupKey(type: MediaType | undefined, raw: string): string {
  */
 export function BoardToolbar(p: BoardToolbarProps) {
   const { projectMedia, media } = useRag();
+  // id → item, built once per media change — the import progress list looks up
+  // dozens of rows per render; an O(1) map keeps each render (esp. during scroll)
+  // cheap instead of O(rows × media).
+  const mediaById = useMemo(() => new Map(media.map((m) => [m.id, m])), [media]);
   const [collapsed, setCollapsed] = useState(false);
   // Sound starts unknown on the server; sync from localStorage after mount.
   const [sound, setSound] = useState(true);
@@ -611,8 +615,7 @@ export function BoardToolbar(p: BoardToolbarProps) {
               </DialogHeader>
               {/* status filter pills — click to slice the list by status */}
               {(() => {
-                const stOf = (mid: string) =>
-                  media.find((x) => x.id === mid)?.status ?? 'processing';
+                const stOf = (mid: string) => mediaById.get(mid)?.status ?? 'processing';
                 const indexedN = importing.filter(
                   (it) => stOf(it.id) === 'indexed'
                 ).length;
@@ -658,14 +661,13 @@ export function BoardToolbar(p: BoardToolbarProps) {
                   .filter((it) => {
                     if (importFilter === 'all') return true;
                     if (importFilter === 'skipped') return false;
-                    const s =
-                      media.find((x) => x.id === it.id)?.status ?? 'processing';
+                    const s = mediaById.get(it.id)?.status ?? 'processing';
                     if (importFilter === 'indexed') return s === 'indexed';
                     if (importFilter === 'failed') return s === 'failed';
                     return s !== 'indexed' && s !== 'failed'; // pending
                   })
                   .map(({ id, url }) => {
-                  const m = media.find((x) => x.id === id);
+                  const m = mediaById.get(id);
                   const st = m?.status ?? 'processing';
                   return (
                     <div
