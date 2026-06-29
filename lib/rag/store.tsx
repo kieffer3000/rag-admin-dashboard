@@ -60,6 +60,13 @@ interface RagState {
   /** Merge persisted media back in on load (board persistence). */
   hydrateMedia: (items: MediaItem[], projectId: string) => void;
   updateMedia: (id: string, patch: Partial<MediaItem>) => void;
+  /** Like updateMedia but COALESCED: many rapid calls (e.g. a big import where
+   *  items finish one after another) are buffered and applied in a single state
+   *  update at most every few seconds — stops the board from re-rendering on
+   *  every item and the "jitter" that causes. */
+  queueMediaPatch: (id: string, patch: Partial<MediaItem>) => void;
+  /** Force-apply any buffered patches now (e.g. when an import finishes). */
+  flushMediaPatches: () => void;
   deleteMedia: (id: string) => void;
   reindexMedia: (id: string) => void;
 
@@ -457,6 +464,40 @@ export function RagProvider({ children }: { children: ReactNode }) {
     setMedia((prev) => prev.map((m) => (m.id === id ? { ...m, ...patch } : m)));
   }, []);
 
+  // ---- coalesced status updates (anti-jitter during imports) ----
+  // Buffer per-item patches and apply them all in ONE setMedia at most every
+  // FLUSH_MS, so a 60-file import re-renders the board ~once every few seconds
+  // instead of 60 times in a burst.
+  const FLUSH_MS = 5000;
+  const patchBuffer = useRef<Map<string, Partial<MediaItem>>>(new Map());
+  const flushTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const flushMediaPatches = useCallback(() => {
+    if (flushTimer.current) {
+      clearTimeout(flushTimer.current);
+      flushTimer.current = null;
+    }
+    if (patchBuffer.current.size === 0) return;
+    const patches = patchBuffer.current;
+    patchBuffer.current = new Map();
+    setMedia((prev) =>
+      prev.map((m) => (patches.has(m.id) ? { ...m, ...patches.get(m.id)! } : m))
+    );
+  }, []);
+  const queueMediaPatch = useCallback(
+    (id: string, patch: Partial<MediaItem>) => {
+      const cur = patchBuffer.current.get(id) ?? {};
+      patchBuffer.current.set(id, { ...cur, ...patch });
+      if (!flushTimer.current) {
+        flushTimer.current = setTimeout(() => {
+          flushTimer.current = null;
+          flushMediaPatches();
+        }, FLUSH_MS);
+      }
+    },
+    [flushMediaPatches]
+  );
+  useEffect(() => () => flushMediaPatches(), [flushMediaPatches]);
+
   const hydrateMedia = useCallback((items: MediaItem[], projectId: string) => {
     if (!items?.length) return;
     // Advance the id counter past every loaded id. The counter is module-level
@@ -763,6 +804,8 @@ export function RagProvider({ children }: { children: ReactNode }) {
     addMedia,
     hydrateMedia,
     updateMedia,
+    queueMediaPatch,
+    flushMediaPatches,
     deleteMedia,
     reindexMedia,
     setActiveProject,

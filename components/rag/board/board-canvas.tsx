@@ -209,7 +209,7 @@ const FILL_MIN_ZOOM = 0.2;
 function BoardCanvasInner() {
   const { board, setBoard, setBoardSilent, nextBoardId, busyBrains, saveNow, removeBoardNode, connectArtifactToBrain, setBrainPicker, setAgentEditor, pendingDelete, setPendingDelete, hydratedProject, researchBrainId, setResearchBrainId } =
     useBoard();
-  const { media, projectMedia, addMedia, updateMedia, deleteMedia, activeProjectId, activeProject, pendingBox, setPendingBox } = useRag();
+  const { media, projectMedia, addMedia, updateMedia, queueMediaPatch, deleteMedia, activeProjectId, activeProject, pendingBox, setPendingBox } = useRag();
 
   // Library → Board handoff: build a box from a selection sent over from the
   // Library ("Send to box"). Creates the hub + a chip per source (pulling any
@@ -1283,7 +1283,7 @@ function BoardCanvasInner() {
             .then(async (r) => {
               const j = await r.json().catch(() => ({}));
               if (!r.ok || !j.ok) throw new Error(j?.error ?? j?.note ?? 'failed');
-              updateMedia(id, {
+              queueMediaPatch(id, {
                 status: 'indexed',
                 chunks: j.chunks,
                 ...(j.title ? { name: j.title } : {}),
@@ -1291,7 +1291,7 @@ function BoardCanvasInner() {
               });
             })
             .catch((e: unknown) =>
-              updateMedia(id, {
+              queueMediaPatch(id, {
                 status: 'failed',
                 error: e instanceof Error && e.message ? e.message : 'Indexing failed'
               })
@@ -1307,14 +1307,14 @@ function BoardCanvasInner() {
             .then(async (r) => {
               const j = await r.json().catch(() => ({}));
               if (!r.ok || !j.ok) throw new Error(j?.note ?? j?.error ?? 'failed');
-              updateMedia(id, {
+              queueMediaPatch(id, {
                 status: 'indexed',
                 chunks: j.chunks,
                 ...(j.title ? { name: j.title } : {})
               });
             })
             .catch((e: unknown) =>
-              updateMedia(id, {
+              queueMediaPatch(id, {
                 status: 'failed',
                 error: e instanceof Error && e.message ? e.message : 'Indexing failed'
               })
@@ -1334,10 +1334,10 @@ function BoardCanvasInner() {
           })
             .then((r) => {
               if (!r.ok) throw new Error(`Indexing failed (HTTP ${r.status})`);
-              updateMedia(id, { status: 'indexed' });
+              queueMediaPatch(id, { status: 'indexed' });
             })
             .catch((e: unknown) =>
-              updateMedia(id, {
+              queueMediaPatch(id, {
                 status: 'failed',
                 error: e instanceof Error && e.message ? e.message : 'Indexing failed'
               })
@@ -2017,7 +2017,7 @@ function BoardCanvasInner() {
                   if (!r.ok || !j.ok)
                     throw new Error(j?.error ?? j?.note ?? 'index failed');
                   // Inherit the real YouTube title + thumbnail (oEmbed).
-                  updateMedia(id, {
+                  queueMediaPatch(id, {
                     status: 'indexed',
                     chunks: j.chunks,
                     ...(j.title ? { name: j.title } : {}),
@@ -2025,7 +2025,7 @@ function BoardCanvasInner() {
                   });
                 })
                 .catch((e: unknown) =>
-              updateMedia(id, {
+              queueMediaPatch(id, {
                 status: 'failed',
                 error: e instanceof Error && e.message ? e.message : 'Indexing failed'
               })
@@ -2050,14 +2050,14 @@ function BoardCanvasInner() {
                     if (j?.note) window.alert(`Couldn’t read that website.\n\n${j.note}`);
                     throw new Error(j?.note ?? j?.error ?? 'index failed');
                   }
-                  updateMedia(id, {
+                  queueMediaPatch(id, {
                     status: 'indexed',
                     chunks: j.chunks,
                     ...(j.title ? { name: j.title } : {})
                   });
                 })
                 .catch((e: unknown) =>
-              updateMedia(id, {
+              queueMediaPatch(id, {
                 status: 'failed',
                 error: e instanceof Error && e.message ? e.message : 'Indexing failed'
               })
@@ -2079,10 +2079,10 @@ function BoardCanvasInner() {
             })
               .then((r) => {
                 if (!r.ok) throw new Error();
-                updateMedia(id, { status: 'indexed' });
+                queueMediaPatch(id, { status: 'indexed' });
               })
               .catch((e: unknown) =>
-              updateMedia(id, {
+              queueMediaPatch(id, {
                 status: 'failed',
                 error: e instanceof Error && e.message ? e.message : 'Indexing failed'
               })
@@ -2118,7 +2118,7 @@ function BoardCanvasInner() {
               .then(async (r) => {
                 const j = await r.json().catch(() => ({}));
                 if (!r.ok || !j.ok) throw new Error(j?.error ?? 'upload failed');
-                updateMedia(id, {
+                queueMediaPatch(id, {
                   status: j.indexed ? 'indexed' : 'processing',
                   source: j.image_url, // hosted URL → thumbnail + visual search
                   content: j.caption || name
@@ -2126,7 +2126,7 @@ function BoardCanvasInner() {
                 if (!j.indexed && j.note) console.warn('[image-index]', j.note);
               })
               .catch((e: unknown) =>
-              updateMedia(id, {
+              queueMediaPatch(id, {
                 status: 'failed',
                 error: e instanceof Error && e.message ? e.message : 'Indexing failed'
               })
@@ -2169,13 +2169,13 @@ function BoardCanvasInner() {
               const j = await r.json().catch(() => ({}));
               if (!r.ok || !j.ok)
                 throw new Error(j?.error ?? j?.note ?? 'index failed');
-              updateMedia(id, {
+              queueMediaPatch(id, {
                 status: 'indexed',
                 chunks: j.chunks,
                 source: j.source_url
               });
             } catch {
-              updateMedia(id, { status: 'failed' });
+              queueMediaPatch(id, { status: 'failed' });
             }
           };
 
@@ -2354,10 +2354,10 @@ function BoardCanvasInner() {
           })
             .then((r) => {
               if (!r.ok) throw new Error(`Indexing failed (HTTP ${r.status})`);
-              updateMedia(id, { status: 'indexed' });
+              queueMediaPatch(id, { status: 'indexed' });
             })
             .catch((e: unknown) =>
-              updateMedia(id, {
+              queueMediaPatch(id, {
                 status: 'failed',
                 error: e instanceof Error && e.message ? e.message : 'Indexing failed'
               })
@@ -2398,7 +2398,7 @@ function BoardCanvasInner() {
                 })
               });
               if (!r.ok) throw new Error(`Indexing failed (HTTP ${r.status})`);
-              updateMedia(id, { status: 'indexed', content: transcript });
+              queueMediaPatch(id, { status: 'indexed', content: transcript });
             } catch (e: unknown) {
               const status = (e as { status?: number })?.status;
               const error =
@@ -2407,7 +2407,7 @@ function BoardCanvasInner() {
                   : e instanceof Error && e.message
                     ? e.message
                     : 'Indexing failed';
-              updateMedia(id, { status: 'failed', error });
+              queueMediaPatch(id, { status: 'failed', error });
             }
           })();
         }}
