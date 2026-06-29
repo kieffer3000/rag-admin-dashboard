@@ -9,15 +9,9 @@ import { useEffect, useRef, useState } from 'react';
 // published Answers Bank, with citations. Self-contained styling so it looks
 // right on any host page (no app chrome, no auth).
 
-interface Citation {
-  source_id: string;
-  source_name?: string;
-  snippet?: string;
-}
 interface Msg {
   role: 'user' | 'assistant';
   content: string;
-  citations?: Citation[];
 }
 
 export default function EmbedChatPage() {
@@ -87,10 +81,7 @@ export default function EmbedChatPage() {
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error || 'Request failed');
       if (data.bank) setBank(data.bank);
-      setMsgs((m) => [
-        ...m,
-        { role: 'assistant', content: data.answer || '(no answer)', citations: data.citations || [] }
-      ]);
+      setMsgs((m) => [...m, { role: 'assistant', content: data.answer || '(no answer)' }]);
     } catch (e) {
       setMsgs((m) => [
         ...m,
@@ -147,14 +138,13 @@ export default function EmbedChatPage() {
       >
         <span style={{ fontSize: 18 }}>🏛️</span>
         <strong style={{ fontSize: 14 }}>{bank || 'Ask the knowledge base'}</strong>
-        <span style={{ marginLeft: 'auto', fontSize: 11, opacity: 0.85 }}>cited answers</span>
       </div>
 
       {/* transcript */}
       <div style={{ flex: 1, overflowY: 'auto', padding: 16, display: 'flex', flexDirection: 'column', gap: 12 }}>
         {msgs.length === 0 && (
           <div style={{ margin: 'auto', textAlign: 'center', color: '#6b7280', fontSize: 13, maxWidth: 280 }}>
-            Ask anything — every answer is grounded in this knowledge base and cited.
+            Ask anything — every answer is grounded in this knowledge base.
           </div>
         )}
         {msgs.map((m, i) => (
@@ -175,29 +165,6 @@ export default function EmbedChatPage() {
             }}
           >
             {m.content}
-            {m.citations && m.citations.length > 0 && (
-              <div style={{ marginTop: 8, display: 'flex', flexWrap: 'wrap', gap: 4 }}>
-                {m.citations.slice(0, 6).map((c, j) => (
-                  <span
-                    key={j}
-                    title={c.snippet || ''}
-                    style={{
-                      fontSize: 10.5,
-                      background: '#eef2ff',
-                      color: '#4338ca',
-                      borderRadius: 999,
-                      padding: '2px 7px',
-                      maxWidth: 160,
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis',
-                      whiteSpace: 'nowrap'
-                    }}
-                  >
-                    {c.source_name || `[${j + 1}]`}
-                  </span>
-                ))}
-              </div>
-            )}
           </div>
         ))}
         {busy && (

@@ -160,8 +160,9 @@ export function ConnectDialog({
           <DialogDescription>
             Publish this Answers Bank as a key-authed chat endpoint. Drop the embed
             widget into any dashboard, or call the REST API. Read-only Q&amp;A over its{' '}
-            <strong>{sourceIds.length}</strong> wired source{sourceIds.length === 1 ? '' : 's'}, with
-            citations — your data and the retrieval pipeline never leave the server.
+            <strong>{sourceIds.length}</strong> wired source{sourceIds.length === 1 ? '' : 's'} — your
+            data and the retrieval pipeline never leave the server. The public API returns answers
+            only (no source citations).
           </DialogDescription>
         </DialogHeader>
 

@@ -229,8 +229,10 @@ export async function POST(req: Request) {
       conversation
     });
 
+    // Citations are intentionally NOT exposed via the public API — only the
+    // answer text is returned to external callers / the embed widget.
     return Response.json(
-      { answer: result.answer, citations: result.citations, bank: conn.label },
+      { answer: result.answer, bank: conn.label },
       { headers: cors }
     );
   } catch (e) {
