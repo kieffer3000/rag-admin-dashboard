@@ -437,7 +437,20 @@ function BoardCanvasInner() {
 
   // Holds the latest cleanDesk (defined later in the component) so the load
   // effect — which appears before it — can call it without a TDZ reference.
-  const cleanDeskRef = useRef<(() => void) | null>(null);
+  const cleanDeskRef = useRef<((reframe?: boolean) => void) | null>(null);
+  // Debounced gentle auto-tidy: after a burst of wiring settles, snap pieces to
+  // their plug side around each brain — no viewport jump (reframe=false).
+  const autoTidyTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const scheduleTidy = useCallback(() => {
+    if (autoTidyTimer.current) clearTimeout(autoTidyTimer.current);
+    autoTidyTimer.current = setTimeout(() => cleanDeskRef.current?.(false), 380);
+  }, []);
+  useEffect(
+    () => () => {
+      if (autoTidyTimer.current) clearTimeout(autoTidyTimer.current);
+    },
+    []
+  );
   useEffect(() => {
     if (hydratedProject !== activeProjectId) return; // wait for the real board
     if (focusedProject.current === activeProjectId) return;
@@ -552,6 +565,7 @@ function BoardCanvasInner() {
       // helper (drops any prior brain for it / prior artifact on this brain).
       if (src.type === 'artifact') {
         connectArtifactToBrain(src.id, tgt.id);
+        scheduleTidy();
         return;
       }
       const plug = plugFor(src.type);
@@ -578,8 +592,9 @@ function BoardCanvasInner() {
           prev.edges as Edge[]
         )
       }));
+      scheduleTidy();
     },
-    [board.nodes, board.edges, setBoard, nextBoardId, connectArtifactToBrain]
+    [board.nodes, board.edges, setBoard, nextBoardId, connectArtifactToBrain, scheduleTidy]
   );
 
   /** Edges only flow INTO a brain, from chips / hubs / text nodes. */
@@ -1589,21 +1604,28 @@ function BoardCanvasInner() {
    * Animated with a short ease so it reads as "everything snaps into place".
    */
   const tidying = useRef(false);
-  const cleanDesk = useCallback(() => {
+  // `reframe` re-fits the viewport after tidying (true for the manual button /
+  // on-load tidy; false for the gentle auto-tidy after a wire, so the view
+  // doesn't jump while the user is working).
+  const cleanDesk = useCallback((reframe = true) => {
     if (tidying.current) return;
     const nodes = board.nodes;
     const typeOf = (n: BoardNode) =>
       media.find((m) => m.id === n.data.mediaId)?.type;
 
     // Block = one rigid unit to place (a chip stack, a hub, a brain, an item).
-    // `kind`: brain | left (sources/context) | right (artifact/reference/robot) |
-    // loose (annotations/mindmaps). `owner` = the brain it's wired to (first one,
-    // by top-to-bottom order) so its pieces tidy into THAT brain's row-band.
+    // `kind` = which side of the brain it docks on (left sources/context, right
+    // artifact, top references, bottom robot) or loose (annotations/mindmaps).
+    // `owner` = the brain it's wired to (first one, by top-to-bottom order) so its
+    // pieces tidy around THAT brain's cross.
     interface Block {
       ids: string[];
       w: number;
       h: number;
-      kind: 'brain' | 'left' | 'right' | 'loose';
+      // Which side of its brain a piece docks on, mirroring the brain's plugs:
+      // sources/boxes/notes → left, artifact → right, references → top,
+      // robot → bottom. So every wire exits straight from its plug, no crossing.
+      kind: 'brain' | 'left' | 'right' | 'top' | 'bottom' | 'loose';
       owner: string | null;
       offs: { id: string; dx: number; dy: number }[];
     }
@@ -1653,13 +1675,9 @@ function BoardCanvasInner() {
         let kind: Block['kind'] = 'loose';
         if (n.type === 'brain') kind = 'brain';
         else if (n.type === 'hub' || n.type === 'textNode') kind = 'left';
-        else if (
-          n.type === 'reference' ||
-          n.type === 'artifact' ||
-          n.type === 'prompt' ||
-          n.type === 'agent'
-        )
-          kind = 'right';
+        else if (n.type === 'reference') kind = 'top';
+        else if (n.type === 'artifact') kind = 'right';
+        else if (n.type === 'prompt' || n.type === 'agent') kind = 'bottom';
         let w = (n.width as number) ?? (n.type === 'brain' ? 400 : 240);
         let h = (n.height as number) ?? (n.type === 'brain' ? 480 : 150);
         if (n.type === 'hub') {
@@ -1676,34 +1694,41 @@ function BoardCanvasInner() {
           w,
           h,
           kind,
-          owner: kind === 'left' || kind === 'right' ? ownerBrain([n.id]) : null,
+          owner: kind !== 'loose' && kind !== 'brain' ? ownerBrain([n.id]) : null,
           offs: [{ id: n.id, dx: 0, dy: 0 }]
         });
       }
     }
     if (blocks.length < 2) return;
 
-    const COL_GAP = 90;
+    const COL_GAP = 110;
     const ROW_GAP = 28;
-    const BAND_GAP = 60;
+    const SIDE_GAP = 46; // gap between a brain and its top/bottom docked row
+    const BAND_GAP = 72;
     const TOP = 80;
     const LEFT = 80;
 
     const leftBlocks = blocks.filter((b) => b.kind === 'left');
     const rightBlocks = blocks.filter((b) => b.kind === 'right');
+    const topBlocks = blocks.filter((b) => b.kind === 'top');
+    const bottomBlocks = blocks.filter((b) => b.kind === 'bottom');
     const looseBlocks = blocks.filter((b) => b.kind === 'loose');
 
     // Column widths from the widest block in each column.
     const leftColW = Math.max(0, ...leftBlocks.concat(looseBlocks).map((b) => b.w));
-    const midColW = Math.max(0, ...blocks.filter((b) => b.kind === 'brain').map((b) => b.w));
+    const brainColW = Math.max(0, ...blocks.filter((b) => b.kind === 'brain').map((b) => b.w));
     const rightColW = Math.max(0, ...rightBlocks.map((b) => b.w));
     const leftX = LEFT;
     const midX = leftX + (leftColW ? leftColW + COL_GAP : 0);
-    const rightX = midX + (midColW ? midColW + COL_GAP : 0);
+    const rightX = midX + brainColW + COL_GAP;
+    const brainCenterX = midX + brainColW / 2;
 
     const target = new Map<string, { x: number; y: number }>();
     const stackHeight = (bs: Block[]) =>
       bs.reduce((s, b, i) => s + b.h + (i ? ROW_GAP : 0), 0);
+    const rowWidth = (bs: Block[]) =>
+      bs.reduce((s, b, i) => s + b.w + (i ? ROW_GAP : 0), 0);
+    const rowHeight = (bs: Block[]) => Math.max(0, ...bs.map((b) => b.h));
     // Lay a vertical stack of blocks in a column; returns the y after the stack.
     const placeStack = (bs: Block[], colX: number, colW: number, startY: number) => {
       let y = startY;
@@ -1714,31 +1739,54 @@ function BoardCanvasInner() {
       }
       return y;
     };
+    // Lay a horizontal row of blocks centered on a point (references above the
+    // brain, robots below it).
+    const placeRow = (bs: Block[], centerX: number, rowY: number) => {
+      let x = centerX - rowWidth(bs) / 2;
+      for (const b of bs) {
+        for (const o of b.offs) target.set(o.id, { x: x + o.dx, y: rowY + o.dy });
+        x += b.w + ROW_GAP;
+      }
+    };
 
-    // One row-band per brain: its sources left, the brain in the middle, its
-    // artifact/references/robot right — all vertically centered in the band so a
-    // brain's pieces line up with IT (brain 2's sources never sit by brain 1).
+    // One CROSS per brain: references dock ABOVE, sources LEFT, the brain in the
+    // middle, artifact RIGHT, the robot BELOW — every piece sits beside its own
+    // plug so a wire runs straight out and never crosses another. Each brain owns
+    // a horizontal band (brain 2's pieces never mingle with brain 1's).
     let y = TOP;
     for (const bn of brainNodes) {
       const brainBlock = blocks.find((b) => b.kind === 'brain' && b.ids[0] === bn.id);
       if (!brainBlock) continue;
       const lefts = leftBlocks.filter((b) => b.owner === bn.id);
       const rights = rightBlocks.filter((b) => b.owner === bn.id);
+      const tops = topBlocks.filter((b) => b.owner === bn.id);
+      const bottoms = bottomBlocks.filter((b) => b.owner === bn.id);
       const leftH = stackHeight(lefts);
       const rightH = stackHeight(rights);
-      const bandH = Math.max(brainBlock.h, leftH, rightH);
-      if (lefts.length) placeStack(lefts, leftX, leftColW, y + (bandH - leftH) / 2);
-      placeStack([brainBlock], midX, midColW, y + (bandH - brainBlock.h) / 2);
-      if (rights.length) placeStack(rights, rightX, rightColW, y + (bandH - rightH) / 2);
-      y += bandH + BAND_GAP;
+      const topH = rowHeight(tops);
+      const bottomH = rowHeight(bottoms);
+      const midH = Math.max(brainBlock.h, leftH, rightH);
+      if (tops.length) placeRow(tops, brainCenterX, y);
+      const midY = y + (topH ? topH + SIDE_GAP : 0);
+      if (lefts.length) placeStack(lefts, leftX, leftColW, midY + (midH - leftH) / 2);
+      placeStack([brainBlock], midX, brainColW, midY + (midH - brainBlock.h) / 2);
+      if (rights.length) placeStack(rights, rightX, rightColW, midY + (midH - rightH) / 2);
+      const bottomY = midY + midH + (bottomH ? SIDE_GAP : 0);
+      if (bottoms.length) placeRow(bottoms, brainCenterX, bottomY);
+      y = bottomY + bottomH + BAND_GAP;
     }
 
     // Orphans (wired to no brain) park at the BOTTOM of their columns.
     const orphanLeft = leftBlocks.filter((b) => !b.owner);
     const orphanRight = rightBlocks.filter((b) => !b.owner);
+    const orphanRest = [
+      ...topBlocks.filter((b) => !b.owner),
+      ...bottomBlocks.filter((b) => !b.owner),
+      ...looseBlocks
+    ];
     const yL = placeStack(orphanLeft, leftX, leftColW, y);
     const yR = placeStack(orphanRight, rightX, rightColW, y);
-    placeStack(looseBlocks, leftX, leftColW, Math.max(yL, yR, y));
+    placeStack(orphanRest, leftX, leftColW, Math.max(yL, yR, y));
 
     // Animate from current → target with an ease, then re-frame.
     tidying.current = true;
@@ -1770,7 +1818,7 @@ function BoardCanvasInner() {
       else {
         tidying.current = false;
         playSnap();
-        fitView({ duration: 500, padding: 0.18 });
+        if (reframe) fitView({ duration: 500, padding: 0.18 });
       }
     };
     requestAnimationFrame(tick);
@@ -1904,7 +1952,7 @@ function BoardCanvasInner() {
 
       <BoardToolbar
         placedIds={placedIds}
-        onCleanDesk={cleanDesk}
+        onCleanDesk={() => cleanDesk(true)}
         onPlaceAllInBox={placeAllInBox}
         onPlaceMedia={(mediaId) =>
           pushNode({

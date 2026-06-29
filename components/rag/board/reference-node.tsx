@@ -92,7 +92,7 @@ function ReferenceNodeInner({ id, data, selected, parentId }: NodeProps) {
       <Handle
         type="source"
         position={Position.Left}
-        className="!h-2.5 !w-2.5 !border-2 !border-card !bg-violet-500"
+        className="!h-4 !w-4 !border-2 !border-card !bg-violet-500"
       />
     </div>
   );

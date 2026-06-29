@@ -31,7 +31,9 @@ import {
   UploadCloud,
   Film,
   FileText,
-  BookOpen
+  BookOpen,
+  HelpCircle,
+  ArrowLeft
 } from 'lucide-react';
 import {
   Dialog,
@@ -134,8 +136,14 @@ export function BoardToolbar(p: BoardToolbarProps) {
   const [sound, setSound] = useState(true);
   useEffect(() => setSound(soundEnabled()), []);
   const [sourceType, setSourceType] = useState<MediaType | null>(null);
-  // The unified "Upload Files & Media" picker — one entry point, category tiles.
+  // The unified upload picker — a 2-step wizard: first WHAT it is (long-term RAG
+  // / working artifact / supporting reference), then (for RAG) which file type.
   const [uploadOpen, setUploadOpen] = useState(false);
+  const [uploadStep, setUploadStep] = useState<'category' | 'type'>('category');
+  // Which category card has its longer "?" explanation expanded (null = none).
+  const [helpKind, setHelpKind] = useState<'rag' | 'artifact' | 'reference' | null>(
+    null
+  );
   const [hubOpen, setHubOpen] = useState(false);
   const [name, setName] = useState('');
   const [url, setUrl] = useState('');
@@ -440,10 +448,14 @@ export function BoardToolbar(p: BoardToolbarProps) {
             onClick={p.onAddBrain}
           />
           <RailButton
-            label="Upload Files & Media"
-            desc="Add anything to your knowledge base — documents, images, audio, YouTube, or websites. Atlas reads, watches, and listens to it."
+            label="Upload"
+            desc="One place to add anything — long-term knowledge (RAG), a working doc (Artifact), or a supporting example (Reference). It asks what you're adding, then how."
             icon={<UploadCloud className="h-[17px] w-[17px]" />}
-            onClick={() => setUploadOpen(true)}
+            onClick={() => {
+              setUploadStep('category');
+              setHelpKind(null);
+              setUploadOpen(true);
+            }}
           />
           <RailDivider />
           <Popover>
@@ -548,7 +560,7 @@ export function BoardToolbar(p: BoardToolbarProps) {
           <RailDivider />
           <RailButton
             label="Clean desk"
-            desc="Auto-tidy: gently untangles wires and spaces everything out, keeping stacks and boxes intact."
+            desc="Untangle: snaps every piece to its plug around each brain — sources left, references top, artifact right, robot bottom — so no wires cross."
             icon={<Wand2 className="h-[17px] w-[17px]" />}
             onClick={p.onCleanDesk}
           />
@@ -986,55 +998,138 @@ export function BoardToolbar(p: BoardToolbarProps) {
         </DialogContent>
       </Dialog>
 
-      {/* unified "Upload Files & Media" picker — one entry point, tiles route
-          to the per-type Add dialog above (audio adds a record-or-upload step). */}
-      <Dialog open={uploadOpen} onOpenChange={setUploadOpen}>
+      {/* unified Upload wizard — STEP 1 picks WHAT it is (long-term RAG / working
+          artifact / supporting reference); STEP 2 (RAG only) picks the file type.
+          Artifact & Reference hand straight off to their own ingest dialog. */}
+      <Dialog
+        open={uploadOpen}
+        onOpenChange={(o) => {
+          setUploadOpen(o);
+          if (!o) {
+            setUploadStep('category');
+            setHelpKind(null);
+          }
+        }}
+      >
         <DialogContent className="sm:max-w-xl">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-[17px]">
-              <UploadCloud className="h-[18px] w-[18px] text-accent" />
-              Upload Files &amp; Media
+              {uploadStep === 'type' ? (
+                <button
+                  type="button"
+                  onClick={() => setUploadStep('category')}
+                  title="Back"
+                  className="-ml-1 flex h-7 w-7 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-black/[0.05] hover:text-foreground dark:hover:bg-white/[0.07]"
+                >
+                  <ArrowLeft className="h-[18px] w-[18px]" />
+                </button>
+              ) : (
+                <UploadCloud className="h-[18px] w-[18px] text-accent" />
+              )}
+              {uploadStep === 'type'
+                ? 'Long-term memory — pick a file type'
+                : 'What are you adding?'}
             </DialogTitle>
             <DialogDescription>
-              Add anything to your knowledge base — Atlas will read, watch, and
-              listen to it. Great for extracting insights and answers with
-              citations.
+              {uploadStep === 'type'
+                ? 'These get read, indexed, and stored so any brain can search and cite them — forever.'
+                : 'Pick how this should live in your workspace. Tap the ? on any card for a fuller explanation.'}
             </DialogDescription>
           </DialogHeader>
-          <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3">
-            <UploadTile meta={MEDIA_TYPES.document} onClick={() => openType('document')} />
-            <UploadTile
-              label="OCR"
-              icon={OcrDocIcon}
-              text="text-accent"
-              tint="bg-accent/10"
-              onClick={() => {
-                openType('document');
-                setOcr(true);
-              }}
-            />
-            <UploadTile meta={MEDIA_TYPES.image} onClick={() => openType('image')} />
-            <UploadTile meta={MEDIA_TYPES.audio} onClick={() => openType('audio')} />
-            <UploadTile
-              label="Video"
-              icon={Film}
-              text="text-muted-foreground"
-              tint="bg-[rgb(var(--hairline)/0.06)]"
-              comingSoon
-            />
-            <UploadTile meta={MEDIA_TYPES.youtube} onClick={() => openType('youtube')} />
-            <UploadTile meta={MEDIA_TYPES.website} onClick={() => openType('website')} />
-          </div>
-          <div className="mt-1.5 flex items-center justify-center">
-            <UploadTile
-              meta={MEDIA_TYPES.text}
-              onClick={() => openType('text')}
-              compact
-            />
-          </div>
-          <p className="mt-1 text-center text-[11.5px] text-muted-foreground/60">
-            Supported files: Documents · Audio · Images · YouTube · Websites
-          </p>
+
+          {uploadStep === 'category' ? (
+            <div className="grid gap-2.5">
+              <CategoryCard
+                icon={LibraryBig}
+                tint="bg-accent/10"
+                text="text-accent"
+                title="Long-term memory"
+                sub="RAG · indexed forever"
+                desc="Books, lectures, images, audio you'll come back to again and again."
+                long="Choose this for anything you want remembered permanently and searched across. It's chunked, embedded, and stored in your vector database, so any brain can retrieve and cite exact passages — even months later. Best for research libraries, full books, course transcripts, and large document sets. Slower to add (it's processed once), instant to query forever."
+                expanded={helpKind === 'rag'}
+                onToggleHelp={() =>
+                  setHelpKind(helpKind === 'rag' ? null : 'rag')
+                }
+                onClick={() => setUploadStep('type')}
+              />
+              <CategoryCard
+                icon={FileText}
+                tint="bg-indigo-500/10"
+                text="text-indigo-500"
+                title="Working doc"
+                sub="Artifact · short-term"
+                desc="A draft, article, or page for a quick project — carried whole, not indexed."
+                long="Choose this when you're actively working ON a document and want a brain to read it in full and opine — rewrite, critique, summarize, or answer about it. It's held complete in the brain's context (not chunked or stored long-term), so the brain sees every word. Best for the article you're drafting, a webpage you're editing, or a transcript you're analyzing right now. It leaves memory when you remove it."
+                expanded={helpKind === 'artifact'}
+                onToggleHelp={() =>
+                  setHelpKind(helpKind === 'artifact' ? null : 'artifact')
+                }
+                onClick={() => {
+                  setUploadOpen(false);
+                  setHelpKind(null);
+                  setUploadStep('category');
+                  p.onAddArtifact();
+                }}
+              />
+              <CategoryCard
+                icon={BookOpen}
+                tint="bg-violet-500/10"
+                text="text-violet-500"
+                title="Supporting document"
+                sub="Reference · an example or guide"
+                desc="A template or example that shows a brain the style or shape you want."
+                long="Choose this to steer HOW a brain answers without it becoming a source. References are exemplars — 'make it like this' — that shape tone, format, and judgment but are never indexed and never cited. Best for a sample whose style you want matched, a rubric, or a 'good answer' to imitate. Pair it with a Working doc and a corpus for the sharpest results."
+                expanded={helpKind === 'reference'}
+                onToggleHelp={() =>
+                  setHelpKind(helpKind === 'reference' ? null : 'reference')
+                }
+                onClick={() => {
+                  setUploadOpen(false);
+                  setHelpKind(null);
+                  setUploadStep('category');
+                  p.onAddReference();
+                }}
+              />
+            </div>
+          ) : (
+            <>
+              <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3">
+                <UploadTile meta={MEDIA_TYPES.document} onClick={() => openType('document')} />
+                <UploadTile
+                  label="OCR"
+                  icon={OcrDocIcon}
+                  text="text-accent"
+                  tint="bg-accent/10"
+                  onClick={() => {
+                    openType('document');
+                    setOcr(true);
+                  }}
+                />
+                <UploadTile meta={MEDIA_TYPES.image} onClick={() => openType('image')} />
+                <UploadTile meta={MEDIA_TYPES.audio} onClick={() => openType('audio')} />
+                <UploadTile
+                  label="Video"
+                  icon={Film}
+                  text="text-muted-foreground"
+                  tint="bg-[rgb(var(--hairline)/0.06)]"
+                  comingSoon
+                />
+                <UploadTile meta={MEDIA_TYPES.youtube} onClick={() => openType('youtube')} />
+                <UploadTile meta={MEDIA_TYPES.website} onClick={() => openType('website')} />
+              </div>
+              <div className="mt-1.5 flex items-center justify-center">
+                <UploadTile
+                  meta={MEDIA_TYPES.text}
+                  onClick={() => openType('text')}
+                  compact
+                />
+              </div>
+              <p className="mt-1 text-center text-[11.5px] text-muted-foreground/60">
+                Supported files: Documents · Audio · Images · YouTube · Websites
+              </p>
+            </>
+          )}
         </DialogContent>
       </Dialog>
 
@@ -1253,6 +1348,83 @@ function OcrDocIcon({ className }: { className?: string }) {
         OCR
       </text>
     </svg>
+  );
+}
+
+/** Step-1 card in the Upload wizard: a big tappable choice (RAG / Artifact /
+ *  Reference) with a one-line summary and a "?" that expands a fuller note. */
+function CategoryCard({
+  icon: Icon,
+  tint,
+  text,
+  title,
+  sub,
+  desc,
+  long,
+  expanded,
+  onToggleHelp,
+  onClick
+}: {
+  icon: React.ComponentType<{ className?: string }>;
+  tint: string;
+  text: string;
+  title: string;
+  sub: string;
+  desc: string;
+  long: string;
+  expanded: boolean;
+  onToggleHelp: () => void;
+  onClick: () => void;
+}) {
+  return (
+    <div className="relative">
+      <button
+        type="button"
+        onClick={onClick}
+        className="group flex w-full flex-col gap-2 rounded-2xl border border-[rgb(var(--hairline)/0.12)] bg-card p-3.5 pr-10 text-left transition-all hover:-translate-y-0.5 hover:border-accent/30 hover:shadow-[0_4px_18px_rgb(0_0_0/0.08)]"
+      >
+        <span className="flex items-center gap-2.5">
+          <span
+            className={cn(
+              'flex h-10 w-10 shrink-0 items-center justify-center rounded-xl',
+              tint
+            )}
+          >
+            <Icon className={cn('h-5 w-5', text)} />
+          </span>
+          <span className="min-w-0">
+            <span className="block text-[14px] font-semibold leading-tight text-foreground">
+              {title}
+            </span>
+            <span className="block text-[10.5px] font-semibold uppercase tracking-wide text-muted-foreground/70">
+              {sub}
+            </span>
+          </span>
+        </span>
+        <span className="text-[12.5px] leading-snug text-muted-foreground">
+          {desc}
+        </span>
+      </button>
+      <button
+        type="button"
+        onClick={onToggleHelp}
+        title="What's this?"
+        aria-label="What's this?"
+        className={cn(
+          'absolute right-2.5 top-2.5 flex h-6 w-6 items-center justify-center rounded-full transition-colors',
+          expanded
+            ? 'bg-accent/15 text-accent'
+            : 'text-muted-foreground/55 hover:bg-black/[0.05] hover:text-foreground dark:hover:bg-white/[0.07]'
+        )}
+      >
+        <HelpCircle className="h-[15px] w-[15px]" />
+      </button>
+      {expanded && (
+        <p className="mt-1 rounded-xl bg-[rgb(var(--hairline)/0.05)] px-3 py-2 text-[12px] leading-relaxed text-muted-foreground">
+          {long}
+        </p>
+      )}
+    </div>
   );
 }
 

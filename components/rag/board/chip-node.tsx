@@ -351,7 +351,7 @@ function ChipNodeInner({ id, data, selected, parentId }: NodeProps) {
         type="source"
         position={Position.Right}
         className={cn(
-          '!h-2.5 !w-2.5 !border-2 !border-card !bg-accent/70',
+          '!h-4 !w-4 !border-2 !border-card !bg-accent/70',
           // Docked in a box: the BOX is the plug — one wire per family, so a
           // piece "in the box but not wired" can never exist.
           parentId && '!pointer-events-none !opacity-0',

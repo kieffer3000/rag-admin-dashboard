@@ -114,7 +114,7 @@ function AgentNodeInner({ id, data, selected, parentId }: NodeProps) {
       <Handle
         type="source"
         position={Position.Left}
-        className="pointer-events-auto !h-2.5 !w-2.5 !border-2 !border-card !bg-emerald-500"
+        className="pointer-events-auto !h-4 !w-4 !border-2 !border-card !bg-emerald-500"
       />
     </div>
   );
