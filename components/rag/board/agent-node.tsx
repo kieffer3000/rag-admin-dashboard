@@ -34,7 +34,15 @@ function AgentNodeInner({ id, data, selected, parentId }: NodeProps) {
         )}
       >
         <span className="pointer-events-none absolute bottom-0 left-0 top-0 w-[3px] rounded-l-[11px] bg-emerald-500" />
-        {icon ? (
+        {d.avatar ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={d.avatar}
+            alt=""
+            draggable={false}
+            className="h-5 w-5 shrink-0 rounded-full object-cover"
+          />
+        ) : icon ? (
           <span className="shrink-0 text-[15px] leading-none">{icon}</span>
         ) : (
           <Bot className="h-3.5 w-3.5 shrink-0 text-emerald-500" />
@@ -73,7 +81,15 @@ function AgentNodeInner({ id, data, selected, parentId }: NodeProps) {
             : 'drop-shadow(0 3px 6px rgb(16 185 129/0.40)) drop-shadow(0 1px 2px rgb(0 0 0/0.18))'
         }}
       >
-        {icon ? (
+        {d.avatar ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={d.avatar}
+            alt=""
+            draggable={false}
+            className="block h-32 w-32 select-none object-contain"
+          />
+        ) : icon ? (
           <span className="block select-none text-[120px] leading-none">{icon}</span>
         ) : (
           <Bot className="h-32 w-32 text-emerald-500" strokeWidth={1.6} />

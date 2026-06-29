@@ -55,8 +55,11 @@ export interface AgentData extends Record<string, unknown> {
   agentId: string;
   /** The agent's display name (shown as the node title). */
   name: string;
-  /** The agent's emoji/icon (defaults to 🤖). */
+  /** The agent's emoji/icon (defaults to 🤖). Ignored when `avatar` is set. */
   icon?: string;
+  /** A custom face image (data URL or remote URL) — a preset robot or the
+   *  user's own upload, optionally background-removed. Takes priority over icon. */
+  avatar?: string;
   /** The agent's system prompt — flows into the brain's guides[]. */
   text: string;
 }
