@@ -151,7 +151,7 @@ export function ConnectDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl border-accent/30">
+      <DialogContent className="max-h-[88vh] w-[calc(100vw-2rem)] max-w-2xl overflow-y-auto border-accent/30">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Plug className="h-5 w-5 text-accent" />
@@ -353,8 +353,10 @@ function KeyRow({
     <div className="space-y-1">
       <div className="text-[11px] font-medium text-muted-foreground">{label}</div>
       <div className="flex items-start gap-1.5">
+        {/* whitespace-pre-wrap + break-all so long iframe/curl strings WRAP
+            inside the box instead of forcing the dialog wider than the screen. */}
         <pre
-          className={`min-w-0 flex-1 overflow-x-auto rounded-md bg-card px-2.5 py-1.5 text-[11.5px] ring-1 ring-black/[0.06] dark:ring-white/[0.08] ${
+          className={`min-w-0 flex-1 whitespace-pre-wrap break-all rounded-md bg-card px-2.5 py-1.5 text-[11.5px] leading-relaxed ring-1 ring-black/[0.06] dark:ring-white/[0.08] ${
             mono ? 'font-mono' : ''
           }`}
         >
@@ -362,9 +364,22 @@ function KeyRow({
         </pre>
         <button
           onClick={onCopy}
-          className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-muted-foreground/70 transition-colors hover:bg-black/[0.05] hover:text-foreground dark:hover:bg-white/[0.07]"
+          className={
+            'flex shrink-0 items-center gap-1 rounded-md px-2.5 py-1.5 text-[11.5px] font-semibold transition-colors ' +
+            (copied
+              ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400'
+              : 'bg-accent/10 text-accent hover:bg-accent/20')
+          }
         >
-          {copied ? <Check className="h-3.5 w-3.5 text-emerald-500" /> : <Copy className="h-3.5 w-3.5" />}
+          {copied ? (
+            <>
+              <Check className="h-3.5 w-3.5" /> Copied
+            </>
+          ) : (
+            <>
+              <Copy className="h-3.5 w-3.5" /> Copy
+            </>
+          )}
         </button>
       </div>
     </div>
