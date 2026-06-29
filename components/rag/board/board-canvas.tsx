@@ -310,6 +310,7 @@ function BoardCanvasInner() {
   const summaryBackfilled = useRef<string | null>(null);
   const [backfillTick, setBackfillTick] = useState(0);
   const [artifactDlgOpen, setArtifactDlgOpen] = useState(false);
+  const [referenceDlgOpen, setReferenceDlgOpen] = useState(false);
   useEffect(() => {
     if (hydratedProject !== activeProjectId) return;
     if (summaryBackfilled.current === activeProjectId) return;
@@ -2232,16 +2233,7 @@ function BoardCanvasInner() {
           })
         }
         onAddArtifact={() => setArtifactDlgOpen(true)}
-        onAddReference={() =>
-          pushNode({
-            id: nextBoardId('ref'),
-            type: 'reference',
-            position: centerPos(),
-            width: 234,
-            height: 170,
-            data: { title: '', content: '' }
-          })
-        }
+        onAddReference={() => setReferenceDlgOpen(true)}
         onAddAnnotation={() =>
           pushNode({
             id: nextBoardId('ann'),
@@ -2399,6 +2391,24 @@ function BoardCanvasInner() {
             window.alert(
               'Add a brain to the board first — an artifact must be connected to a brain.'
             );
+        }}
+      />
+      <ArtifactDialog
+        kind="reference"
+        open={referenceDlgOpen}
+        onOpenChange={setReferenceDlgOpen}
+        onCreate={(a) => {
+          // Same multi-modal ingestion as an artifact (file/audio/PDF-via-
+          // CloudConvert/website/text) → a TOP-plug reference exemplar. The user
+          // wires it to a brain's reference plug.
+          pushNode({
+            id: nextBoardId('ref'),
+            type: 'reference',
+            position: centerPos(),
+            width: 234,
+            height: 170,
+            data: { title: a.title ?? '', url: a.url ?? '', content: a.content }
+          });
         }}
       />
       <ArtifactBrainPicker />

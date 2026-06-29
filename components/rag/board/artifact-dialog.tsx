@@ -39,11 +39,15 @@ const METHODS: { key: Method; label: string; icon: any }[] = [
 export function ArtifactDialog({
   open,
   onOpenChange,
-  onCreate
+  onCreate,
+  kind = 'artifact'
 }: {
   open: boolean;
   onOpenChange: (o: boolean) => void;
   onCreate: (a: NewArtifact) => void;
+  /** Same multi-modal ingestion, two roles: the RIGHT-plug artifact (reasoned
+   *  about) or a TOP-plug reference exemplar. Only the labels differ. */
+  kind?: 'artifact' | 'reference';
 }) {
   const [method, setMethod] = useState<Method>('file');
   const [title, setTitle] = useState('');
@@ -175,11 +179,21 @@ export function ArtifactDialog({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <FileText className="h-5 w-5 text-indigo-500" />
-            Add an artifact
+            {kind === 'reference' ? 'Add a reference' : 'Add an artifact'}
           </DialogTitle>
           <DialogDescription>
-            Your working doc — the corpus reasons <em>about</em> this. Carried whole and{' '}
-            <strong>never indexed</strong>. Upload a file, load a webpage, or paste text.
+            {kind === 'reference' ? (
+              <>
+                An <em>exemplar</em> — a target or clue the brain learns from (shapes the
+                answer, <strong>not cited, never indexed</strong>). Upload a file, load a
+                webpage, or paste text.
+              </>
+            ) : (
+              <>
+                Your working doc — the corpus reasons <em>about</em> this. Carried whole and{' '}
+                <strong>never indexed</strong>. Upload a file, load a webpage, or paste text.
+              </>
+            )}
           </DialogDescription>
         </DialogHeader>
 
