@@ -3,7 +3,7 @@
 import { memo } from 'react';
 import { Handle, Position, type NodeProps } from '@xyflow/react';
 import { cn } from '@/lib/utils';
-import { Bot, RotateCcw } from 'lucide-react';
+import { Bot, Pencil, Trash2 } from 'lucide-react';
 import { useBoard } from '@/lib/rag/board/store';
 import { CHIP_W, CHIP_H, AGENT_W, AGENT_H, type AgentData } from '@/lib/rag/board/types';
 
@@ -17,7 +17,7 @@ import { CHIP_W, CHIP_H, AGENT_W, AGENT_H, type AgentData } from '@/lib/rag/boar
  */
 function AgentNodeInner({ id, data, selected, parentId }: NodeProps) {
   const d = data as AgentData;
-  const { removeBoardNode } = useBoard();
+  const { setAgentEditor, setPendingDelete } = useBoard();
   const name = (d.name as string)?.trim() || 'Agent';
   const icon = (d.icon as string) || '';
 
@@ -79,16 +79,30 @@ function AgentNodeInner({ id, data, selected, parentId }: NodeProps) {
           <Bot className="h-32 w-32 text-emerald-500" strokeWidth={1.6} />
         )}
 
-        <button
-          title="Remove from board"
-          onClick={(e) => {
-            e.stopPropagation();
-            removeBoardNode(id);
-          }}
-          className="nodrag absolute -right-1 -top-1 flex h-5 w-5 items-center justify-center rounded-full bg-card text-muted-foreground/60 opacity-0 shadow-[0_1px_4px_rgb(0_0_0/0.12)] transition-opacity hover:text-foreground group-hover:opacity-100"
-        >
-          <RotateCcw className="h-2.5 w-2.5" />
-        </button>
+        {/* Edit (improve the prompt) + Delete (asks to confirm). Also on
+            right-click → context menu. */}
+        <div className="nodrag absolute -right-1 -top-1 flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+          <button
+            title="Edit agent"
+            onClick={(e) => {
+              e.stopPropagation();
+              setAgentEditor(id);
+            }}
+            className="flex h-5 w-5 items-center justify-center rounded-full bg-card text-muted-foreground/60 shadow-[0_1px_4px_rgb(0_0_0/0.12)] transition-colors hover:text-foreground"
+          >
+            <Pencil className="h-2.5 w-2.5" />
+          </button>
+          <button
+            title="Delete agent"
+            onClick={(e) => {
+              e.stopPropagation();
+              setPendingDelete(id);
+            }}
+            className="flex h-5 w-5 items-center justify-center rounded-full bg-card text-muted-foreground/60 shadow-[0_1px_4px_rgb(0_0_0/0.12)] transition-colors hover:text-red-500"
+          >
+            <Trash2 className="h-2.5 w-2.5" />
+          </button>
+        </div>
       </div>
 
       <div className="pointer-events-auto line-clamp-1 max-w-[150px] text-center text-[12px] font-semibold text-emerald-900/90 drop-shadow-[0_1px_1px_rgb(255_255_255/0.6)] dark:text-emerald-100/90 dark:drop-shadow-[0_1px_2px_rgb(0_0_0/0.6)]">

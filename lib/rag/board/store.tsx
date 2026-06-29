@@ -218,6 +218,12 @@ interface BoardCtxState {
    *  with multiple brains present, or its wire was cut). null = closed. */
   brainPicker: { artId: string; afterCutEdge?: string } | null;
   setBrainPicker: (p: { artId: string; afterCutEdge?: string } | null) => void;
+  /** Agent (robot) node being edited — its node id, or null = closed. */
+  agentEditor: string | null;
+  setAgentEditor: (id: string | null) => void;
+  /** A node id awaiting delete confirmation, or null = closed. */
+  pendingDelete: string | null;
+  setPendingDelete: (id: string | null) => void;
   /** Un-snap a welded stack at the seam ABOVE this piece — this piece and
    *  everything below it detach into their own stack. */
   unsnapPiece: (nodeId: string) => void;
@@ -759,6 +765,8 @@ export function BoardProvider({ children }: { children: ReactNode }) {
   const [brainPicker, setBrainPicker] = useState<
     { artId: string; afterCutEdge?: string } | null
   >(null);
+  const [agentEditor, setAgentEditor] = useState<string | null>(null);
+  const [pendingDelete, setPendingDelete] = useState<string | null>(null);
   const connectArtifactToBrain = useCallback(
     (artifactId: string, brainId: string) => {
       setBoard((prev) => {
@@ -1125,6 +1133,10 @@ export function BoardProvider({ children }: { children: ReactNode }) {
     connectArtifactToBrain,
     brainPicker,
     setBrainPicker,
+    agentEditor,
+    setAgentEditor,
+    pendingDelete,
+    setPendingDelete,
     unsnapPiece,
     stashBrain,
     unstashBrain,

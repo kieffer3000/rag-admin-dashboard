@@ -26,6 +26,7 @@ import {
   ArrowDownToLine,
   Copy,
   Unplug,
+  Pencil,
   Trash2,
   Maximize
 } from 'lucide-react';
@@ -62,6 +63,7 @@ import { MindmapNode } from './mindmap-node';
 import { ArtifactNode } from './artifact-node';
 import { ReferenceNode } from './reference-node';
 import { ArtifactDialog } from './artifact-dialog';
+import { AgentEditDialog } from './agent-edit-dialog';
 import { ArtifactBrainPicker } from './artifact-brain-picker';
 import { ScopeEdge } from './scope-edge';
 import { BoardToolbar } from './toolbar';
@@ -205,7 +207,7 @@ const FILL_MAX_ZOOM = 2;
 const FILL_MIN_ZOOM = 0.2;
 
 function BoardCanvasInner() {
-  const { board, setBoard, setBoardSilent, nextBoardId, busyBrains, saveNow, removeBoardNode, connectArtifactToBrain, setBrainPicker, hydratedProject, researchBrainId, setResearchBrainId } =
+  const { board, setBoard, setBoardSilent, nextBoardId, busyBrains, saveNow, removeBoardNode, connectArtifactToBrain, setBrainPicker, setAgentEditor, pendingDelete, setPendingDelete, hydratedProject, researchBrainId, setResearchBrainId } =
     useBoard();
   const { media, projectMedia, addMedia, updateMedia, deleteMedia, activeProjectId, activeProject, pendingBox, setPendingBox } = useRag();
 
@@ -2412,6 +2414,43 @@ function BoardCanvasInner() {
         }}
       />
       <ArtifactBrainPicker />
+      <AgentEditDialog />
+      {/* Delete confirmation — any node delete (robot button or right-click) asks
+          first. */}
+      {pendingDelete && (
+        <div
+          className="fixed inset-0 z-[70] flex items-center justify-center bg-black/30"
+          onClick={() => setPendingDelete(null)}
+        >
+          <div
+            className="w-[330px] rounded-2xl border border-[rgb(var(--hairline)/0.16)] bg-card p-5 shadow-[0_20px_60px_-10px_rgb(0_0_0/0.45)]"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 className="text-[15px] font-semibold">Delete this?</h3>
+            <p className="mt-1.5 text-[13px] text-muted-foreground">
+              It will be removed from the board. This can&apos;t be undone.
+            </p>
+            <div className="mt-5 flex justify-end gap-2">
+              <button
+                onClick={() => setPendingDelete(null)}
+                className="rounded-lg px-3.5 py-1.5 text-[13px] font-medium text-muted-foreground transition-colors hover:bg-accent/10"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => {
+                  const id = pendingDelete;
+                  setPendingDelete(null);
+                  deleteNodeById(id);
+                }}
+                className="rounded-lg bg-red-600 px-3.5 py-1.5 text-[13px] font-semibold text-white transition-colors hover:bg-red-700"
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       {/* Build stamp — confirm you're on the latest code at a glance. */}
       <div className="pointer-events-none absolute bottom-1.5 right-2 z-50 rounded bg-black/55 px-2 py-0.5 font-mono text-[10px] text-amber-300/90">
         build {process.env.NEXT_PUBLIC_BUILD ?? 'dev'}
@@ -2512,12 +2551,22 @@ function BoardCanvasInner() {
                 <Unplug className="h-4 w-4 text-foreground/70" /> Disconnect wires
               </button>
             )}
+            {ctxNode.type === 'agent' && (
+              <button
+                onClick={() => {
+                  setAgentEditor(ctxMenu.nodeId);
+                  setCtxMenu(null);
+                }}
+                className="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-left transition-colors hover:bg-accent/10"
+              >
+                <Pencil className="h-4 w-4 text-foreground/70" /> Edit agent
+              </button>
+            )}
             <div className="my-1 h-px bg-[rgb(var(--hairline)/0.12)]" />
             <button
               onClick={() => {
-                const id = ctxMenu.nodeId;
+                setPendingDelete(ctxMenu.nodeId);
                 setCtxMenu(null);
-                deleteNodeById(id);
               }}
               className="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-left text-red-600 transition-colors hover:bg-red-500/10"
             >

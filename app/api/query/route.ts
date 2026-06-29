@@ -28,6 +28,9 @@ import { getOrgOpenrouterKey, scopeOf } from '@/lib/org-settings';
 // Webhook URL stays server-side — this repo is public.
 
 export const runtime = 'nodejs';
+// Wait for Make's actual response (it returns its own errors) — don't cut a slow
+// research query off mid-flight. 180s — generous for Make.
+export const maxDuration = 180;
 
 const NOMATCH_THRESHOLD = Number(process.env.RAG_NOMATCH_THRESHOLD ?? 0.6);
 

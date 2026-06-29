@@ -17,9 +17,10 @@ import { fetchReadablePage } from '@/lib/rag/web-extract';
 //           null so no footnotes render.
 
 export const runtime = 'nodejs';
-// The Make opine round-trip (Conductor → embed → Pinecone → synthesis) runs
-// ~8-15s; without this the function default cut it off → "temporarily unreachable".
-export const maxDuration = 60;
+// Wait for Make's ACTUAL response (success or Make's own error) — never cut it
+// off mid-flight. 180s — generous for Make, under the platform ceiling; Make handles real errors itself,
+// so we don't impose a premature client timeout on top.
+export const maxDuration = 180;
 
 const NOMATCH_THRESHOLD = Number(process.env.RAG_NOMATCH_THRESHOLD ?? 0.6);
 const HISTORY_MAX_MESSAGES = 30;
