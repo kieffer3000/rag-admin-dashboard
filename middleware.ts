@@ -8,7 +8,11 @@ const isPublicRoute = createRouteMatcher([
   '/api/webhooks(.*)',
   // Server-to-server (Make ingest → Nova captioner). Clerk-exempt; the route
   // enforces its own CAPTION_WEBHOOK_SECRET shared-secret header instead.
-  '/api/caption-image'
+  '/api/caption-image',
+  // Public published-Bank surfaces: the key-authed Q&A API (auth = per-Bank API
+  // key, enforced in the route) and the embeddable chat widget that calls it.
+  '/api/v1(.*)',
+  '/embed(.*)'
 ]);
 
 // Private app — only these emails may use it (comma-separated override via

@@ -14,6 +14,7 @@ import { useRag } from '@/lib/rag/store';
 import { streamText } from '@/lib/rag/mock-answer';
 import { useScrollStyle } from '@/lib/rag/scroll-style';
 import { askBrain, opineBrain } from '@/lib/rag/board/ask';
+import { ConnectDialog } from './connect-dialog';
 import { startHum, stopHum, playChime } from '@/lib/rag/board/sound';
 import { WavRecorder, transcribeAudio } from '@/lib/rag/board/dictation';
 import { ChatMessage } from '@/lib/rag/types';
@@ -69,6 +70,7 @@ import {
   Search,
   Telescope,
   ZoomIn,
+  Plug,
   ThumbsUp,
   ThumbsDown,
   RefreshCw
@@ -200,6 +202,7 @@ function BrainNodeInner({ id, data, selected }: NodeProps) {
   const [question, setQuestion] = useState('');
   const [busy, setBusy] = useState(false);
   const [renaming, setRenaming] = useState(false);
+  const [connectOpen, setConnectOpen] = useState(false);
   const answerMode: 'cited' | 'hybrid' = d.answerMode ?? 'cited';
   // ⚡ Fast (lightning, fewer round-trips) vs 🔍 Detailed (full pipeline).
   // Defaults to Fast and persists with the brain (stays on across sessions).
@@ -1109,6 +1112,9 @@ function BrainNodeInner({ id, data, selected }: NodeProps) {
               <DropdownMenuItem onClick={() => setRenaming(true)} className="gap-2.5">
                 <Pencil className="h-4 w-4 text-foreground/70" /> Rename Answers Bank
               </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setConnectOpen(true)} className="gap-2.5">
+                <Plug className="h-4 w-4 text-accent" /> Connect to another app
+              </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem
                 onClick={() => exportConversation('pdf')}
@@ -1567,6 +1573,16 @@ function BrainNodeInner({ id, data, selected }: NodeProps) {
         position={Position.Bottom}
         title="Persona — wire ONE agent/voice that shapes how it answers"
         className="!-bottom-[58px] !h-4 !w-9 !rounded-full !border-2 !border-card !bg-emerald-500 !shadow-[0_2px_6px_rgb(16_185_129/0.5)]"
+      />
+
+      <ConnectDialog
+        open={connectOpen}
+        onOpenChange={setConnectOpen}
+        bankLabel={d.name || 'Answers Bank'}
+        sourceIds={scope.items.map((m) => m.id)}
+        answerMode={answerMode}
+        model={modelId}
+        speed={speed}
       />
     </div>
   );
