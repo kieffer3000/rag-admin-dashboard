@@ -1509,7 +1509,7 @@ function BrainNodeInner({ id, data, selected }: NodeProps) {
         position={Position.Left}
         title="Library — your long-term knowledge base; wire boxes & sources here (left plug)"
         className={cn(
-          '!h-7 !w-3.5 !-left-1 !rounded-full !border-2 !border-card !bg-gradient-to-b !from-accent !to-violet-600',
+          '!h-7 !w-4 !-left-3 !rounded-full !border-2 !border-card !bg-gradient-to-b !from-accent !to-violet-600',
           wired
             ? '!shadow-[inset_0_1px_2px_rgb(0_0_0/0.3),0_0_10px_2px_hsl(var(--accent)/0.5)]'
             : '!shadow-[inset_0_1px_2px_rgb(0_0_0/0.3),0_1px_4px_hsl(var(--accent)/0.45)]',
@@ -1528,7 +1528,7 @@ function BrainNodeInner({ id, data, selected }: NodeProps) {
             : 'Draft — wire the working doc you want help with here (right plug)'
         }
         className={cn(
-          '!h-7 !w-3.5 !-right-1 !rounded-full !border-2 !border-card !bg-indigo-500',
+          '!h-7 !w-4 !-right-3 !rounded-full !border-2 !border-card !bg-indigo-500',
           scope.artifact
             ? '!shadow-[0_0_12px_3px_rgb(99_102_241/0.85)] animate-pulse'
             : '!shadow-[inset_0_1px_2px_rgb(0_0_0/0.3),0_1px_4px_rgb(99_102_241/0.5)]'
@@ -1540,7 +1540,7 @@ function BrainNodeInner({ id, data, selected }: NodeProps) {
         type="target"
         position={Position.Top}
         title="Examples — wire samples that show the style/shape you want (top plug)"
-        className="!h-3.5 !w-7 !-top-1 !rounded-full !border-2 !border-card !bg-violet-500 !shadow-[inset_0_1px_2px_rgb(0_0_0/0.3),0_1px_4px_rgb(139_92_246/0.5)]"
+        className="!h-4 !w-7 !-top-3 !rounded-full !border-2 !border-card !bg-violet-500 !shadow-[inset_0_1px_2px_rgb(0_0_0/0.3),0_1px_4px_rgb(139_92_246/0.5)]"
       />
       {/* Bottom plug — the ROBOT persona (one only). */}
       <Handle
@@ -1548,7 +1548,7 @@ function BrainNodeInner({ id, data, selected }: NodeProps) {
         type="target"
         position={Position.Bottom}
         title="Persona — wire ONE agent/voice that shapes how it answers (bottom plug)"
-        className="!h-3.5 !w-7 !-bottom-1 !rounded-full !border-2 !border-card !bg-emerald-500 !shadow-[inset_0_1px_2px_rgb(0_0_0/0.3),0_1px_4px_rgb(16_185_129/0.5)]"
+        className="!h-4 !w-7 !-bottom-3 !rounded-full !border-2 !border-card !bg-emerald-500 !shadow-[inset_0_1px_2px_rgb(0_0_0/0.3),0_1px_4px_rgb(16_185_129/0.5)]"
       />
 
       {/* Plug labels — ALWAYS on, OUTSIDE the box so they never cover the chat,
@@ -1556,16 +1556,16 @@ function BrainNodeInner({ id, data, selected }: NodeProps) {
           (right), Persona (bottom). Solid color pills, large + readable;
           pointer-events-none keeps the plugs grabbable. */}
       <div className="pointer-events-none absolute inset-0 z-20">
-        <span className="absolute -top-8 left-1/2 -translate-x-1/2 rounded-full bg-violet-500 px-3 py-1 text-[17px] font-bold uppercase tracking-wide text-white shadow-[0_2px_10px_rgb(0_0_0/0.20)]">
+        <span className="absolute -top-12 left-1/2 -translate-x-1/2 rounded-full bg-violet-500 px-3 py-1 text-[17px] font-bold uppercase tracking-wide text-white shadow-[0_2px_10px_rgb(0_0_0/0.20)]">
           Examples
         </span>
-        <span className="absolute -bottom-8 left-1/2 -translate-x-1/2 rounded-full bg-emerald-500 px-3 py-1 text-[17px] font-bold uppercase tracking-wide text-white shadow-[0_2px_10px_rgb(0_0_0/0.20)]">
+        <span className="absolute -bottom-12 left-1/2 -translate-x-1/2 rounded-full bg-emerald-500 px-3 py-1 text-[17px] font-bold uppercase tracking-wide text-white shadow-[0_2px_10px_rgb(0_0_0/0.20)]">
           Persona
         </span>
-        <span className="absolute -left-3 top-1/2 -translate-x-full -translate-y-1/2 rounded-full bg-accent px-3 py-1 text-[17px] font-bold uppercase tracking-wide text-white shadow-[0_2px_10px_rgb(0_0_0/0.20)]">
+        <span className="absolute -left-5 top-1/2 -translate-x-full -translate-y-1/2 rounded-full bg-accent px-3 py-1 text-[17px] font-bold uppercase tracking-wide text-white shadow-[0_2px_10px_rgb(0_0_0/0.20)]">
           Library
         </span>
-        <span className="absolute -right-3 top-1/2 -translate-y-1/2 translate-x-full rounded-full bg-indigo-500 px-3 py-1 text-[17px] font-bold uppercase tracking-wide text-white shadow-[0_2px_10px_rgb(0_0_0/0.20)]">
+        <span className="absolute -right-5 top-1/2 -translate-y-1/2 translate-x-full rounded-full bg-indigo-500 px-3 py-1 text-[17px] font-bold uppercase tracking-wide text-white shadow-[0_2px_10px_rgb(0_0_0/0.20)]">
           Draft
         </span>
       </div>
