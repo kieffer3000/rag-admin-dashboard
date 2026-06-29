@@ -104,10 +104,12 @@ async function authorize(
   if (slug) {
     const conn = await getConnectionBySlug(slug);
     if (!conn) return { error: 'Unknown embed.', status: 401, headers: openCors(origin) };
-    const sameOrigin = !!self && (origin ?? '').toLowerCase() === self;
-    if (!sameOrigin) {
-      // The widget always calls from this app's own origin; anything else with a
-      // slug is an off-widget attempt → block.
+    // The widget calls from this app's own origin. Browsers OMIT the Origin
+    // header on same-origin GETs (e.g. the config fetch), so accept "no Origin"
+    // as same-origin; only reject when an Origin is present and isn't ours.
+    const o = (origin ?? '').toLowerCase();
+    const okOrigin = !o || (!!self && o === self);
+    if (!okOrigin) {
       return {
         error: 'This widget can only be used where it is embedded.',
         status: 403,

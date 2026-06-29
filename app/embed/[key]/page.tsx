@@ -14,6 +14,21 @@ interface Msg {
   content: string;
 }
 
+// Answers come back as HTML — render them, but strip anything dangerous first
+// (scripts/styles/iframes, inline event handlers, javascript: URLs). Lightweight
+// allowlist-ish scrub, since the widget is public.
+function sanitizeAnswerHtml(html: string): string {
+  let s = html ?? '';
+  // drop whole dangerous elements + their contents
+  s = s.replace(/<\s*(script|style|iframe|object|embed|link|meta)[\s\S]*?<\s*\/\s*\1\s*>/gi, '');
+  s = s.replace(/<\s*(script|style|iframe|object|embed|link|meta)[^>]*\/?\s*>/gi, '');
+  // strip inline event handlers (onclick=, onerror=, …)
+  s = s.replace(/\son\w+\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi, '');
+  // neutralize javascript:/data: URLs in href/src
+  s = s.replace(/(href|src)\s*=\s*("|')\s*(javascript|data):[^"']*\2/gi, '$1=$2#$2');
+  return s;
+}
+
 export default function EmbedChatPage() {
   const params = useParams<{ key: string }>();
   // The path segment is the PUBLIC embed id (not the secret key). It's sent as
@@ -124,6 +139,27 @@ export default function EmbedChatPage() {
         color: '#1a1a2e'
       }}
     >
+      {/* styling for rendered HTML answers — keeps lists, headings, links,
+          code, tables readable inside the bubble. */}
+      <style>{`
+        .ad-answer > *:first-child { margin-top: 0; }
+        .ad-answer > *:last-child { margin-bottom: 0; }
+        .ad-answer p { margin: 0 0 8px; }
+        .ad-answer ul, .ad-answer ol { margin: 0 0 8px; padding-left: 20px; }
+        .ad-answer li { margin: 2px 0; }
+        .ad-answer h1, .ad-answer h2, .ad-answer h3, .ad-answer h4 { margin: 12px 0 6px; font-weight: 700; line-height: 1.3; }
+        .ad-answer h1 { font-size: 17px; } .ad-answer h2 { font-size: 15.5px; } .ad-answer h3 { font-size: 14px; }
+        .ad-answer a { color: #4f46e5; text-decoration: underline; word-break: break-word; }
+        .ad-answer strong { font-weight: 700; }
+        .ad-answer code { background: #f1f1f4; border-radius: 4px; padding: 1px 4px; font-size: 12.5px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+        .ad-answer pre { background: #f6f6f8; border-radius: 8px; padding: 8px 10px; overflow-x: auto; margin: 0 0 8px; }
+        .ad-answer pre code { background: none; padding: 0; }
+        .ad-answer blockquote { margin: 0 0 8px; padding-left: 10px; border-left: 3px solid #e5e7eb; color: #555; }
+        .ad-answer table { border-collapse: collapse; width: 100%; margin: 0 0 8px; font-size: 12.5px; }
+        .ad-answer th, .ad-answer td { border: 1px solid #e5e7eb; padding: 4px 7px; text-align: left; }
+        .ad-answer img { max-width: 100%; height: auto; border-radius: 8px; }
+        .ad-answer hr { border: none; border-top: 1px solid #ececf0; margin: 10px 0; }
+      `}</style>
       {/* header */}
       <div
         style={{
@@ -147,26 +183,35 @@ export default function EmbedChatPage() {
             Ask anything — every answer is grounded in this knowledge base.
           </div>
         )}
-        {msgs.map((m, i) => (
-          <div
-            key={i}
-            style={{
-              alignSelf: m.role === 'user' ? 'flex-end' : 'flex-start',
-              maxWidth: '85%',
-              background: m.role === 'user' ? '#4f46e5' : '#fff',
-              color: m.role === 'user' ? '#fff' : '#1a1a2e',
-              border: m.role === 'user' ? 'none' : '1px solid #ececf0',
-              borderRadius: 14,
-              padding: '9px 12px',
-              fontSize: 13.5,
-              lineHeight: 1.5,
-              boxShadow: m.role === 'user' ? 'none' : '0 1px 2px rgba(0,0,0,0.05)',
-              whiteSpace: 'pre-wrap'
-            }}
-          >
-            {m.content}
-          </div>
-        ))}
+        {msgs.map((m, i) => {
+          const isUser = m.role === 'user';
+          const common: React.CSSProperties = {
+            alignSelf: isUser ? 'flex-end' : 'flex-start',
+            maxWidth: '85%',
+            background: isUser ? '#4f46e5' : '#fff',
+            color: isUser ? '#fff' : '#1a1a2e',
+            border: isUser ? 'none' : '1px solid #ececf0',
+            borderRadius: 14,
+            padding: '9px 12px',
+            fontSize: 13.5,
+            lineHeight: 1.5,
+            boxShadow: isUser ? 'none' : '0 1px 2px rgba(0,0,0,0.05)'
+          };
+          // Assistant answers come back as HTML → render (sanitized). User text
+          // stays plain (pre-wrap), so nothing they type is ever interpreted.
+          return isUser ? (
+            <div key={i} style={{ ...common, whiteSpace: 'pre-wrap' }}>
+              {m.content}
+            </div>
+          ) : (
+            <div
+              key={i}
+              className="ad-answer"
+              style={common}
+              dangerouslySetInnerHTML={{ __html: sanitizeAnswerHtml(m.content) }}
+            />
+          );
+        })}
         {busy && (
           <div style={{ alignSelf: 'flex-start', color: '#6b7280', fontSize: 13 }}>thinking…</div>
         )}
