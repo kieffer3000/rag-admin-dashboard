@@ -75,6 +75,12 @@ export async function POST(req: Request) {
           title: typeof a.title === 'string' ? a.title : undefined,
           model: typeof body.model === 'string' ? body.model : undefined,
           source_ids: sourceIds,
+          // Pre-built Pinecone filter so Make retrieves only from the WIRED
+          // sources (not the whole namespace). Absent when no corpus is wired →
+          // the scenario routes to its artifact-only branch.
+          filter_json: sourceIds.length
+            ? JSON.stringify({ source_id: { $in: sourceIds } })
+            : undefined,
           namespace: nsForUser(userId),
           // The ROBOT (persona/instructions) + reference exemplars — forward them
           // so the relay path behaves like the in-code path (don't drop the bot).
