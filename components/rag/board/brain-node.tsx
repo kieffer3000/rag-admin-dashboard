@@ -1500,74 +1500,83 @@ function BrainNodeInner({ id, data, selected }: NodeProps) {
 
       </div>
 
-      {/* input RECEPTACLE — a visible port set into the brain's left edge. It
-          comes alive when cables are plugged in (soft inner glow) and pulses
-          in time with the wires while the brain is thinking. */}
-      <Handle
-        id="sources"
-        type="target"
-        position={Position.Left}
-        title="Library — your long-term knowledge base; wire boxes & sources here (left plug)"
-        className={cn(
-          '!h-7 !w-4 !-left-3 !rounded-full !border-2 !border-card !bg-gradient-to-b !from-accent !to-violet-600',
-          wired
-            ? '!shadow-[inset_0_1px_2px_rgb(0_0_0/0.3),0_0_10px_2px_hsl(var(--accent)/0.5)]'
-            : '!shadow-[inset_0_1px_2px_rgb(0_0_0/0.3),0_1px_4px_hsl(var(--accent)/0.45)]',
-          busy && 'animate-pulse'
-        )}
-      />
-      {/* Right plug — the ARTIFACT the corpus opines on. Lights up + pulses when
-          an artifact is connected and detected. */}
-      <Handle
-        id="artifact"
-        type="target"
-        position={Position.Right}
-        title={
-          scope.artifact
-            ? 'Draft connected ✓'
-            : 'Draft — wire the working doc you want help with here (right plug)'
-        }
-        className={cn(
-          '!h-7 !w-4 !-right-3 !rounded-full !border-2 !border-card !bg-indigo-500',
-          scope.artifact
-            ? '!shadow-[0_0_12px_3px_rgb(99_102_241/0.85)] animate-pulse'
-            : '!shadow-[inset_0_1px_2px_rgb(0_0_0/0.3),0_1px_4px_rgb(99_102_241/0.5)]'
-        )}
-      />
-      {/* Top plug — REFERENCE exemplars/clues. */}
-      <Handle
-        id="references"
-        type="target"
-        position={Position.Top}
-        title="Examples — wire samples that show the style/shape you want (top plug)"
-        className="!h-4 !w-7 !-top-3 !rounded-full !border-2 !border-card !bg-violet-500 !shadow-[inset_0_1px_2px_rgb(0_0_0/0.3),0_1px_4px_rgb(139_92_246/0.5)]"
-      />
-      {/* Bottom plug — the ROBOT persona (one only). */}
-      <Handle
-        id="robot"
-        type="target"
-        position={Position.Bottom}
-        title="Persona — wire ONE agent/voice that shapes how it answers (bottom plug)"
-        className="!h-4 !w-7 !-bottom-3 !rounded-full !border-2 !border-card !bg-emerald-500 !shadow-[inset_0_1px_2px_rgb(0_0_0/0.3),0_1px_4px_rgb(16_185_129/0.5)]"
-      />
+      {/* Four labelled PORTS. Each juts OUT of the Answers Bank: the connector
+          sits at the OUTER tip, the label nestles against the box — so a piece
+          reads as plugging IN. Always visible; the container is click-through
+          (pointer-events-none) and only the plug opts back in, so it stays
+          grabbable for wiring while the label never blocks the canvas. The
+          Handle is dropped into normal flow (!relative) so flex puts the plug
+          past the label; React Flow still measures its real position for wires. */}
 
-      {/* Plug labels — ALWAYS on, OUTSIDE the box so they never cover the chat,
-          one per plug in plain language: Examples (top), Library (left), Draft
-          (right), Persona (bottom). Solid color pills, large + readable;
-          pointer-events-none keeps the plugs grabbable. */}
-      <div className="pointer-events-none absolute inset-0 z-20">
-        <span className="absolute -top-12 left-1/2 -translate-x-1/2 rounded-full bg-violet-500 px-3 py-1 text-[17px] font-bold uppercase tracking-wide text-white shadow-[0_2px_10px_rgb(0_0_0/0.20)]">
-          Examples
-        </span>
-        <span className="absolute -bottom-12 left-1/2 -translate-x-1/2 rounded-full bg-emerald-500 px-3 py-1 text-[17px] font-bold uppercase tracking-wide text-white shadow-[0_2px_10px_rgb(0_0_0/0.20)]">
-          Persona
-        </span>
-        <span className="absolute -left-5 top-1/2 -translate-x-full -translate-y-1/2 rounded-full bg-accent px-3 py-1 text-[17px] font-bold uppercase tracking-wide text-white shadow-[0_2px_10px_rgb(0_0_0/0.20)]">
+      {/* LEFT — Library (long-term knowledge) */}
+      <div className="pointer-events-none absolute right-full top-1/2 z-20 flex -translate-y-1/2 flex-row items-center gap-2 pr-1.5">
+        <Handle
+          id="sources"
+          type="target"
+          position={Position.Left}
+          title="Library — your long-term knowledge base; wire boxes & sources here"
+          className={cn(
+            'pointer-events-auto !relative !inset-auto !m-0 !h-8 !w-4 !translate-x-0 !translate-y-0 !rounded-full !border-2 !border-card !bg-gradient-to-b !from-accent !to-violet-600',
+            wired
+              ? '!shadow-[0_0_10px_2px_hsl(var(--accent)/0.55)]'
+              : '!shadow-[0_2px_6px_hsl(var(--accent)/0.45)]',
+            busy && 'animate-pulse'
+          )}
+        />
+        <span className="rounded-full bg-accent px-3 py-1 text-[17px] font-bold uppercase tracking-wide text-white shadow-[0_2px_10px_rgb(0_0_0/0.20)] ring-1 ring-white/20">
           Library
         </span>
-        <span className="absolute -right-5 top-1/2 -translate-y-1/2 translate-x-full rounded-full bg-indigo-500 px-3 py-1 text-[17px] font-bold uppercase tracking-wide text-white shadow-[0_2px_10px_rgb(0_0_0/0.20)]">
+      </div>
+
+      {/* RIGHT — Draft (the working doc) */}
+      <div className="pointer-events-none absolute left-full top-1/2 z-20 flex -translate-y-1/2 flex-row items-center gap-2 pl-1.5">
+        <span className="rounded-full bg-indigo-500 px-3 py-1 text-[17px] font-bold uppercase tracking-wide text-white shadow-[0_2px_10px_rgb(0_0_0/0.20)] ring-1 ring-white/20">
           Draft
         </span>
+        <Handle
+          id="artifact"
+          type="target"
+          position={Position.Right}
+          title={
+            scope.artifact
+              ? 'Draft connected ✓'
+              : 'Draft — wire the working doc you want help with here'
+          }
+          className={cn(
+            'pointer-events-auto !relative !inset-auto !m-0 !h-8 !w-4 !translate-x-0 !translate-y-0 !rounded-full !border-2 !border-card !bg-indigo-500',
+            scope.artifact
+              ? '!shadow-[0_0_12px_3px_rgb(99_102_241/0.85)] animate-pulse'
+              : '!shadow-[0_2px_6px_rgb(99_102_241/0.5)]'
+          )}
+        />
+      </div>
+
+      {/* TOP — Examples (style samples) */}
+      <div className="pointer-events-none absolute bottom-full left-1/2 z-20 flex -translate-x-1/2 flex-col items-center gap-1.5 pb-1.5">
+        <Handle
+          id="references"
+          type="target"
+          position={Position.Top}
+          title="Examples — wire samples that show the style/shape you want"
+          className="pointer-events-auto !relative !inset-auto !m-0 !h-4 !w-8 !translate-x-0 !translate-y-0 !rounded-full !border-2 !border-card !bg-violet-500 !shadow-[0_2px_6px_rgb(139_92_246/0.5)]"
+        />
+        <span className="rounded-full bg-violet-500 px-3 py-1 text-[17px] font-bold uppercase tracking-wide text-white shadow-[0_2px_10px_rgb(0_0_0/0.20)] ring-1 ring-white/20">
+          Examples
+        </span>
+      </div>
+
+      {/* BOTTOM — Persona (the answering voice) */}
+      <div className="pointer-events-none absolute top-full left-1/2 z-20 flex -translate-x-1/2 flex-col items-center gap-1.5 pt-1.5">
+        <span className="rounded-full bg-emerald-500 px-3 py-1 text-[17px] font-bold uppercase tracking-wide text-white shadow-[0_2px_10px_rgb(0_0_0/0.20)] ring-1 ring-white/20">
+          Persona
+        </span>
+        <Handle
+          id="robot"
+          type="target"
+          position={Position.Bottom}
+          title="Persona — wire ONE agent/voice that shapes how it answers"
+          className="pointer-events-auto !relative !inset-auto !m-0 !h-4 !w-8 !translate-x-0 !translate-y-0 !rounded-full !border-2 !border-card !bg-emerald-500 !shadow-[0_2px_6px_rgb(16_185_129/0.5)]"
+        />
       </div>
     </div>
   );
