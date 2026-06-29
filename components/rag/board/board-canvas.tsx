@@ -108,7 +108,7 @@ const DUP_PREFIX: Record<string, string> = {
 const DOCKABLE_CONTEXT = new Set(['textNode', 'prompt', 'agent']);
 
 /** Live measured node sizes from React Flow, keyed by id. Updated every render
- *  (a brain with a long chat is far bigger than its declared 400×480, so static
+ *  (a brain with a long chat is far bigger than its declared 500×600, so static
  *  estimates let pieces land on it — measured sizes fix that). */
 let MEASURED = new Map<string, { width: number; height: number }>();
 
@@ -117,11 +117,11 @@ let MEASURED = new Map<string, { width: number; height: number }>();
  *  once the thumbnail + 2-line title stack up). */
 function nodeRect(n: BoardNode) {
   const m = MEASURED.get(n.id);
-  const w = m?.width ?? n.width ?? (n.type === 'brain' ? 400 : CHIP_W);
+  const w = m?.width ?? n.width ?? (n.type === 'brain' ? 500 : CHIP_W);
   const h =
     m?.height ??
     n.height ??
-    (n.type === 'brain' ? 480 : n.type === 'agent' ? AGENT_H : CHIP_H + 64);
+    (n.type === 'brain' ? 600 : n.type === 'agent' ? AGENT_H : CHIP_H + 64);
   return { x: n.position.x, y: n.position.y, w, h };
 }
 
@@ -1678,8 +1678,8 @@ function BoardCanvasInner() {
         else if (n.type === 'reference') kind = 'top';
         else if (n.type === 'artifact') kind = 'right';
         else if (n.type === 'prompt' || n.type === 'agent') kind = 'bottom';
-        let w = (n.width as number) ?? (n.type === 'brain' ? 400 : 240);
-        let h = (n.height as number) ?? (n.type === 'brain' ? 480 : 150);
+        let w = (n.width as number) ?? (n.type === 'brain' ? 500 : 240);
+        let h = (n.height as number) ?? (n.type === 'brain' ? 600 : 150);
         if (n.type === 'hub') {
           // Collapse-aware: a minimized box reserves its real mini footprint.
           const sz = hubFootprint(
@@ -2267,8 +2267,8 @@ function BoardCanvasInner() {
             id: nextBoardId('brain'),
             type: 'brain',
             position: centerPos(),
-            width: 400,
-            height: 480,
+            width: 500,
+            height: 600,
             data: { name: `Brain ${brainCount + 1}` }
           });
         }}

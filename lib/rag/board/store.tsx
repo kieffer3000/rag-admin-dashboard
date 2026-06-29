@@ -108,8 +108,8 @@ function seedBoard(media: MediaItem[]): BoardState {
       id: brainId,
       type: 'brain',
       position: { x: 640, y: 160 },
-      width: 400,
-      height: 480,
+      width: 500,
+      height: 600,
       data: { name: 'Brain 1' }
     }
   ];

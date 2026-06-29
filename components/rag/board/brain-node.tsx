@@ -3,6 +3,7 @@
 import { memo, useRef, useState, useEffect, useCallback } from 'react';
 import {
   Handle,
+  NodeResizer,
   Position,
   useReactFlow,
   type NodeProps
@@ -268,7 +269,7 @@ function BrainNodeInner({ id, data, selected }: NodeProps) {
 
   /**
    * Cycle the brain through three sizes:
-   * default (400×480) → half-screen → READING MODE (near-fullscreen, for
+   * default (500×600) → half-screen → READING MODE (near-fullscreen, for
    * reading long answers/charts like a doc) → back to default.
    * Each step re-frames the viewport onto the brain so it fills the screen.
    */
@@ -288,7 +289,7 @@ function BrainNodeInner({ id, data, selected }: NodeProps) {
       const { w, h } = px(0.92, 0.9);
       resizeBoardNode(id, w, h, { sizeMode: 'full', expanded: true });
     } else {
-      resizeBoardNode(id, 400, 480, { sizeMode: 'default', expanded: false });
+      resizeBoardNode(id, 500, 600, { sizeMode: 'default', expanded: false });
     }
     // Re-frame after the node re-renders at its new dimensions.
     setTimeout(
@@ -856,9 +857,18 @@ function BrainNodeInner({ id, data, selected }: NodeProps) {
   }
 
   return (
-    <div className="relative h-full w-full">
-      {/* No free-form resize — the brain has exactly 3 sizes (normal · half ·
-          reading/research), cycled by the size button in the header. */}
+    <div className="group relative h-full w-full">
+      {/* Free-form resize: drag any corner/edge handle (shown when selected) to
+          size the brain. The header's size button still cycles default · half ·
+          reading. Manual size persists via resizeBoardNode on resize-end. */}
+      <NodeResizer
+        minWidth={360}
+        minHeight={340}
+        isVisible={selected}
+        lineClassName="!border-accent/40"
+        handleClassName="!h-3 !w-3 !rounded-full !border-2 !border-card !bg-accent"
+        onResizeEnd={(_, p) => resizeBoardNode(id, Math.round(p.width), Math.round(p.height))}
+      />
       <div
         className={cn(
           'flex h-full w-full flex-col overflow-hidden rounded-[20px] bg-card',
@@ -1296,37 +1306,37 @@ function BrainNodeInner({ id, data, selected }: NodeProps) {
                 onClick={() => updateBoardNodeData(id, { speed: 'fast' })}
                 title="Fast — a quick, lightning answer (fewer steps, no per-claim citations or extra checks)."
                 className={cn(
-                  'flex items-center gap-1 rounded-full px-2 py-0.5 text-[15px] font-semibold uppercase tracking-wide transition-colors',
+                  'flex items-center gap-0.5 rounded-full px-1.5 py-[1px] text-[9.5px] font-semibold uppercase tracking-wide transition-colors',
                   speed === 'fast'
                     ? 'bg-amber-400 text-white shadow-[0_1px_3px_rgb(0_0_0/0.18)]'
                     : 'text-muted-foreground/70 hover:text-foreground'
                 )}
               >
-                <Zap className="h-[15px] w-[15px]" /> Fast
+                <Zap className="h-3 w-3" /> Fast
               </button>
               <button
                 onClick={() => updateBoardNodeData(id, { speed: 'detailed' })}
                 title="Normal — the full pipeline: query expansion and per-claim citations. Slower, more thorough."
                 className={cn(
-                  'flex items-center gap-1 rounded-full px-2 py-0.5 text-[15px] font-semibold uppercase tracking-wide transition-colors',
+                  'flex items-center gap-0.5 rounded-full px-1.5 py-[1px] text-[9.5px] font-semibold uppercase tracking-wide transition-colors',
                   speed === 'detailed'
                     ? 'bg-accent text-white shadow-[0_1px_3px_rgb(0_0_0/0.18)]'
                     : 'text-muted-foreground/70 hover:text-foreground'
                 )}
               >
-                <Search className="h-[15px] w-[15px]" /> Normal
+                <Search className="h-3 w-3" /> Normal
               </button>
               <button
                 onClick={() => updateBoardNodeData(id, { speed: 'research' })}
                 title="Research — the deepest answer: the full pipeline plus a heavier reasoning model that organizes findings across many sources and bridges to related concepts. Slowest, most thorough."
                 className={cn(
-                  'flex items-center gap-1 rounded-full px-2 py-0.5 text-[15px] font-semibold uppercase tracking-wide transition-colors',
+                  'flex items-center gap-0.5 rounded-full px-1.5 py-[1px] text-[9.5px] font-semibold uppercase tracking-wide transition-colors',
                   speed === 'research'
                     ? 'bg-violet-500 text-white shadow-[0_1px_3px_rgb(0_0_0/0.18)]'
                     : 'text-muted-foreground/70 hover:text-foreground'
                 )}
               >
-                <Telescope className="h-[15px] w-[15px]" /> Research
+                <Telescope className="h-3 w-3" /> Research
               </button>
             </div>
           </div>
@@ -1439,7 +1449,7 @@ function BrainNodeInner({ id, data, selected }: NodeProps) {
         id="sources"
         type="target"
         position={Position.Left}
-        title="Knowledge — wire your sources / boxes here (left plug)"
+        title="RAG — your long-term knowledge base; wire boxes & sources here (left plug)"
         className={cn(
           '!h-7 !w-3.5 !-left-1 !rounded-full !border-2 !border-card !bg-gradient-to-b !from-accent !to-violet-600',
           wired
@@ -1471,7 +1481,7 @@ function BrainNodeInner({ id, data, selected }: NodeProps) {
         id="references"
         type="target"
         position={Position.Top}
-        title="References — wire exemplars or clues to steer judgment (top plug)"
+        title="Sources — wire supporting docs / examples to steer the answer (top plug)"
         className="!h-3.5 !w-7 !-top-1 !rounded-full !border-2 !border-card !bg-violet-500 !shadow-[inset_0_1px_2px_rgb(0_0_0/0.3),0_1px_4px_rgb(139_92_246/0.5)]"
       />
       {/* Bottom plug — the ROBOT persona (one only). */}
@@ -1482,6 +1492,31 @@ function BrainNodeInner({ id, data, selected }: NodeProps) {
         title="Robot — wire ONE agent/prompt persona (bottom plug)"
         className="!h-3.5 !w-7 !-bottom-1 !rounded-full !border-2 !border-card !bg-emerald-500 !shadow-[inset_0_1px_2px_rgb(0_0_0/0.3),0_1px_4px_rgb(16_185_129/0.5)]"
       />
+
+      {/* Plug guide labels — what each side accepts, hugging its connector.
+          Arrangement the user set: Sources top · RAG left · Artifact right ·
+          Bots bottom. Frosted so they read on the header or white content;
+          pointer-events-none keeps the plugs grabbable; revealed on hover or
+          when selected so they never clutter at rest. */}
+      <div
+        className={cn(
+          'pointer-events-none absolute inset-0 z-20 opacity-0 transition-opacity duration-150 group-hover:opacity-100',
+          selected && '!opacity-100'
+        )}
+      >
+        <span className="absolute left-1/2 top-1 -translate-x-1/2 rounded-full bg-card/95 px-1.5 py-[1px] text-[8.5px] font-bold uppercase tracking-wider text-violet-600 shadow-sm ring-1 ring-violet-400/50 backdrop-blur-sm dark:text-violet-300">
+          Sources
+        </span>
+        <span className="absolute bottom-1 left-1/2 -translate-x-1/2 rounded-full bg-card/95 px-1.5 py-[1px] text-[8.5px] font-bold uppercase tracking-wider text-emerald-600 shadow-sm ring-1 ring-emerald-400/50 backdrop-blur-sm dark:text-emerald-300">
+          Bots
+        </span>
+        <span className="absolute left-0.5 top-1/2 -translate-y-1/2 rotate-180 rounded-full bg-card/95 px-[2px] py-1.5 text-[8.5px] font-bold uppercase tracking-wider text-accent shadow-sm ring-1 ring-accent/40 backdrop-blur-sm [writing-mode:vertical-rl]">
+          RAG
+        </span>
+        <span className="absolute right-0.5 top-1/2 -translate-y-1/2 rounded-full bg-card/95 px-[2px] py-1.5 text-[8.5px] font-bold uppercase tracking-wider text-indigo-600 shadow-sm ring-1 ring-indigo-400/50 backdrop-blur-sm [writing-mode:vertical-rl] dark:text-indigo-300">
+          Artifact
+        </span>
+      </div>
     </div>
   );
 }
