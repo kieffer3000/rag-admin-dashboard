@@ -22,14 +22,28 @@ interface Msg {
 
 export default function EmbedChatPage() {
   const params = useParams<{ key: string }>();
-  const apiKey = params?.key ?? '';
+  // The path segment is the PUBLIC embed id (not the secret key). It's sent as
+  // x-embed-id and only works from this widget, on an allowed domain.
+  const embedId = params?.key ?? '';
   const [msgs, setMsgs] = useState<Msg[]>([]);
   const [q, setQ] = useState('');
   const [busy, setBusy] = useState(false);
   const [bank, setBank] = useState('');
   const [allowSpeed, setAllowSpeed] = useState(false);
   const [speed, setSpeed] = useState<'fast' | 'detailed' | 'research'>('detailed');
+  // Only run inside an iframe — a direct top-level visit (someone pasting the URL)
+  // does nothing. Combined with the frame-ancestors CSP, the widget only works
+  // when embedded on an allowed site.
+  const [framed, setFramed] = useState(true);
   const endRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    try {
+      setFramed(window.self !== window.top);
+    } catch {
+      setFramed(true); // cross-origin access throws → we ARE framed
+    }
+  }, []);
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -37,8 +51,8 @@ export default function EmbedChatPage() {
 
   // Pull the widget config (label + whether to offer the speed picker).
   useEffect(() => {
-    if (!apiKey) return;
-    fetch('/api/v1/ask', { headers: { Authorization: `Bearer ${apiKey}` } })
+    if (!embedId || !framed) return;
+    fetch('/api/v1/ask', { headers: { 'x-embed-id': embedId } })
       .then((r) => (r.ok ? r.json() : null))
       .then((cfg) => {
         if (!cfg) return;
@@ -49,7 +63,7 @@ export default function EmbedChatPage() {
         }
       })
       .catch(() => {});
-  }, [apiKey]);
+  }, [embedId, framed]);
 
   const SPEEDS: { id: 'fast' | 'detailed' | 'research'; label: string }[] = [
     { id: 'fast', label: 'Fast' },
@@ -67,7 +81,7 @@ export default function EmbedChatPage() {
     try {
       const res = await fetch('/api/v1/ask', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
+        headers: { 'Content-Type': 'application/json', 'x-embed-id': embedId },
         body: JSON.stringify({ question: text, conversation: history, speed })
       });
       const data = await res.json();
@@ -85,6 +99,26 @@ export default function EmbedChatPage() {
     } finally {
       setBusy(false);
     }
+  }
+
+  if (!framed) {
+    return (
+      <div
+        style={{
+          display: 'flex',
+          height: '100vh',
+          alignItems: 'center',
+          justifyContent: 'center',
+          padding: 24,
+          textAlign: 'center',
+          color: '#6b7280',
+          fontFamily: 'ui-sans-serif, system-ui, sans-serif',
+          fontSize: 13.5
+        }}
+      >
+        This chat widget must be embedded on its website.
+      </div>
+    );
   }
 
   return (

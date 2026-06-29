@@ -28,6 +28,10 @@ export interface ConnectionRow {
   allow_speed_choice: boolean;
   allowed_origins: string[];
   key_prefix: string;
+  /** PUBLIC, non-secret id used in the embed iframe URL. Safe to expose: it only
+   *  works inside the widget, which is frame-locked to allowed_origins. The
+   *  secret API key is never put in a URL. */
+  embed_slug: string;
   created_at: string;
   last_used_at: string | null;
   calls: number;
@@ -51,14 +55,17 @@ async function ensureSchema() {
       allowed_origins jsonb NOT NULL DEFAULT '[]'::jsonb,
       key_hash text NOT NULL,
       key_prefix text NOT NULL,
+      embed_slug text,
       created_at timestamptz NOT NULL DEFAULT now(),
       last_used_at timestamptz,
       calls integer NOT NULL DEFAULT 0
     )
   `;
-  // Idempotent add for tables created before this column existed.
+  // Idempotent adds for tables created before these columns existed.
   await sql`ALTER TABLE connections ADD COLUMN IF NOT EXISTS allow_speed_choice boolean NOT NULL DEFAULT false`;
+  await sql`ALTER TABLE connections ADD COLUMN IF NOT EXISTS embed_slug text`;
   await sql`CREATE INDEX IF NOT EXISTS connections_key_hash_idx ON connections (key_hash)`;
+  await sql`CREATE INDEX IF NOT EXISTS connections_embed_slug_idx ON connections (embed_slug)`;
   await sql`CREATE INDEX IF NOT EXISTS connections_scope_idx ON connections (scope)`;
   ensured = true;
 }
@@ -78,6 +85,8 @@ function normOrigin(s: string): string {
 
 const hashKey = (key: string) => createHash('sha256').update(key).digest('hex');
 const newId = () => 'conn_' + randomBytes(9).toString('base64url');
+/** Public, non-secret embed id (goes in the iframe URL). */
+const newSlug = () => 'emb_' + randomBytes(18).toString('base64url');
 
 /** A fresh, unguessable key. Shown to the owner ONCE; only its hash is stored. */
 function newKey(): { key: string; prefix: string } {
@@ -107,6 +116,7 @@ export async function createConnection(
   if (!sql) return null;
   await ensureSchema();
   const id = newId();
+  const slug = newSlug();
   const { key, prefix } = newKey();
   const sourceIds = (input.sourceIds ?? []).filter((s) => typeof s === 'string');
   const origins = Array.from(
@@ -118,12 +128,12 @@ export async function createConnection(
   const allowSpeedChoice = !!input.allowSpeedChoice;
   await sql`
     INSERT INTO connections
-      (id, scope, user_id, label, namespace, source_ids, answer_mode, model, speed, allow_speed_choice, allowed_origins, key_hash, key_prefix)
+      (id, scope, user_id, label, namespace, source_ids, answer_mode, model, speed, allow_speed_choice, allowed_origins, key_hash, key_prefix, embed_slug)
     VALUES
       (${id}, ${input.scope}, ${input.userId}, ${input.label || 'Untitled'},
        ${input.namespace}, ${JSON.stringify(sourceIds)}::jsonb, ${answerMode},
        ${input.model ?? ''}, ${speed}, ${allowSpeedChoice}, ${JSON.stringify(origins)}::jsonb,
-       ${hashKey(key)}, ${prefix})
+       ${hashKey(key)}, ${prefix}, ${slug})
   `;
   const rows = await sql`SELECT * FROM connections WHERE id=${id}`;
   return { row: rowOf(rows[0]), key };
@@ -190,6 +200,19 @@ export async function getConnectionByKey(key: string): Promise<ConnectionRow | n
   return row;
 }
 
+/** Resolve a PUBLIC embed slug → its connection (for the widget). The slug is
+ *  not a secret; its safety comes from the widget being frame-locked + the
+ *  endpoint only honouring a slug from the widget's own origin. */
+export async function getConnectionBySlug(slug: string): Promise<ConnectionRow | null> {
+  if (!sql || !slug) return null;
+  await ensureSchema();
+  const rows = await sql`SELECT * FROM connections WHERE embed_slug=${slug} LIMIT 1`;
+  if (!rows[0]) return null;
+  const row = rowOf(rows[0]);
+  void sql`UPDATE connections SET calls=calls+1, last_used_at=now() WHERE id=${row.id}`;
+  return row;
+}
+
 function rowOf(r: Record<string, unknown>): ConnectionRow {
   const arr = (v: unknown): string[] =>
     Array.isArray(v) ? (v as string[]) : typeof v === 'string' ? safeArr(v) : [];
@@ -206,6 +229,7 @@ function rowOf(r: Record<string, unknown>): ConnectionRow {
     allow_speed_choice: r.allow_speed_choice === true || r.allow_speed_choice === 't',
     allowed_origins: arr(r.allowed_origins),
     key_prefix: String(r.key_prefix ?? ''),
+    embed_slug: String(r.embed_slug ?? ''),
     created_at: String(r.created_at ?? ''),
     last_used_at: r.last_used_at ? String(r.last_used_at) : null,
     calls: Number(r.calls ?? 0)

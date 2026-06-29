@@ -1,6 +1,6 @@
 import { clerkMiddleware, createRouteMatcher, clerkClient } from '@clerk/nextjs/server';
 import { NextResponse } from 'next/server';
-import { allowedOriginsForKey } from '@/lib/rag/embed-origins';
+import { allowedOriginsForSlug } from '@/lib/rag/embed-origins';
 
 const isPublicRoute = createRouteMatcher([
   '/sign-in(.*)',
@@ -38,8 +38,8 @@ export default clerkMiddleware(async (auth, req) => {
   // refuses to render the widget on any other site (the real "can't use it
   // outside that domain"). Unknown key / DB error → 'none' (fail closed).
   if (req.nextUrl.pathname.startsWith('/embed/')) {
-    const key = decodeURIComponent(req.nextUrl.pathname.split('/')[2] ?? '');
-    const origins = await allowedOriginsForKey(key);
+    const slug = decodeURIComponent(req.nextUrl.pathname.split('/')[2] ?? '');
+    const origins = await allowedOriginsForSlug(slug);
     const ancestors = origins && origins.length > 0 ? origins.join(' ') : "'none'";
     const res = NextResponse.next();
     res.headers.set('Content-Security-Policy', `frame-ancestors ${ancestors}`);

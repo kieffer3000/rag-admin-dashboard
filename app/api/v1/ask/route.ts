@@ -1,4 +1,4 @@
-import { getConnectionByKey } from '@/lib/rag/connections';
+import { getConnectionByKey, getConnectionBySlug, type ConnectionRow } from '@/lib/rag/connections';
 import { relayPublicQuery } from '@/lib/rag/query-relay';
 
 // PUBLIC, key-authed Q&A over one published Answers Bank. NOT Clerk-gated
@@ -76,6 +76,69 @@ function keyFrom(req: Request, body: Record<string, unknown>): string {
   return '';
 }
 
+function slugFrom(req: Request, body: Record<string, unknown>): string {
+  const h = req.headers.get('x-embed-id');
+  if (h) return h.trim();
+  if (typeof body.embedId === 'string') return body.embedId.trim();
+  return '';
+}
+
+/** Resolve the caller's credential to a connection.
+ *  - PUBLIC embed slug (x-embed-id, used by the widget): only honoured from the
+ *    widget's OWN origin (same-origin). It can never carry the secret key, and a
+ *    server/curl with the slug (no/foreign Origin) is rejected.
+ *  - SECRET key (Bearer): REST. Browser cross-origin must match the allowlist;
+ *    server-to-server (no Origin) passes — the key is the secret.
+ *  Returns { conn, headers } on success, or { error, status, headers } to return. */
+async function authorize(
+  req: Request,
+  body: Record<string, unknown>
+): Promise<
+  | { conn: ConnectionRow; headers: Record<string, string> }
+  | { error: string; status: number; headers: Record<string, string> }
+> {
+  const origin = req.headers.get('origin');
+  const self = selfOriginOf(req);
+  const slug = slugFrom(req, body);
+
+  if (slug) {
+    const conn = await getConnectionBySlug(slug);
+    if (!conn) return { error: 'Unknown embed.', status: 401, headers: openCors(origin) };
+    const sameOrigin = !!self && (origin ?? '').toLowerCase() === self;
+    if (!sameOrigin) {
+      // The widget always calls from this app's own origin; anything else with a
+      // slug is an off-widget attempt → block.
+      return {
+        error: 'This widget can only be used where it is embedded.',
+        status: 403,
+        headers: resolveCors(origin, self, []).headers
+      };
+    }
+    return { conn, headers: resolveCors(origin, self, []).headers };
+  }
+
+  const key = keyFrom(req, body);
+  if (!key) {
+    return {
+      error: 'Missing credential. Send Authorization: Bearer <key> (REST) or x-embed-id (widget).',
+      status: 401,
+      headers: openCors(origin)
+    };
+  }
+  const conn = await getConnectionByKey(key);
+  if (!conn) return { error: 'Invalid or revoked API key.', status: 401, headers: openCors(origin) };
+
+  const { ok, headers } = resolveCors(origin, self, conn.allowed_origins);
+  if (!ok) {
+    return {
+      error: 'This key is locked to another website and cannot be used from here.',
+      status: 403,
+      headers
+    };
+  }
+  return { conn, headers };
+}
+
 export async function OPTIONS(req: Request) {
   // Preflight — reflect permissively; the actual GET/POST re-checks the Origin
   // against the resolved connection's allowlist.
@@ -85,28 +148,21 @@ export async function OPTIONS(req: Request) {
 // Lightweight public config for the embed widget (no question): the Bank's
 // label, whether to show the speed picker, and the default speed.
 export async function GET(req: Request) {
-  const origin = req.headers.get('origin');
-  const key = keyFrom(req, {});
-  const conn = key ? await getConnectionByKey(key) : null;
-  if (!conn) {
-    return Response.json({ error: 'Invalid or revoked API key.' }, { status: 401, headers: openCors(origin) });
-  }
-  const { ok, headers } = resolveCors(origin, selfOriginOf(req), conn.allowed_origins);
-  if (!ok) {
-    return Response.json({ error: 'Origin not allowed for this key.' }, { status: 403, headers });
+  const a = await authorize(req, {});
+  if ('error' in a) {
+    return Response.json({ error: a.error }, { status: a.status, headers: a.headers });
   }
   return Response.json(
     {
-      bank: conn.label,
-      allowSpeedChoice: conn.allow_speed_choice,
-      defaultSpeed: conn.speed
+      bank: a.conn.label,
+      allowSpeedChoice: a.conn.allow_speed_choice,
+      defaultSpeed: a.conn.speed
     },
-    { headers }
+    { headers: a.headers }
   );
 }
 
 export async function POST(req: Request) {
-  const origin = req.headers.get('origin');
   let body: Record<string, unknown> = {};
   try {
     body = (await req.json()) as Record<string, unknown>;
@@ -114,36 +170,12 @@ export async function POST(req: Request) {
     /* empty body ok */
   }
 
-  const key = keyFrom(req, body);
-  if (!key) {
-    return Response.json(
-      { error: 'Missing API key. Send Authorization: Bearer <key>.' },
-      { status: 401, headers: openCors(origin) }
-    );
+  const a = await authorize(req, body);
+  if ('error' in a) {
+    return Response.json({ error: a.error }, { status: a.status, headers: a.headers });
   }
-
-  const conn = await getConnectionByKey(key);
-  if (!conn) {
-    return Response.json(
-      { error: 'Invalid or revoked API key.' },
-      { status: 401, headers: openCors(origin) }
-    );
-  }
-
-  // Origin lock — deny browser calls from a domain that isn't allowed (covers the
-  // widget being lifted onto an unauthorized site, or the key used from another
-  // origin's JS). Server-to-server calls (no Origin) pass — the key is the secret.
-  const { ok: originOk, headers: cors } = resolveCors(
-    origin,
-    selfOriginOf(req),
-    conn.allowed_origins
-  );
-  if (!originOk) {
-    return Response.json(
-      { error: 'This key is locked to another website and cannot be used from here.' },
-      { status: 403, headers: cors }
-    );
-  }
+  const conn = a.conn;
+  const cors = a.headers;
 
   if (rateLimited(conn.id)) {
     return Response.json(

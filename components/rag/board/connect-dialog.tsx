@@ -17,6 +17,7 @@ interface Conn {
   id: string;
   label: string;
   key_prefix: string;
+  embed_slug: string;
   source_ids: string[];
   allowed_origins: string[];
   calls: number;
@@ -52,6 +53,7 @@ export function ConnectDialog({
     speed === 'fast' || speed === 'research' ? (speed as 'fast' | 'research') : 'detailed'
   );
   const [freshKey, setFreshKey] = useState<string | null>(null);
+  const [freshConn, setFreshConn] = useState<Conn | null>(null);
   const [copied, setCopied] = useState<string | null>(null);
   const origin = typeof window !== 'undefined' ? window.location.origin : '';
   const hasRag = sourceIds.length > 0;
@@ -76,6 +78,7 @@ export function ConnectDialog({
   useEffect(() => {
     if (open) {
       setFreshKey(null);
+      setFreshConn(null);
       void load();
     }
   }, [open, load]);
@@ -103,6 +106,7 @@ export function ConnectDialog({
         return;
       }
       setFreshKey(data.key);
+      setFreshConn(data.connection ?? null);
       await load();
     } finally {
       setCreating(false);
@@ -138,8 +142,10 @@ export function ConnectDialog({
     setTimeout(() => setCopied(null), 1500);
   }
 
-  const embedSnippet = (key: string) =>
-    `<iframe src="${origin}/embed/${key}" width="420" height="600" style="border:1px solid #e5e7eb;border-radius:16px" title="Ask the knowledge base"></iframe>`;
+  // Embed uses the PUBLIC slug (safe to expose; domain-locked). The secret key is
+  // only ever used server-side for REST and never appears in a URL.
+  const embedSnippet = (slug: string) =>
+    `<iframe src="${origin}/embed/${slug}" width="420" height="600" style="border:1px solid #e5e7eb;border-radius:16px" title="Ask the knowledge base"></iframe>`;
   const curlSnippet = (key: string) =>
     `curl -X POST ${origin}/api/v1/ask \\\n  -H "Authorization: Bearer ${key}" \\\n  -H "Content-Type: application/json" \\\n  -d '{"question":"What does my knowledge base say about ...?"}'`;
 
@@ -239,21 +245,26 @@ export function ConnectDialog({
             )}
           </div>
 
-          {/* freshly-created key — shown ONCE */}
-          {freshKey && (
+          {/* freshly-created — the embed snippet (public slug) is always safe to
+              paste; the secret API key is shown ONCE for server-side REST. */}
+          {freshKey && freshConn && (
             <div className="space-y-2.5 rounded-xl border border-emerald-500/30 bg-emerald-500/[0.05] p-3">
               <p className="text-[12.5px] font-semibold text-emerald-700 dark:text-emerald-300">
-                ✅ Key created — copy it now, it won’t be shown again.
+                ✅ Connection created.
               </p>
-              <KeyRow label="API key" value={freshKey} copied={copied === 'key'} onCopy={() => copy(freshKey, 'key')} mono />
               <KeyRow
-                label={<span className="flex items-center gap-1"><Code2 className="h-3.5 w-3.5" /> Embed widget (paste into your dashboard)</span>}
-                value={embedSnippet(freshKey)}
+                label={<span className="flex items-center gap-1"><Code2 className="h-3.5 w-3.5" /> Embed widget — paste into your dashboard (no secret key inside)</span>}
+                value={embedSnippet(freshConn.embed_slug)}
                 copied={copied === 'embed'}
-                onCopy={() => copy(embedSnippet(freshKey), 'embed')}
+                onCopy={() => copy(embedSnippet(freshConn.embed_slug), 'embed')}
               />
+              <div className="rounded-lg bg-amber-500/10 px-2.5 py-2 text-[11.5px] text-amber-700 dark:text-amber-300">
+                🔑 <strong>Secret API key — for server-to-server REST only.</strong> Copy it now,
+                it won’t be shown again. Never put this in a web page or the iframe.
+              </div>
+              <KeyRow label="API key (secret)" value={freshKey} copied={copied === 'key'} onCopy={() => copy(freshKey, 'key')} mono />
               <KeyRow
-                label="REST (curl)"
+                label="REST example (curl)"
                 value={curlSnippet(freshKey)}
                 copied={copied === 'curl'}
                 onCopy={() => copy(curlSnippet(freshKey), 'curl')}
@@ -288,6 +299,17 @@ export function ConnectDialog({
                         {c.allowed_origins.length > 0 && ` · ${c.allowed_origins.length} origin(s)`}
                       </div>
                     </div>
+                    <button
+                      title="Copy the embed snippet (public — safe to paste)"
+                      onClick={() => copy(embedSnippet(c.embed_slug), `embed-${c.id}`)}
+                      className="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground/70 transition-colors hover:bg-black/[0.05] hover:text-foreground dark:hover:bg-white/[0.07]"
+                    >
+                      {copied === `embed-${c.id}` ? (
+                        <Check className="h-3.5 w-3.5 text-emerald-500" />
+                      ) : (
+                        <Code2 className="h-3.5 w-3.5" />
+                      )}
+                    </button>
                     <button
                       title="Re-sync to this Bank's current sources"
                       onClick={() => resync(c.id)}
