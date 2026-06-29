@@ -1703,10 +1703,10 @@ function BoardCanvasInner() {
 
     // Generous gaps so each brain's OUTSIDE plug labels (Library/Examples/Draft/
     // Persona) have room and never overlap the docked pieces.
-    const COL_GAP = 150;
+    const COL_GAP = 200; // room for the side ports (label + plug jut ~140px out)
     const ROW_GAP = 28;
-    const SIDE_GAP = 78; // gap between a brain and its top/bottom docked row
-    const BAND_GAP = 84;
+    const SIDE_GAP = 96; // gap between a brain and its top/bottom docked row
+    const BAND_GAP = 150;
     const TOP = 80;
     const LEFT = 80;
 
