@@ -107,6 +107,34 @@ export default function EmbedChatPage() {
     }
   }
 
+  // Export the conversation as a plain-text .txt download (HTML answers → text).
+  function exportTxt() {
+    if (msgs.length === 0) return;
+    const toText = (html: string) =>
+      html
+        .replace(/<\/(p|div|li|h[1-6]|tr|blockquote)>/gi, '\n')
+        .replace(/<br\s*\/?>/gi, '\n')
+        .replace(/<li[^>]*>/gi, '• ')
+        .replace(/<[^>]+>/g, '')
+        .replace(/&nbsp;/g, ' ')
+        .replace(/&amp;/g, '&')
+        .replace(/&lt;/g, '<')
+        .replace(/&gt;/g, '>')
+        .replace(/\n{3,}/g, '\n\n')
+        .trim();
+    const header = `${bank || 'Knowledge base'} — conversation\n${'='.repeat(40)}\n\n`;
+    const body = msgs
+      .map((m) => `${m.role === 'user' ? 'You' : bank || 'Assistant'}:\n${toText(m.content)}`)
+      .join('\n\n');
+    const blob = new Blob([header + body + '\n'], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${(bank || 'conversation').replace(/[^\w-]+/g, '_')}_chat.txt`;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 2000);
+  }
+
   if (!framed) {
     return (
       <div
@@ -175,30 +203,51 @@ export default function EmbedChatPage() {
         <span style={{ fontSize: 18 }}>🏛️</span>
         <strong style={{ fontSize: 14 }}>{bank || 'Ask the knowledge base'}</strong>
         {msgs.length > 0 && (
-          <button
-            type="button"
-            onClick={() => {
-              setMsgs([]);
-              setQ('');
-            }}
-            title="Start a new conversation"
-            style={{
-              marginLeft: 'auto',
-              display: 'flex',
-              alignItems: 'center',
-              gap: 5,
-              border: 'none',
-              borderRadius: 999,
-              padding: '4px 11px',
-              fontSize: 12,
-              fontWeight: 600,
-              cursor: 'pointer',
-              background: 'rgba(255,255,255,0.18)',
-              color: '#fff'
-            }}
-          >
-            <span style={{ fontSize: 13, lineHeight: 1 }}>＋</span> New chat
-          </button>
+          <div style={{ marginLeft: 'auto', display: 'flex', gap: 6 }}>
+            <button
+              type="button"
+              onClick={exportTxt}
+              title="Export this conversation as a .txt file"
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 5,
+                border: 'none',
+                borderRadius: 999,
+                padding: '4px 11px',
+                fontSize: 12,
+                fontWeight: 600,
+                cursor: 'pointer',
+                background: 'rgba(255,255,255,0.18)',
+                color: '#fff'
+              }}
+            >
+              <span style={{ fontSize: 12, lineHeight: 1 }}>⬇</span> Export
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setMsgs([]);
+                setQ('');
+              }}
+              title="Start a new conversation"
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 5,
+                border: 'none',
+                borderRadius: 999,
+                padding: '4px 11px',
+                fontSize: 12,
+                fontWeight: 600,
+                cursor: 'pointer',
+                background: 'rgba(255,255,255,0.18)',
+                color: '#fff'
+              }}
+            >
+              <span style={{ fontSize: 13, lineHeight: 1 }}>＋</span> New chat
+            </button>
+          </div>
         )}
       </div>
 
