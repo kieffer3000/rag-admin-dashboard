@@ -65,6 +65,7 @@ import { ReferenceNode } from './reference-node';
 import { ArtifactDialog } from './artifact-dialog';
 import { AgentEditDialog } from './agent-edit-dialog';
 import { ArtifactBrainPicker } from './artifact-brain-picker';
+import { BrandSplash } from './brand-splash';
 import { ScopeEdge } from './scope-edge';
 import { BoardToolbar } from './toolbar';
 import { BoardChest, CHEST_MIME } from './board-chest';
@@ -1848,6 +1849,9 @@ function BoardCanvasInner() {
       onDragOver={onCanvasDragOver}
       onDrop={onCanvasDrop}
     >
+      {/* Branded loading splash — covers the board until the saved board loads,
+          so a refresh never flashes the bare canvas / starter Answers Bank. */}
+      <BrandSplash visible={hydratedProject !== activeProjectId} />
       <div
         ref={spotRef}
         aria-hidden
