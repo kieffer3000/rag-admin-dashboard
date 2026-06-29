@@ -110,7 +110,7 @@ function seedBoard(media: MediaItem[]): BoardState {
       position: { x: 640, y: 160 },
       width: 400,
       height: 480,
-      data: { name: 'answersDoc Brain' }
+      data: { name: 'Brain 1' }
     }
   ];
   const edges: BoardEdge[] = [];

@@ -482,7 +482,7 @@ export function ResearchOverlay({
                 onVoiceover={handleVoiceover}
                 voicing={voicingId === m.id}
                 onEdit={handleEditInText}
-                modelLabel={m.role === 'assistant' ? modelId : undefined}
+                /* Model name intentionally hidden in research output (per request) */
               />
             ))
           )}
