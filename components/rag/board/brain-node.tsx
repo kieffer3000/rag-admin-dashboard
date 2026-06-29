@@ -68,6 +68,7 @@ import {
   Zap,
   Search,
   Telescope,
+  ZoomIn,
   ThumbsUp,
   ThumbsDown,
   RefreshCw
@@ -869,6 +870,59 @@ function BrainNodeInner({ id, data, selected }: NodeProps) {
         handleClassName="!h-3 !w-3 !rounded-full !border-2 !border-card !bg-accent"
         onResizeEnd={(_, p) => resizeBoardNode(id, Math.round(p.width), Math.round(p.height))}
       />
+
+      {/* Floating action bar — pops above the brain on hover / when selected.
+          Our own rounded, frosted look (not the reference's flat tabs). */}
+      <div
+        className={cn(
+          'absolute -top-12 left-1/2 z-30 flex -translate-x-1/2 items-center gap-0.5 rounded-full border border-[rgb(var(--hairline)/0.14)] bg-card/95 p-1 shadow-[0_4px_18px_rgb(0_0_0/0.14)] backdrop-blur-md transition-all duration-150',
+          selected
+            ? 'pointer-events-auto translate-y-0 opacity-100'
+            : 'pointer-events-none -translate-y-1 opacity-0 group-hover:pointer-events-auto group-hover:translate-y-0 group-hover:opacity-100'
+        )}
+      >
+        <BrainBarBtn
+          title="Fullscreen — fill the screen for reading"
+          onClick={() => {
+            const { zoom } = getViewport();
+            resizeBoardNode(
+              id,
+              Math.round((window.innerWidth * 0.92) / zoom),
+              Math.round((window.innerHeight * 0.9) / zoom),
+              { sizeMode: 'full', expanded: true }
+            );
+            setTimeout(
+              () => fitView({ nodes: [{ id }], duration: 420, padding: 0.04, maxZoom: 1.2 }),
+              30
+            );
+          }}
+        >
+          <Maximize2 className="h-[15px] w-[15px]" />
+        </BrainBarBtn>
+        <BrainBarBtn
+          title="Zoom to this brain"
+          onClick={() =>
+            fitView({ nodes: [{ id }], duration: 420, padding: 0.12, maxZoom: 1.4 })
+          }
+        >
+          <ZoomIn className="h-[15px] w-[15px]" />
+        </BrainBarBtn>
+        <BrainBarBtn
+          title="Research mode — full-screen, distraction-free"
+          accent
+          onClick={() => setResearchBrainId(id)}
+        >
+          <Telescope className="h-[15px] w-[15px]" />
+        </BrainBarBtn>
+        <span className="mx-0.5 h-4 w-px bg-[rgb(var(--hairline)/0.18)]" />
+        <BrainBarBtn
+          title="Send to Chest — tuck this brain away"
+          onClick={() => stashBrain(id)}
+        >
+          <Archive className="h-[15px] w-[15px]" />
+        </BrainBarBtn>
+      </div>
+
       <div
         className={cn(
           'flex h-full w-full flex-col overflow-hidden rounded-[20px] bg-card',
@@ -1518,6 +1572,38 @@ function BrainNodeInner({ id, data, selected }: NodeProps) {
         </span>
       </div>
     </div>
+  );
+}
+
+/** One icon button in the brain's floating hover bar. */
+function BrainBarBtn({
+  title,
+  onClick,
+  accent,
+  children
+}: {
+  title: string;
+  onClick: () => void;
+  accent?: boolean;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      title={title}
+      onClick={(e) => {
+        e.stopPropagation();
+        onClick();
+      }}
+      className={cn(
+        'nodrag flex h-7 w-7 items-center justify-center rounded-full transition-colors',
+        accent
+          ? 'text-accent hover:bg-accent hover:text-white'
+          : 'text-muted-foreground/75 hover:bg-black/[0.05] hover:text-foreground dark:hover:bg-white/[0.07]'
+      )}
+    >
+      {children}
+    </button>
   );
 }
 
