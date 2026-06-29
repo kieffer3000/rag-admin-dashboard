@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { cn } from '@/lib/utils';
 import { useBoard } from '@/lib/rag/board/store';
 import { useRag } from '@/lib/rag/store';
-import { askBrain } from '@/lib/rag/board/ask';
+import { askBrain, opineBrain } from '@/lib/rag/board/ask';
 import { streamText } from '@/lib/rag/mock-answer';
 import { useScrollStyle } from '@/lib/rag/scroll-style';
 import { startHum, stopHum, playChime } from '@/lib/rag/board/sound';
@@ -348,20 +348,35 @@ export function ResearchOverlay({
             .replace(/\s+/g, ' ')
             .trim()
         }));
-      const r = await askBrain(
-        q,
-        scope.items,
-        scope.contextTexts,
-        modelId,
-        answerMode,
-        scope.guides,
-        history,
-        summary,
-        speed,
-        scope.clusterIds,
-        scope.everything,
-        activeProjectId
-      );
+      // OPINE PATH: an artifact (right plug) is wired → reason ABOUT it via the
+      // Make opine scenario — in research mode too, not just the brain card.
+      // Otherwise the normal query path. (Mode-specific models come later.)
+      const r = scope.artifact
+        ? await opineBrain(
+            q,
+            scope.items,
+            scope.artifact,
+            scope.references,
+            scope.guides,
+            data.citations === false ? 'off' : 'on',
+            answerMode,
+            history,
+            activeProjectId
+          )
+        : await askBrain(
+            q,
+            scope.items,
+            scope.contextTexts,
+            modelId,
+            answerMode,
+            scope.guides,
+            history,
+            summary,
+            speed,
+            scope.clusterIds,
+            scope.everything,
+            activeProjectId
+          );
       content = r.answer;
       citations = r.citations;
       noMatch = r.noMatch;

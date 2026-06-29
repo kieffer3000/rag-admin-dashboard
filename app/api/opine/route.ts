@@ -17,6 +17,9 @@ import { fetchReadablePage } from '@/lib/rag/web-extract';
 //           null so no footnotes render.
 
 export const runtime = 'nodejs';
+// The Make opine round-trip (Conductor → embed → Pinecone → synthesis) runs
+// ~8-15s; without this the function default cut it off → "temporarily unreachable".
+export const maxDuration = 60;
 
 const NOMATCH_THRESHOLD = Number(process.env.RAG_NOMATCH_THRESHOLD ?? 0.6);
 const HISTORY_MAX_MESSAGES = 30;
