@@ -125,7 +125,7 @@ function AnnotationNodeInner({ id, data, selected }: NodeProps) {
         onChange={(e) => updateBoardNodeData(id, { text: e.target.value })}
         placeholder="Note to self…"
         className={cn(
-          'nodrag block min-h-0 w-full flex-1 resize-none bg-transparent px-2.5 py-2 text-[12.5px] leading-[1.55] outline-none',
+          'nodrag nowheel block min-h-0 w-full flex-1 resize-none overflow-y-auto bg-transparent px-2.5 py-2 text-[12.5px] leading-[1.55] outline-none',
           c.text
         )}
       />

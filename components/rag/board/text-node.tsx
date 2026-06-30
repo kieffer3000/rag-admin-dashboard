@@ -82,7 +82,7 @@ function TextNodeInner({ id, data, selected, parentId }: NodeProps) {
         value={d.text}
         onChange={(e) => updateBoardNodeData(id, { text: e.target.value })}
         placeholder="Goal, instructions, extra context for the Answers Bank…"
-        className="nodrag block min-h-0 w-full flex-1 resize-none bg-transparent px-3 py-2 text-[12px] leading-relaxed outline-none placeholder:text-muted-foreground/40"
+        className="nodrag nowheel block min-h-0 w-full flex-1 resize-none overflow-y-auto bg-transparent px-3 py-2 text-[12px] leading-relaxed outline-none placeholder:text-muted-foreground/40"
       />
       <Handle
         type="source"

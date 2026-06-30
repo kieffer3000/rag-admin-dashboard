@@ -263,7 +263,7 @@ function ArtifactNodeInner({ id, data, selected, parentId }: NodeProps) {
         value={d.content ?? ''}
         onChange={(e) => updateBoardNodeData(id, { content: e.target.value })}
         placeholder="Paste the article / webpage / draft to critique or improve — or load a URL above…"
-        className="nodrag block min-h-0 w-full flex-1 resize-none bg-transparent px-3 py-2 text-[12px] leading-relaxed outline-none placeholder:text-muted-foreground/40"
+        className="nodrag nowheel block min-h-0 w-full flex-1 resize-none overflow-y-auto bg-transparent px-3 py-2 text-[12px] leading-relaxed outline-none placeholder:text-muted-foreground/40"
       />
       {/* Connector on the LEFT — the artifact sits to the right of the brain, so
           a left-facing plug runs the wire straight into the brain's right side. */}

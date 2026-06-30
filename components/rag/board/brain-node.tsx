@@ -1178,7 +1178,9 @@ function BrainNodeInner({ id, data, selected }: NodeProps) {
           // grabbed from its whole body, not just the header. The answer text
           // bubbles below opt back out (nodrag + select-text) so reading and
           // selecting still work; buttons click fine (a click isn't a drag).
-          'scroll-brain flex min-h-0 flex-1 flex-col gap-2.5 overflow-y-auto py-3',
+          // `nowheel` so the mouse-wheel scrolls the answers here instead of
+          // zooming the board (React Flow hijacks wheel over the pane otherwise).
+          'nowheel scroll-brain flex min-h-0 flex-1 flex-col gap-2.5 overflow-y-auto py-3',
           // Reading mode: a comfortable ~70ch centered measure (not full-bleed)
           // plus larger type — a premium reading column, not a stretched page.
           sizeMode === 'full'
