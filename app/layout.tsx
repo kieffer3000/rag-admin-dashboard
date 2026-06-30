@@ -1,6 +1,6 @@
 import './globals.css';
 
-import type { Metadata } from 'next';
+import type { Metadata, Viewport } from 'next';
 import { Inter } from 'next/font/google';
 import { Analytics } from '@vercel/analytics/react';
 import { ClerkProvider } from '@clerk/nextjs';
@@ -15,6 +15,15 @@ export const metadata: Metadata = {
   title: 'Atlas — Knowledge Base',
   description:
     'A beautiful RAG knowledge base. Chat with your documents, videos, audio and notes — grounded answers with citations.'
+};
+
+// iOS/iPad Safari: maximumScale 1 stops the jarring auto-zoom when a small input
+// is focused (the app has its own A+ text scaling for accessibility, so manual
+// readability isn't lost).
+export const viewport: Viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  maximumScale: 1
 };
 
 export default function RootLayout({

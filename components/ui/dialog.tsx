@@ -34,13 +34,18 @@ const DialogContent = React.forwardRef<
     <DialogPrimitive.Content
       ref={ref}
       className={cn(
-        'fixed left-[50%] top-[50%] z-50 grid w-full max-w-lg translate-x-[-50%] translate-y-[-50%] gap-4 border bg-card p-6 shadow-float rounded-2xl duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95',
+        // max-h:100dvh + scroll so the dialog ALWAYS fits the visible viewport
+        // (iPad/iOS: the keyboard or tall content used to push it past the screen,
+        // taking the X off-screen with no backdrop left to tap). Per-dialog
+        // max-h/overflow still win via tailwind-merge.
+        'fixed left-[50%] top-[50%] z-50 grid max-h-[calc(100dvh-1.5rem)] w-full max-w-lg translate-x-[-50%] translate-y-[-50%] gap-4 overflow-y-auto overscroll-contain border bg-card p-6 shadow-float rounded-2xl duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95',
         className
       )}
       {...props}
     >
       {children}
-      <DialogPrimitive.Close className="absolute right-4 top-4 rounded-lg p-1 text-muted-foreground opacity-70 transition-opacity hover:bg-secondary hover:opacity-100 focus:outline-none">
+      {/* Close — bigger touch target for iPad; backdrop-tap & Esc also close. */}
+      <DialogPrimitive.Close className="absolute right-3 top-3 z-10 flex h-9 w-9 items-center justify-center rounded-lg bg-card/80 text-muted-foreground opacity-80 backdrop-blur-sm transition-opacity hover:bg-secondary hover:opacity-100 focus:outline-none">
         <X className="h-4 w-4" />
         <span className="sr-only">Close</span>
       </DialogPrimitive.Close>
