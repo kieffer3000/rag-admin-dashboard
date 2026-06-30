@@ -104,7 +104,26 @@ export async function POST(req: Request) {
     }
   }
 
-  const outForm = new FormData();
+  // Whisper takes well over undici's DEFAULT 300s headersTimeout/bodyTimeout to
+  // transcribe a long (~2h+) recording. The function's maxDuration is 800s, but
+  // the *fetch* to OpenAI would otherwise abort at 300s and surface as a false
+  // "Could not reach transcription service" (the bug for the 2h AAC file).
+  //
+  // CRITICAL: everything here must come from the SAME undici import — its fetch,
+  // its Agent (dispatcher), AND its FormData/File. Two earlier traps:
+  //  1. A standalone-undici Agent on Node's GLOBAL fetch throws UND_ERR_INVALID_
+  //     ARG ("invalid onRequestStart method") — version-skewed handler interfaces.
+  //  2. A GLOBAL FormData through undici's fetch serialised WITHOUT its string
+  //     fields → OpenAI 400 "you must provide a model parameter". Building the
+  //     multipart with undici's own FormData/File fixes it.
+  // Mirrors app/api/index-youtube/route.ts.
+  const { Agent, fetch: undiciFetch, FormData: UndiciFormData } = await import('undici');
+  const dispatcher = new Agent({ headersTimeout: 780_000, bodyTimeout: 780_000 });
+
+  // Build the multipart with undici's OWN FormData; the blob can stay global
+  // (undici duck-types it via Symbol.toStringTag). 3-arg append(name, blob,
+  // filename) is the web-spec form.
+  const outForm = new UndiciFormData();
   outForm.append('file', audioBlob, audioName);
   outForm.append('model', MODEL);
   // verbose_json → text + segment timestamps + the auto-detected language.
@@ -112,31 +131,14 @@ export async function POST(req: Request) {
   if (prompt) outForm.append('prompt', prompt);
   // NO `language` field → Whisper auto-detects, so it works in any language.
 
-  // Whisper takes well over undici's DEFAULT 300s headersTimeout/bodyTimeout to
-  // transcribe a long (~2h+) recording. The function's maxDuration is 800s, but
-  // the *fetch* to OpenAI would otherwise abort at 300s and surface as a false
-  // "Could not reach transcription service" (the bug for the 2h AAC file).
-  //
-  // CRITICAL: use undici's OWN fetch with its OWN Agent (matched pair). Passing a
-  // standalone-undici Agent as a `dispatcher` to Node's GLOBAL fetch throws
-  // `UND_ERR_INVALID_ARG: invalid onRequestStart method` — the global fetch runs
-  // on Node's bundled undici, whose handler interface differs from the undici@8
-  // package. Mirrors app/api/index-youtube/route.ts. undici accepts global
-  // FormData/Blob (duck-typed via Symbol.toStringTag), so outForm is fine.
-  const { Agent, fetch: undiciFetch } = await import('undici');
-  const dispatcher = new Agent({ headersTimeout: 780_000, bodyTimeout: 780_000 });
-
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const reqInit: any = {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${apiKey}` }, // fetch sets the multipart boundary
-    body: outForm,
-    dispatcher
-  };
-
   let res: Response;
   try {
-    res = (await undiciFetch(WHISPER_URL, reqInit)) as unknown as Response;
+    res = (await undiciFetch(WHISPER_URL, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${apiKey}` }, // undici sets the multipart boundary
+      body: outForm,
+      dispatcher
+    })) as unknown as Response;
   } catch (err) {
     // Log the real cause — the catch was previously blind, so a network/timeout
     // failure was indistinguishable from a genuine outage.
