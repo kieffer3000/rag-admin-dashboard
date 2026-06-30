@@ -221,7 +221,7 @@ export function BoardToolbar(p: BoardToolbarProps) {
     } catch (e: any) {
       if (e?.status === 503 || e?.status === 501) {
         window.alert(
-          'Recording needs MAI-Transcribe configured (MAI_TRANSCRIBE_* env).'
+          'Recording needs high-accuracy transcription configured on the server (OPENAI_API_KEY).'
         );
       } else {
         window.alert(e?.message ?? 'Transcription failed.');

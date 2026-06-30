@@ -193,13 +193,14 @@ export async function captureWebsiteText(url: string): Promise<string> {
   }
 }
 
-// ---- Audio compression (for long-audio transcription) -----------------------
+// ---- Audio compression + chunking (for long-audio transcription) ------------
 // Long audio can't be POSTed through a Vercel function (~4.5 MB body cap). So the
 // CLIENT uploads the raw file straight to CloudConvert (presigned form, no cap),
-// CloudConvert compresses it to a small low-bitrate MP3, and the transcribe route
-// fetches that result SERVER-side → MAI (which accepts MP3, up to 300 MB).
-// MAI bills by duration, not size, so this is purely to beat the size limit +
-// shrink the server-side fetch — mirrors the old AnswersDoc m4a@25k trick.
+// CloudConvert compresses it to small low-bitrate AAC, and the transcribe route
+// fetches that SERVER-side → OpenAI Whisper. Whisper has a HARD 25MB upload cap
+// (and a 2h+ single file is unreliable — it 500s), so long audio is SPLIT here
+// into 15-min segments (trim_start/trim_end) that the transcribe route stitches
+// back. Two non-negotiable guards: stay under 25MB per file, and chunk long ones.
 
 const AUDIO_BITRATE = Number(process.env.AUDIO_COMPRESS_BITRATE ?? 16); // kbps fallback
 

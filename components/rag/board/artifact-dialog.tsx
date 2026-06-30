@@ -113,8 +113,10 @@ export function ArtifactDialog({
         done();
       } else if (files.length) {
         // Extract every file and fuse into ONE artifact. Audio is transcribed
-        // CLIENT-side (presigned CloudConvert→Azure MAI — any size, no 4.5MB cap)
-        // with [M:SS] markers; everything else uses deterministic extraction.
+        // CLIENT-side via the shared hardened path (transcribeAudioDetailed →
+        // /api/transcribe = OpenAI Whisper; large/long files compress + chunk via
+        // CloudConvert) with [M:SS] markers; everything else uses deterministic
+        // extraction.
         const parts: string[] = [];
         for (const f of files) {
           let fileText = '';

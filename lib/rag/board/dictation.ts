@@ -1,9 +1,12 @@
-// Browser mic → 16 kHz mono MP3 (WAV fallback). MAI-Transcribe accepts
-// WAV/MP3/FLAC only; MediaRecorder emits WebM/Opus, so we capture raw PCM via
-// AudioContext and encode it ourselves. We ship MP3 (~48 kbps mono ≈ 0.36 MB/min)
-// rather than WAV (~1.9 MB/min) so a recording stays well under Vercel's ~4.5 MB
-// request-body cap — lifting the practical limit from ~2.3 min to ~12 min.
-// Used for high-accuracy question dictation and voice-memos-as-sources.
+// Browser mic → 16 kHz mono MP3 (WAV fallback). MediaRecorder emits WebM/Opus,
+// so we capture raw PCM via AudioContext and encode it ourselves. We ship MP3
+// (~48 kbps mono ≈ 0.36 MB/min) rather than WAV (~1.9 MB/min) so a recording
+// stays well under Vercel's ~4.5 MB request-body cap.
+// ALL transcription (mic notes + uploaded audio files, board + Library/Pinecone)
+// funnels through ONE hardened path: transcribeAudioDetailed → /api/transcribe
+// (OpenAI Whisper). Large/long audio routes via /api/audio-job → CloudConvert,
+// which compresses to AAC and SPLITS long files into 15-min segments the
+// transcribe route stitches back — so no caller hits the 25MB cap / 500 / timeout.
 
 export class WavRecorder {
   private ctx?: AudioContext;
@@ -214,9 +217,11 @@ function audioDurationSec(blob: Blob): Promise<number> {
 
 async function transcribeViaCompression(
   blob: Blob,
-  phrases: string[]
+  phrases: string[],
+  knownDurationSec?: number
 ): Promise<DetailedTranscript | null> {
-  const durationSec = await audioDurationSec(blob);
+  // Reuse the duration if the caller already measured it (avoids a 2nd decode).
+  const durationSec = knownDurationSec ?? (await audioDurationSec(blob));
   const jobRes = await fetch('/api/audio-job', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -236,15 +241,23 @@ async function transcribeViaCompression(
   return parseTranscribeResponse(await fetch('/api/transcribe', { method: 'POST', body: tfd }));
 }
 
-/** POST a WAV/MP3 blob to our transcribe proxy → text + per-phrase timestamps.
- *  `phrases` biases recognition toward known entities (wired source names).
- *  Large files are compressed via CloudConvert first (beats the body cap). */
+/** POST an audio blob to our transcribe route (OpenAI Whisper) → text + per-
+ *  segment timestamps. `phrases` biases recognition toward known entities (wired
+ *  source names).
+ *
+ *  Route through CloudConvert (compress + SERVER-SIDE chunking past ~25min) when
+ *  the audio is LARGE *or* LONG — not size alone. A long-but-small file (heavily
+ *  pre-compressed) would otherwise go inline as a single Whisper call and risk
+ *  the single-shot failures we hardened against (25MB cap / OpenAI 500 / timeout).
+ *  Short clips (mic notes ≤2min) stay inline — no CloudConvert round-trip. */
+const LONG_AUDIO_SEC = 20 * 60; // ≥20 min → always use the compress+chunk path
 export async function transcribeAudioDetailed(
   blob: Blob,
   phrases: string[] = []
 ): Promise<DetailedTranscript> {
-  if (blob.size > COMPRESS_OVER_BYTES) {
-    const viaCompress = await transcribeViaCompression(blob, phrases);
+  const durationSec = await audioDurationSec(blob);
+  if (blob.size > COMPRESS_OVER_BYTES || durationSec > LONG_AUDIO_SEC) {
+    const viaCompress = await transcribeViaCompression(blob, phrases, durationSec);
     if (viaCompress) return viaCompress;
     // compression unavailable → fall through (works for borderline sizes)
   }

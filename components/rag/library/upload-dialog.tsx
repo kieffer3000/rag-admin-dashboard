@@ -119,9 +119,11 @@ export function UploadDialog({
       for (const file of files) {
         const type = inferFileType(file.name);
         const nm = single && name.trim() ? name.trim() : file.name.replace(/\.[^.]+$/, '');
-        // Audio → transcribe CLIENT-side (auto inline for small, presigned
-        // CloudConvert→Azure MAI for large — any size, no 4.5MB cap), with [M:SS]
-        // timestamps, then index the transcript as a normal text source.
+        // Audio → transcribe CLIENT-side via the shared hardened path
+        // (transcribeAudioDetailed → /api/transcribe = OpenAI Whisper; large/long
+        // files compress + chunk through CloudConvert), with [M:SS] timestamps,
+        // then index the transcript TEXT as a normal source (/api/index never
+        // sees audio bytes — same transcription path as the board + voice notes).
         if (type === 'audio') {
           const id = addMedia(
             { type, name: nm, description: description.trim(), date, content: '', source: file.name },

@@ -459,7 +459,9 @@ function BrainNodeInner({ id, data, selected }: NodeProps) {
     const SR =
       (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
     if (!SR) {
-      window.alert('Dictation needs Chrome/Edge/Safari, or configure MAI-Transcribe.');
+      window.alert(
+        'Dictation needs Chrome/Edge/Safari, or high-accuracy transcription configured on the server (OPENAI_API_KEY).'
+      );
       return;
     }
     const rec = new SR();
