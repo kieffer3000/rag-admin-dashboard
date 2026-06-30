@@ -422,8 +422,12 @@ export function ResearchOverlay({
     // a query/stream) or a fast scroll briefly bleeds the board through. The
     // translateZ(0)+isolation+contain pins it to its own layer = no flash.
     <div
-      className="fixed inset-0 z-40 flex flex-col overflow-hidden bg-[#efece4] dark:bg-[#0c0c0e]"
-      style={{ transform: 'translateZ(0)', isolation: 'isolate' }}
+      // top-anchored + height:100dvh (not inset-0 / 100vh) so the bottom composer
+      // stays visible on iPad/iOS Safari, where a fixed full-height box otherwise
+      // runs under the address bar. The own GPU/stacking layer (translateZ +
+      // isolation) stops the board flashing through; see the streaming-jitter fix.
+      className="fixed inset-x-0 top-0 z-40 flex h-screen flex-col overflow-hidden bg-[#efece4] dark:bg-[#0c0c0e]"
+      style={{ height: '100dvh', transform: 'translateZ(0)', isolation: 'isolate' }}
     >
       {/* minimal top bar */}
       <header className="flex h-14 shrink-0 items-center gap-2 px-5">
