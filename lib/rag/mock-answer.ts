@@ -108,29 +108,35 @@ export function streamText(
   // chars/sec: short answers ~380, scaling up so a long one still wraps up in a
   // few seconds. ~6–14 chars/frame at 60fps — small enough to read as a flow.
   const rate = Math.min(900, Math.max(380, full.length / 4));
+  // THROTTLE the intermediate emits. onChunk → setState → the brainMessages
+  // context changes → the WHOLE board re-renders. At ~60fps that's a re-render
+  // storm = the "jitter while an answer streams". Emitting at most ~once/55ms
+  // (~18fps) still reads as smooth word-by-word typing but cuts board
+  // re-renders 3-5×. The FINAL full text is always flushed (below), unthrottled.
+  const EMIT_MS = 55;
   let raf = 0;
   let start = 0;
   let finished = false;
   let prevN = 0;
+  let lastEmit = 0;
 
   const step = (t: number) => {
     if (!start) start = t;
     const target = Math.min(full.length, Math.ceil(((t - start) / 1000) * rate));
     if (target >= full.length) {
-      onChunk(full);
+      onChunk(full); // final reveal — always emitted in full
       finished = true;
       onDone();
       return;
     }
     // Reveal WHOLE WORDS only: drop the trailing partial word so a word never
     // appears half-typed. The reveal still advances on the time-driven clock —
-    // a word surfaces once the clock moves past it into the next word. This
-    // gives both reveal styles a word cadence (the per-word fade needs it; the
-    // mask reads cleaner too) without changing the callback contract.
+    // a word surfaces once the clock moves past it into the next word.
     const trailingWordStart = full.slice(0, target).search(/\S+$/);
     const n = trailingWordStart > prevN ? trailingWordStart : prevN;
-    if (n > prevN) {
+    if (n > prevN && t - lastEmit >= EMIT_MS) {
       prevN = n;
+      lastEmit = t;
       onChunk(full.slice(0, n));
     }
     raf = requestAnimationFrame(step);
