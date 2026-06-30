@@ -112,14 +112,28 @@ export async function POST(req: Request) {
   if (prompt) outForm.append('prompt', prompt);
   // NO `language` field → Whisper auto-detects, so it works in any language.
 
+  // Whisper takes well over undici's DEFAULT 300s headersTimeout/bodyTimeout to
+  // transcribe a long (~2h+) recording. The function's maxDuration is 800s, but
+  // the *fetch* to OpenAI would otherwise abort at 300s and surface as a false
+  // "Could not reach transcription service" (the bug for the 2h AAC file). Use an
+  // undici Agent with timeouts raised to just under maxDuration so the request
+  // lives as long as the function does. (undici is a direct dep; global fetch
+  // honours the non-standard `dispatcher` option — keeps Response/FormData global.)
+  const { Agent } = await import('undici');
+  const dispatcher = new Agent({ headersTimeout: 780_000, bodyTimeout: 780_000 });
+
   let res: Response;
   try {
     res = await fetch(WHISPER_URL, {
       method: 'POST',
       headers: { Authorization: `Bearer ${apiKey}` }, // fetch sets the multipart boundary
-      body: outForm
-    });
-  } catch {
+      body: outForm,
+      dispatcher
+    } as RequestInit & { dispatcher: unknown });
+  } catch (err) {
+    // Log the real cause — the catch was previously blind, so a network/timeout
+    // failure was indistinguishable from a genuine outage.
+    console.error('[transcribe] whisper fetch threw:', err);
     return Response.json({ error: 'Could not reach transcription service' }, { status: 502 });
   }
 
