@@ -115,21 +115,28 @@ export async function POST(req: Request) {
   // Whisper takes well over undici's DEFAULT 300s headersTimeout/bodyTimeout to
   // transcribe a long (~2h+) recording. The function's maxDuration is 800s, but
   // the *fetch* to OpenAI would otherwise abort at 300s and surface as a false
-  // "Could not reach transcription service" (the bug for the 2h AAC file). Use an
-  // undici Agent with timeouts raised to just under maxDuration so the request
-  // lives as long as the function does. (undici is a direct dep; global fetch
-  // honours the non-standard `dispatcher` option — keeps Response/FormData global.)
-  const { Agent } = await import('undici');
+  // "Could not reach transcription service" (the bug for the 2h AAC file).
+  //
+  // CRITICAL: use undici's OWN fetch with its OWN Agent (matched pair). Passing a
+  // standalone-undici Agent as a `dispatcher` to Node's GLOBAL fetch throws
+  // `UND_ERR_INVALID_ARG: invalid onRequestStart method` — the global fetch runs
+  // on Node's bundled undici, whose handler interface differs from the undici@8
+  // package. Mirrors app/api/index-youtube/route.ts. undici accepts global
+  // FormData/Blob (duck-typed via Symbol.toStringTag), so outForm is fine.
+  const { Agent, fetch: undiciFetch } = await import('undici');
   const dispatcher = new Agent({ headersTimeout: 780_000, bodyTimeout: 780_000 });
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const reqInit: any = {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${apiKey}` }, // fetch sets the multipart boundary
+    body: outForm,
+    dispatcher
+  };
 
   let res: Response;
   try {
-    res = await fetch(WHISPER_URL, {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${apiKey}` }, // fetch sets the multipart boundary
-      body: outForm,
-      dispatcher
-    } as RequestInit & { dispatcher: unknown });
+    res = (await undiciFetch(WHISPER_URL, reqInit)) as unknown as Response;
   } catch (err) {
     // Log the real cause — the catch was previously blind, so a network/timeout
     // failure was indistinguishable from a genuine outage.
