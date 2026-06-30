@@ -417,7 +417,14 @@ export function ResearchOverlay({
   }
 
   return (
-    <div className="fixed inset-0 z-40 flex flex-col bg-[#efece4] dark:bg-[#0c0c0e]">
+    // Own opaque GPU layer + isolated stacking/paint context: without this the
+    // overlay isn't composited separately, so a board repaint behind it (during
+    // a query/stream) or a fast scroll briefly bleeds the board through. The
+    // translateZ(0)+isolation+contain pins it to its own layer = no flash.
+    <div
+      className="fixed inset-0 z-40 flex flex-col overflow-hidden bg-[#efece4] dark:bg-[#0c0c0e]"
+      style={{ transform: 'translateZ(0)', isolation: 'isolate' }}
+    >
       {/* minimal top bar */}
       <header className="flex h-14 shrink-0 items-center gap-2 px-5">
         <div className="flex items-center gap-2 text-[14px] font-semibold">
