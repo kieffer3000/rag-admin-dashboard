@@ -226,29 +226,75 @@ export function bitrateForDuration(durationSec: number): number {
   return snapBitrate(maxKbps);
 }
 
-/** Create a CloudConvert job that compresses an uploaded audio file → small AAC
- *  (.m4a). Returns the jobId + the presigned upload form for the client to PUT. */
-export async function createAudioCompressJob(
+// ---- Long-audio CHUNKING ----------------------------------------------------
+// A 2h+ file in ONE Whisper call is unreliable (OpenAI 500s / our 25MB cap /
+// undici timeout). So for long audio we ask CloudConvert to emit N TIME segments
+// (ffmpeg `trim_start`/`trim_end`, verified option names) in a single job; the
+// transcribe route then transcribes each segment and stitches them back with a
+// per-chunk timestamp offset. Short audio stays a single file (1 Whisper call).
+export const AUDIO_CHUNK_SEC = 900; // 15 min/segment — Whisper handles this comfortably
+const CHUNK_THRESHOLD_SEC = 1500; // ≤25 min → single file; longer → chunk
+const CHUNK_BITRATE = 48; // per-segment size isn't the constraint → favour accuracy
+const MAX_CHUNKS = 48; // ~12h ceiling (beyond this, ask the user to split)
+
+/** HH:MM:SS for CloudConvert's trim_start/trim_end. */
+function secToHMS(total: number): string {
+  const s = Math.max(0, Math.floor(total));
+  const p = (n: number) => String(n).padStart(2, '0');
+  return `${p(Math.floor(s / 3600))}:${p(Math.floor((s % 3600) / 60))}:${p(s % 60)}`;
+}
+
+/** How many segments a given duration is split into (1 = no chunking). */
+export function audioChunkCount(durationSec: number): number {
+  if (!durationSec || durationSec <= CHUNK_THRESHOLD_SEC) return 1;
+  return Math.min(MAX_CHUNKS, Math.ceil(durationSec / AUDIO_CHUNK_SEC));
+}
+
+/** Create a CloudConvert job that transcodes an uploaded audio file → small AAC
+ *  (.m4a), as a SINGLE file (short audio) or N trimmed 15-min segments (long).
+ *  Returns the jobId + presigned upload form for the client to PUT, plus the
+ *  chunk count. */
+export async function createAudioTranscodeJob(
+  durationSec: number,
   bitrateKbps?: number
 ): Promise<
-  { jobId: string; form: { url: string; parameters: Record<string, string> } } | null
+  | { jobId: string; form: { url: string; parameters: Record<string, string> }; chunks: number }
+  | null
 > {
   const key = process.env.CLOUDCONVERT_API_KEY;
   if (!key) return null;
-  const audio_bitrate = snapBitrate(bitrateKbps ?? AUDIO_BITRATE);
+  const n = audioChunkCount(durationSec);
   try {
-    const tasks = {
-      'import-1': { operation: 'import/upload' },
-      'audio-1': {
+    const tasks: Record<string, unknown> = { 'import-1': { operation: 'import/upload' } };
+    if (n <= 1) {
+      tasks['audio-001'] = {
         operation: 'convert',
         input: 'import-1',
         output_format: 'm4a',
         audio_codec: 'aac',
-        audio_bitrate, // AAC honours low bitrates directly (no mp3 floor)
-        audio_channels: 1 // mono — all Whisper needs; halves the size
-      },
-      'export-1': { operation: 'export/url', input: 'audio-1' }
-    };
+        audio_bitrate: snapBitrate(bitrateKbps ?? bitrateForDuration(durationSec)),
+        channels: 1 // mono — all Whisper needs (correct option is `channels`, not audio_channels)
+      };
+      tasks['export-001'] = { operation: 'export/url', input: 'audio-001' };
+    } else {
+      const audio_bitrate = snapBitrate(CHUNK_BITRATE);
+      for (let i = 0; i < n; i++) {
+        const id = String(i + 1).padStart(3, '0');
+        const conv: Record<string, unknown> = {
+          operation: 'convert',
+          input: 'import-1',
+          output_format: 'm4a',
+          audio_codec: 'aac',
+          audio_bitrate,
+          channels: 1,
+          trim_start: secToHMS(i * AUDIO_CHUNK_SEC)
+        };
+        // Last segment runs to the end (omit trim_end → no rounding cutoff).
+        if (i < n - 1) conv.trim_end = secToHMS((i + 1) * AUDIO_CHUNK_SEC);
+        tasks[`audio-${id}`] = conv;
+        tasks[`export-${id}`] = { operation: 'export/url', input: `audio-${id}` };
+      }
+    }
     const r = await fetch(`${API}/v2/jobs`, {
       method: 'POST',
       headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
@@ -259,34 +305,37 @@ export async function createAudioCompressJob(
     const form = job?.tasks?.find((t: any) => t.operation === 'import/upload')?.result
       ?.form;
     if (!form?.url) return null;
-    return { jobId: job.id, form };
+    return { jobId: job.id, form, chunks: n };
   } catch {
     return null;
   }
 }
 
-/** Poll a CloudConvert job to completion and return the compressed file URL
- *  (empty string on failure). */
-export async function pollAudioCompressedUrl(jobId: string): Promise<string> {
+/** Poll a CloudConvert audio job → the ORDERED list of output file URLs (one for
+ *  a single file, N for a chunked job, ordered by segment index). [] on failure.
+ *  A bigger poll ceiling than the PDF path — many segments take longer. */
+export async function pollAudioOutputUrls(jobId: string): Promise<string[]> {
   const key = process.env.CLOUDCONVERT_API_KEY;
-  if (!key) return '';
+  if (!key) return [];
   const auth = { Authorization: `Bearer ${key}` };
-  for (let i = 0; i < MAX_POLLS; i++) {
+  const max = Number(process.env.CLOUDCONVERT_AUDIO_MAX_POLLS ?? 150); // ~300s
+  for (let i = 0; i < max; i++) {
     await sleep(POLL_MS);
     try {
       const pr = await fetch(`${API}/v2/jobs/${jobId}`, { headers: auth });
       if (!pr.ok) continue;
       const data = (await pr.json()).data;
-      if (data.status === 'error') return '';
-      if (data.status === 'finished')
-        return (
-          data.tasks?.find(
-            (t: any) => t.operation === 'export/url' && t.status === 'finished'
-          )?.result?.files?.[0]?.url ?? ''
-        );
+      if (data.status === 'error') return [];
+      if (data.status === 'finished') {
+        return ((data.tasks ?? []) as any[])
+          .filter((t) => t.operation === 'export/url' && t.status === 'finished')
+          .sort((a, b) => String(a.name).localeCompare(String(b.name))) // export-001, -002, …
+          .map((t) => t?.result?.files?.[0]?.url as string)
+          .filter(Boolean);
+      }
     } catch {
       /* keep polling */
     }
   }
-  return '';
+  return [];
 }

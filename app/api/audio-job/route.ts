@@ -1,5 +1,5 @@
 import { auth } from '@clerk/nextjs/server';
-import { createAudioCompressJob, bitrateForDuration } from '@/lib/rag/cloudconvert';
+import { createAudioTranscodeJob, bitrateForDuration } from '@/lib/rag/cloudconvert';
 
 // Brokers a CloudConvert audio-compression job for long-audio transcription.
 // Returns the jobId + a presigned upload form; the client PUTs the raw audio
@@ -23,12 +23,15 @@ export async function POST(req: Request) {
     /* no body → safe default bitrate */
   }
 
-  const job = await createAudioCompressJob(bitrateForDuration(durationSec));
+  // Long audio (>25 min) is split into N 15-min segments server-side so each
+  // Whisper call is small + reliable; short audio stays a single file. Chunking
+  // is invisible to the client — it still uploads once + calls /api/transcribe.
+  const job = await createAudioTranscodeJob(durationSec, bitrateForDuration(durationSec));
   if (!job) {
     return Response.json(
       { error: 'Audio compression not configured — set CLOUDCONVERT_API_KEY.' },
       { status: 503 }
     );
   }
-  return Response.json({ jobId: job.jobId, upload: job.form });
+  return Response.json({ jobId: job.jobId, upload: job.form, chunks: job.chunks });
 }
