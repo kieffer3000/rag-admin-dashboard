@@ -40,7 +40,12 @@ export function useSaveStatus(): SaveStatus {
     () => _saveStatus
   );
 }
-import { ChatMessage, MediaItem } from '../types';
+import { MediaItem } from '../types';
+import {
+  getAllBrainMessages,
+  mergeBrainMessages,
+  subscribeBrainMessages
+} from './brain-messages-store';
 import {
   BoardNode,
   BoardEdge,
@@ -182,15 +187,9 @@ interface BoardCtxState {
    *  Flow's internal noise (node measurement, selection) so it can't block
    *  the saved-board load on mount. */
   setBoardSilent: (updater: (prev: BoardState) => BoardState) => void;
-  /** Chat messages per brain node id. */
-  brainMessages: Record<string, ChatMessage[]>;
-  addBrainMessage: (brainId: string, m: ChatMessage) => void;
-  updateBrainMessage: (brainId: string, msgId: string, patch: Partial<ChatMessage>) => void;
-  /** Delete one message (and, for an assistant answer, the question that
-   *  prompted it) so a disliked turn leaves the list AND the model's history. */
-  removeBrainMessage: (brainId: string, msgId: string) => void;
-  /** Wipe a brain's whole conversation. */
-  clearBrainMessages: (brainId: string) => void;
+  // Chat messages + their mutators moved to brain-messages-store (isolated so
+  // streaming never re-renders the board). Import useBrainMessages / the
+  // add/update/remove/clear functions from there.
   /** Resolve a brain's knowledge basis from graph connectivity. */
   resolveBrainScope: (brainId: string) => BrainScope;
   /** Patch a node's data (controlled flow — must go through the provider). */
@@ -254,7 +253,8 @@ const Ctx = createContext<BoardCtxState | null>(null);
 export function BoardProvider({ children }: { children: ReactNode }) {
   const { activeProjectId, projectMedia, media, hydrateMedia } = useRag();
   const [boards, setBoards] = useState<Record<string, BoardState>>({});
-  const [brainMessages, setBrainMessages] = useState<Record<string, ChatMessage[]>>({});
+  // Chat messages live in their OWN external store (brain-messages-store) so a
+  // streaming answer never re-renders the board. See that file for why.
   /** Project id whose saved board has finished loading (for load-complete focus). */
   const [hydratedProject, setHydratedProject] = useState<string | null>(null);
   /** Brain in full-screen Research Mode (distraction-free). */
@@ -422,8 +422,7 @@ export function BoardProvider({ children }: { children: ReactNode }) {
                   stashedBoxes: data.stashedBoxes ?? []
                 }
               }));
-            if (data.brainMessages)
-              setBrainMessages((prev) => ({ ...prev, ...data.brainMessages }));
+            if (data.brainMessages) mergeBrainMessages(data.brainMessages);
           }
         }
       } catch {
@@ -452,7 +451,7 @@ export function BoardProvider({ children }: { children: ReactNode }) {
       ...stashed.map((s) => s.node.id)
     ]);
     const msgs = Object.fromEntries(
-      Object.entries(brainMessages).filter(([k]) => brainIds.has(k))
+      Object.entries(getAllBrainMessages()).filter(([k]) => brainIds.has(k))
     );
     return {
       nodes: board.nodes,
@@ -467,7 +466,7 @@ export function BoardProvider({ children }: { children: ReactNode }) {
       media: projectMedia.map((m) => ({ ...m, content: '' })),
       savedAt: Date.now()
     };
-  }, [board, brainMessages, projectMedia]);
+  }, [board, projectMedia]);
 
   // Refs the interval/flush saves read — updated cheaply each render (NO
   // serialization here, unlike the old per-change save that lagged dragging).
@@ -528,12 +527,23 @@ export function BoardProvider({ children }: { children: ReactNode }) {
   }, [persistNow]);
 
   // ---- Discussion text saves PROMPTLY (debounced ~2.5s) so chat is never lost
-  // between 60s ticks. Fires only when messages change — not while dragging. ----
+  // between 60s ticks. We SUBSCRIBE to the external chat store (instead of a
+  // brainMessages state dep) so a streaming answer schedules a save WITHOUT
+  // re-rendering this provider — that decoupling is the whole point. ----
+  const chatSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
-    if (!hydrated.current.has(activeProjectId)) return;
-    const t = setTimeout(() => persistNow(), 2500);
-    return () => clearTimeout(t);
-  }, [brainMessages, activeProjectId, persistNow]);
+    const unsub = subscribeBrainMessages(() => {
+      if (!hydrated.current.has(pidRef.current)) return;
+      dirty.current = true;
+      setSaveStatus('saving');
+      if (chatSaveTimer.current) clearTimeout(chatSaveTimer.current);
+      chatSaveTimer.current = setTimeout(() => persistNow(), 2500);
+    });
+    return () => {
+      unsub();
+      if (chatSaveTimer.current) clearTimeout(chatSaveTimer.current);
+    };
+  }, [persistNow]);
 
   // ---- FLUSH on page-hide / tab-switch — builds the CURRENT doc fresh so the
   // latest positions/edits are saved even though we only persist every 60s. ----
@@ -963,47 +973,8 @@ export function BoardProvider({ children }: { children: ReactNode }) {
     [setBoard, media]
   );
 
-  const addBrainMessage = useCallback((brainId: string, m: ChatMessage) => {
-    setBrainMessages((prev) => ({
-      ...prev,
-      [brainId]: [...(prev[brainId] ?? []), m]
-    }));
-  }, []);
-
-  const updateBrainMessage = useCallback(
-    (brainId: string, msgId: string, patch: Partial<ChatMessage>) => {
-      setBrainMessages((prev) => ({
-        ...prev,
-        [brainId]: (prev[brainId] ?? []).map((m) =>
-          m.id === msgId ? { ...m, ...patch } : m
-        )
-      }));
-    },
-    []
-  );
-
-  const removeBrainMessage = useCallback((brainId: string, msgId: string) => {
-    setBrainMessages((prev) => {
-      const list = prev[brainId] ?? [];
-      const idx = list.findIndex((m) => m.id === msgId);
-      if (idx === -1) return prev;
-      const drop = new Set([msgId]);
-      // Deleting an assistant answer? Also drop the user question right before
-      // it, so the pair vanishes cleanly from the list and the history.
-      if (
-        list[idx].role === 'assistant' &&
-        idx > 0 &&
-        list[idx - 1].role === 'user'
-      ) {
-        drop.add(list[idx - 1].id);
-      }
-      return { ...prev, [brainId]: list.filter((m) => !drop.has(m.id)) };
-    });
-  }, []);
-
-  const clearBrainMessages = useCallback((brainId: string) => {
-    setBrainMessages((prev) => ({ ...prev, [brainId]: [] }));
-  }, []);
+  // Chat mutators now live in brain-messages-store (module functions) so they
+  // never touch this provider's state. Consumers import them directly.
 
   /**
    * THE assembler: connectivity → source_ids.
@@ -1118,11 +1089,6 @@ export function BoardProvider({ children }: { children: ReactNode }) {
     board,
     setBoard,
     setBoardSilent,
-    brainMessages,
-    addBrainMessage,
-    updateBrainMessage,
-    removeBrainMessage,
-    clearBrainMessages,
     resolveBrainScope,
     updateBoardNodeData,
     toggleHubCollapse,

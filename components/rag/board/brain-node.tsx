@@ -15,6 +15,13 @@ import { streamText } from '@/lib/rag/mock-answer';
 import { useScrollStyle } from '@/lib/rag/scroll-style';
 import { askBrain, opineBrain } from '@/lib/rag/board/ask';
 import { ConnectDialog } from './connect-dialog';
+import {
+  useBrainMessages,
+  addBrainMessage,
+  updateBrainMessage,
+  removeBrainMessage,
+  clearBrainMessages
+} from '@/lib/rag/board/brain-messages-store';
 import { startHum, stopHum, playChime } from '@/lib/rag/board/sound';
 import { WavRecorder, transcribeAudio } from '@/lib/rag/board/dictation';
 import { ChatMessage } from '@/lib/rag/types';
@@ -182,11 +189,6 @@ function BrainNodeInner({ id, data, selected }: NodeProps) {
   const {
     board,
     setBoard,
-    brainMessages,
-    addBrainMessage,
-    updateBrainMessage,
-    removeBrainMessage,
-    clearBrainMessages,
     resolveBrainScope,
     updateBoardNodeData,
     resizeBoardNode,
@@ -196,6 +198,9 @@ function BrainNodeInner({ id, data, selected }: NodeProps) {
     removeBoardNode,
     nextBoardId
   } = useBoard();
+  // Chat lives in the isolated store — only THIS brain re-renders on a stream
+  // tick, not the whole board.
+  const messages = useBrainMessages(id);
   const { openViewer, activeProjectId } = useRag();
   const { getViewport, fitView } = useReactFlow();
   const scrollStyle = useScrollStyle();
@@ -239,7 +244,6 @@ function BrainNodeInner({ id, data, selected }: NodeProps) {
   /** Composer text at the moment dictation started — interim results append to it. */
   const dictBaseRef = useRef('');
 
-  const messages = brainMessages[id] ?? [];
   const scope = resolveBrainScope(id);
   /** Any cable plugged into this brain's receptacle? */
   const wired = board.edges.some((e) => e.target === id);

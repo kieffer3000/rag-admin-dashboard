@@ -3,6 +3,12 @@
 import { useEffect, useRef, useState } from 'react';
 import { cn } from '@/lib/utils';
 import { useBoard } from '@/lib/rag/board/store';
+import {
+  useBrainMessages,
+  addBrainMessage,
+  updateBrainMessage,
+  removeBrainMessage
+} from '@/lib/rag/board/brain-messages-store';
 import { useRag } from '@/lib/rag/store';
 import { askBrain, opineBrain } from '@/lib/rag/board/ask';
 import { streamText } from '@/lib/rag/mock-answer';
@@ -39,11 +45,7 @@ export function ResearchOverlay({
 }) {
   const {
     board,
-    brainMessages,
     resolveBrainScope,
-    addBrainMessage,
-    updateBrainMessage,
-    removeBrainMessage,
     setBrainBusy,
     setBoard,
     updateBoardNodeData,
@@ -64,7 +66,7 @@ export function ResearchOverlay({
       : data.speed === 'research'
         ? 'research'
         : 'fast';
-  const messages = brainMessages[brainId] ?? [];
+  const messages = useBrainMessages(brainId);
   const scopeCount = resolveBrainScope(brainId).items.length;
 
   const [question, setQuestion] = useState('');
