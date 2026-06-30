@@ -217,7 +217,13 @@ export async function createAudioCompressJob(): Promise<
         operation: 'convert',
         input: 'import-1',
         output_format: 'mp3',
-        audio_bitrate: AUDIO_BITRATE
+        audio_bitrate: AUDIO_BITRATE,
+        // Force MONO + 16kHz — Whisper works at 16kHz mono anyway, and without
+        // this ffmpeg can't actually reach 16kbps on a stereo/full-rate source,
+        // so the "compressed" file stayed huge and tripped Whisper's 25MB cap
+        // (a 2h file came out ~26MB instead of ~14MB). Now it truly hits 16kbps.
+        audio_channels: 1,
+        audio_frequency: 16000
       },
       'export-1': { operation: 'export/url', input: 'mp3-1' }
     };
