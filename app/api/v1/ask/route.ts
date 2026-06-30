@@ -8,7 +8,13 @@ import { relayPublicQuery } from '@/lib/rag/query-relay';
 // leaves the server.
 
 export const runtime = 'nodejs';
-export const maxDuration = 60;
+// RESEARCH mode's Make reasoning can run 60–180s — the same heavy path the in-app
+// /api/query route already allows 180s for. At 60s the embed widget's Research
+// requests were killed mid-flight (504 FUNCTION_INVOCATION_TIMEOUT) while Fast/
+// Normal (well under 60s) succeeded. This is NOT a cross-site cookie issue: the
+// widget is a public, NON-Clerk route authed by the embed slug (no cookies), so a
+// 504 can only be a server timeout. Match the project Fluid ceiling (300s).
+export const maxDuration = 300;
 
 // Best-effort per-key throttle. In-memory, so it resets per serverless instance
 // — a courtesy limit, not a hard security boundary (the key scope is the real
