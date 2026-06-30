@@ -156,8 +156,11 @@ export function ArtifactDialog({
         });
         done();
       }
-    } catch {
-      setErr('Something went wrong. Try again.');
+    } catch (e) {
+      // Surface the real reason (e.g. "Transcription failed (504)" / a format
+      // error) instead of a generic message, so long-audio issues are diagnosable.
+      const msg = e instanceof Error && e.message ? e.message : 'Something went wrong. Try again.';
+      setErr(msg);
       setBusy(false);
     }
   }

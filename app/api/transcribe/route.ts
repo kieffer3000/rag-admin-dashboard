@@ -14,7 +14,9 @@ import { pollAudioCompressedUrl } from '@/lib/rag/cloudconvert';
 //    Compressed @16 kbps so even a 3 h recording stays under Whisper's 25 MB cap.
 
 export const runtime = 'nodejs';
-export const maxDuration = 300;
+// Long audio (CloudConvert compress + Whisper for a 2–3h file) can exceed 300s.
+// 800 is the max with Fluid Compute (clamps to the plan limit otherwise).
+export const maxDuration = 800;
 
 const WHISPER_URL = 'https://api.openai.com/v1/audio/transcriptions';
 const MODEL = process.env.WHISPER_MODEL ?? 'whisper-1';

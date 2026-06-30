@@ -148,6 +148,25 @@ export interface DetailedTranscript {
 // CloudConvert (direct upload) instead of POSTing it inline.
 const COMPRESS_OVER_BYTES = 4 * 1024 * 1024;
 
+/** The TRUE file extension, so CloudConvert detects the format correctly. The
+ *  old code named everything .wav/.mp3, so an m4a/aac/ogg upload was mislabeled
+ *  and the convert job failed ("Something went wrong"). Prefer the real filename,
+ *  fall back to the MIME type. */
+function audioExt(blob: Blob): string {
+  const name =
+    typeof (blob as { name?: unknown }).name === 'string' ? (blob as File).name : '';
+  const m = /\.([a-z0-9]{2,5})$/i.exec(name);
+  if (m) return m[1].toLowerCase();
+  const t = (blob.type || '').toLowerCase();
+  if (t.includes('mp4') || t.includes('m4a') || t.includes('aac')) return 'm4a';
+  if (t.includes('mpeg') || t.includes('mp3')) return 'mp3';
+  if (t.includes('ogg')) return 'ogg';
+  if (t.includes('flac')) return 'flac';
+  if (t.includes('webm')) return 'webm';
+  if (t.includes('wav')) return 'wav';
+  return 'mp3';
+}
+
 async function parseTranscribeResponse(res: Response): Promise<DetailedTranscript> {
   if (!res.ok) {
     const e = await res.json().catch(() => ({}));
@@ -178,8 +197,7 @@ async function transcribeViaCompression(
   if (!jobId || !upload?.url) return null;
   const up = new FormData();
   for (const [k, v] of Object.entries(upload.parameters ?? {})) up.append(k, v as string);
-  const ext = blob.type.includes('mpeg') || blob.type.includes('mp3') ? 'mp3' : 'wav';
-  up.append('file', blob, `audio.${ext}`);
+  up.append('file', blob, `audio.${audioExt(blob)}`);
   const ur = await fetch(upload.url, { method: 'POST', body: up });
   if (!ur.ok && ur.status !== 201) return null;
   const tfd = new FormData();
@@ -201,9 +219,8 @@ export async function transcribeAudioDetailed(
     // compression unavailable → fall through (works for borderline sizes)
   }
   const fd = new FormData();
-  // name by actual container so Azure/our route detect the format correctly
-  const ext = blob.type.includes('mpeg') || blob.type.includes('mp3') ? 'mp3' : 'wav';
-  fd.append('audio', blob, `dictation.${ext}`);
+  // name by actual container so the route detects the format correctly
+  fd.append('audio', blob, `dictation.${audioExt(blob)}`);
   if (phrases.length) fd.append('phrases', JSON.stringify(phrases.slice(0, 50)));
   return parseTranscribeResponse(await fetch('/api/transcribe', { method: 'POST', body: fd }));
 }
