@@ -19,7 +19,9 @@ const isPublicRoute = createRouteMatcher([
 // Private app — only these emails may use it (comma-separated override via
 // ALLOWED_EMAILS). Clerk's native allowlist needs a paid plan, so we gate in
 // code: covers both the dashboard UI and the API routes in one chokepoint.
-const ALLOWED_EMAILS = (process.env.ALLOWED_EMAILS ?? 'tiosquareinc@gmail.com')
+const ALLOWED_EMAILS = (
+  process.env.ALLOWED_EMAILS ?? 'tiosquareinc@gmail.com,nc@tiosquare.com'
+)
   .split(',')
   .map((s) => s.trim().toLowerCase())
   .filter(Boolean);
