@@ -203,10 +203,11 @@ export async function captureWebsiteText(url: string): Promise<string> {
 
 const AUDIO_BITRATE = Number(process.env.AUDIO_COMPRESS_BITRATE ?? 16); // kbps fallback
 
-// VALID MPEG-2 Layer-III bitrates at 16kHz. The encoder rounds/rejects anything
-// else (e.g. 12kbps is NOT valid), and at higher sample rates it can't even
-// reach the low end — that's why a 2h file kept coming out ~28MB. We always
-// downsample to 16kHz mono (what Whisper uses) so these low rates are reachable.
+// We output AAC (.m4a), NOT mp3: mp3 has a hard low-bitrate FLOOR (~32kbps at a
+// 48kHz source — CloudConvert ignored the sample-rate downshift, so a 2h file
+// stayed ~28MB and tripped Whisper's 25MB cap no matter the requested bitrate).
+// AAC has no such floor — it honours 8–32kbps directly at any sample rate — and
+// Whisper natively accepts m4a. So low bitrates actually take effect now.
 const VALID_BITRATES = [8, 16, 24, 32, 40, 48, 56, 64];
 function snapBitrate(kbps: number): number {
   const n = Number.isFinite(kbps) ? kbps : AUDIO_BITRATE;
@@ -215,18 +216,18 @@ function snapBitrate(kbps: number): number {
   return Math.max(8, Math.min(64, chosen));
 }
 
-/** Highest valid bitrate that keeps `durationSec` of audio under ~23MB (margin
- *  below Whisper's 25MB). Short clips → high quality; long ones → compressed
- *  more, all automatic. ~6h still fits at the 8kbps floor. */
+/** Highest bitrate that keeps `durationSec` of audio under ~20MB (margin below
+ *  Whisper's 25MB). Short clips → high quality; long ones → compressed more, all
+ *  automatic. ~9h fits at the 8kbps floor. */
 export function bitrateForDuration(durationSec: number): number {
   if (!durationSec || durationSec <= 0) return AUDIO_BITRATE; // unknown → safe default
-  const TARGET_BYTES = 23 * 1024 * 1024;
+  const TARGET_BYTES = 20 * 1024 * 1024;
   const maxKbps = (TARGET_BYTES * 8) / durationSec / 1000;
   return snapBitrate(maxKbps);
 }
 
-/** Create a CloudConvert job that compresses an uploaded audio file → MP3.
- *  Returns the jobId + the presigned upload form for the client to PUT into. */
+/** Create a CloudConvert job that compresses an uploaded audio file → small AAC
+ *  (.m4a). Returns the jobId + the presigned upload form for the client to PUT. */
 export async function createAudioCompressJob(
   bitrateKbps?: number
 ): Promise<
@@ -238,18 +239,15 @@ export async function createAudioCompressJob(
   try {
     const tasks = {
       'import-1': { operation: 'import/upload' },
-      'mp3-1': {
+      'audio-1': {
         operation: 'convert',
         input: 'import-1',
-        output_format: 'mp3',
-        audio_bitrate,
-        // Force MONO + 16kHz — Whisper works at 16kHz mono anyway, and without
-        // the sample-rate downshift the encoder can't reach low bitrates on a
-        // 48kHz source (a 2h file came out ~28MB and tripped the 25MB cap).
-        audio_channels: 1,
-        audio_frequency: 16000
+        output_format: 'm4a',
+        audio_codec: 'aac',
+        audio_bitrate, // AAC honours low bitrates directly (no mp3 floor)
+        audio_channels: 1 // mono — all Whisper needs; halves the size
       },
-      'export-1': { operation: 'export/url', input: 'mp3-1' }
+      'export-1': { operation: 'export/url', input: 'audio-1' }
     };
     const r = await fetch(`${API}/v2/jobs`, {
       method: 'POST',

@@ -51,7 +51,7 @@ export async function POST(req: Request) {
       return Response.json({ error: 'Could not fetch compressed audio.' }, { status: 502 });
     }
     audioBlob = await got.blob();
-    audioName = 'audio.mp3';
+    audioName = 'audio.m4a';
   } else {
     const audio = inForm.get('audio');
     if (!(audio instanceof File)) {
