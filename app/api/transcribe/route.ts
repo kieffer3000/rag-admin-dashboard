@@ -71,6 +71,20 @@ export async function POST(req: Request) {
     audioName = audio.name || 'audio.wav';
   }
 
+  // Hard guard: OpenAI rejects > 25 MiB. The compressor sizes by duration to stay
+  // under this, but a truly enormous recording (~6h+) could still exceed it — give
+  // a clear, actionable error instead of OpenAI's raw 413.
+  const WHISPER_MAX = 26214400; // 25 MiB
+  if (audioBlob.size > WHISPER_MAX) {
+    const mb = (audioBlob.size / 1048576).toFixed(1);
+    return Response.json(
+      {
+        error: `This recording is too long to transcribe in one piece (${mb}MB after compression; OpenAI's limit is 25MB, about ~6 hours). Please split it into shorter parts and upload each.`
+      },
+      { status: 413 }
+    );
+  }
+
   // Optional biasing: wired source names nudge recognition of domain terms
   // (Whisper's `prompt` is a soft hint, ≤ ~224 tokens — we cap the text).
   let prompt = '';

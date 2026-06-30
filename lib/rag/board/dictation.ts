@@ -187,11 +187,41 @@ async function parseTranscribeResponse(res: Response): Promise<DetailedTranscrip
  *  Vercel cap), compress to MP3, then transcribe the result by jobId (the route
  *  fetches the small compressed file server-side). Returns null if compression
  *  is unavailable so the caller can fall back. */
+/** Read an audio file's duration (seconds) in the browser — lets the server pick
+ *  the best bitrate that still fits Whisper's 25MB cap. 0 if it can't be read. */
+function audioDurationSec(blob: Blob): Promise<number> {
+  return new Promise((resolve) => {
+    try {
+      const el = document.createElement('audio');
+      el.preload = 'metadata';
+      const url = URL.createObjectURL(blob);
+      let settled = false;
+      const done = (v: number) => {
+        if (settled) return;
+        settled = true;
+        URL.revokeObjectURL(url);
+        resolve(Number.isFinite(v) && v > 0 ? v : 0);
+      };
+      el.onloadedmetadata = () => done(el.duration);
+      el.onerror = () => done(0);
+      el.src = url;
+      setTimeout(() => done(el.duration), 8000); // safety net
+    } catch {
+      resolve(0);
+    }
+  });
+}
+
 async function transcribeViaCompression(
   blob: Blob,
   phrases: string[]
 ): Promise<DetailedTranscript | null> {
-  const jobRes = await fetch('/api/audio-job', { method: 'POST' });
+  const durationSec = await audioDurationSec(blob);
+  const jobRes = await fetch('/api/audio-job', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ durationSec })
+  });
   if (!jobRes.ok) return null;
   const { jobId, upload } = await jobRes.json();
   if (!jobId || !upload?.url) return null;

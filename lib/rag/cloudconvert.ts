@@ -201,17 +201,40 @@ export async function captureWebsiteText(url: string): Promise<string> {
 // MAI bills by duration, not size, so this is purely to beat the size limit +
 // shrink the server-side fetch — mirrors the old AnswersDoc m4a@25k trick.
 
-// kbps. 12k MONO/16kHz keeps even a ~4.5h file under Whisper's 25MB cap (16k
-// only reached ~3.4h, so a long recording still 413'd). Plenty for speech STT.
-const AUDIO_BITRATE = Number(process.env.AUDIO_COMPRESS_BITRATE ?? 12);
+const AUDIO_BITRATE = Number(process.env.AUDIO_COMPRESS_BITRATE ?? 16); // kbps fallback
+
+// VALID MPEG-2 Layer-III bitrates at 16kHz. The encoder rounds/rejects anything
+// else (e.g. 12kbps is NOT valid), and at higher sample rates it can't even
+// reach the low end — that's why a 2h file kept coming out ~28MB. We always
+// downsample to 16kHz mono (what Whisper uses) so these low rates are reachable.
+const VALID_BITRATES = [8, 16, 24, 32, 40, 48, 56, 64];
+function snapBitrate(kbps: number): number {
+  const n = Number.isFinite(kbps) ? kbps : AUDIO_BITRATE;
+  let chosen = VALID_BITRATES[0];
+  for (const b of VALID_BITRATES) if (b <= n) chosen = b;
+  return Math.max(8, Math.min(64, chosen));
+}
+
+/** Highest valid bitrate that keeps `durationSec` of audio under ~23MB (margin
+ *  below Whisper's 25MB). Short clips → high quality; long ones → compressed
+ *  more, all automatic. ~6h still fits at the 8kbps floor. */
+export function bitrateForDuration(durationSec: number): number {
+  if (!durationSec || durationSec <= 0) return AUDIO_BITRATE; // unknown → safe default
+  const TARGET_BYTES = 23 * 1024 * 1024;
+  const maxKbps = (TARGET_BYTES * 8) / durationSec / 1000;
+  return snapBitrate(maxKbps);
+}
 
 /** Create a CloudConvert job that compresses an uploaded audio file → MP3.
  *  Returns the jobId + the presigned upload form for the client to PUT into. */
-export async function createAudioCompressJob(): Promise<
+export async function createAudioCompressJob(
+  bitrateKbps?: number
+): Promise<
   { jobId: string; form: { url: string; parameters: Record<string, string> } } | null
 > {
   const key = process.env.CLOUDCONVERT_API_KEY;
   if (!key) return null;
+  const audio_bitrate = snapBitrate(bitrateKbps ?? AUDIO_BITRATE);
   try {
     const tasks = {
       'import-1': { operation: 'import/upload' },
@@ -219,11 +242,10 @@ export async function createAudioCompressJob(): Promise<
         operation: 'convert',
         input: 'import-1',
         output_format: 'mp3',
-        audio_bitrate: AUDIO_BITRATE,
+        audio_bitrate,
         // Force MONO + 16kHz — Whisper works at 16kHz mono anyway, and without
-        // this ffmpeg can't actually reach 16kbps on a stereo/full-rate source,
-        // so the "compressed" file stayed huge and tripped Whisper's 25MB cap
-        // (a 2h file came out ~26MB instead of ~14MB). Now it truly hits 16kbps.
+        // the sample-rate downshift the encoder can't reach low bitrates on a
+        // 48kHz source (a 2h file came out ~28MB and tripped the 25MB cap).
         audio_channels: 1,
         audio_frequency: 16000
       },
