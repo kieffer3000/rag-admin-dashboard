@@ -526,7 +526,7 @@ function EmptyState({
         <div className="absolute inset-0 -z-10 rounded-[28px] bg-accent/30 blur-2xl" />
         <div className="flex h-16 w-16 items-center justify-center overflow-hidden rounded-[22px] bg-[#efe9da] shadow-float">
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/answersdoc-logo.png" alt="answersDoc" className="h-full w-full object-contain p-1.5" draggable={false} />
+          <img src="/answersdoc-logo.png" alt="answersDoc" className="h-full w-full object-contain p-1" draggable={false} />
         </div>
       </div>
       <h1 className="text-gradient text-[32px] font-semibold leading-tight tracking-tight">

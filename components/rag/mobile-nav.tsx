@@ -23,7 +23,7 @@ export function MobileNav() {
         <Link href="/" className="mb-5 flex items-center gap-2.5">
           <div className="flex h-8 w-8 items-center justify-center overflow-hidden rounded-[10px] bg-[#efe9da]">
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src="/answersdoc-logo.png" alt="answersDoc" className="h-full w-full object-contain p-0.5" draggable={false} />
+            <img src="/answersdoc-logo.png" alt="answersDoc" className="h-full w-full object-contain p-0" draggable={false} />
           </div>
           <span className="text-[15px] font-semibold">answersDoc</span>
         </Link>
