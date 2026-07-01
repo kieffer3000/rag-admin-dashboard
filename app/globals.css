@@ -494,9 +494,13 @@ input[type='search']::-webkit-search-cancel-button {
 
 
 /* Motion Polish */
-/* Smooth easing for wire draw */
+/* Only the stroke may transition (hover highlight). NEVER transition `d`:
+   React Flow recomputes each edge's path on every node move / re-measure /
+   re-render, so animating `d` makes all wires morph and JITTER continuously
+   (worst during uploads, when box re-tiling nudges nodes every status change).
+   Browsers also can't interpolate `d` between differently-shaped paths → snaps. */
 .react-flow__edge-path {
-  transition: stroke 0.3s ease, stroke-width 0.3s ease, d 0.3s cubic-bezier(0.25, 1, 0.5, 1);
+  transition: stroke 0.3s ease, stroke-width 0.3s ease;
 }
 
 /* Gentle answer-arrival reveal for the chat message container */
