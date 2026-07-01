@@ -830,7 +830,7 @@ export function BoardToolbar(p: BoardToolbarProps) {
                       accept={
                         sourceType === 'image'
                           ? 'image/png,image/jpeg,image/webp,image/gif'
-                          : '.pdf,.docx,.epub,.txt,.md,application/pdf,application/epub+zip,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain'
+                          : '.pdf,.docx,.doc,.epub,.rtf,.odt,.txt,.md,application/pdf,application/msword,application/epub+zip,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/rtf,application/vnd.oasis.opendocument.text,text/plain'
                       }
                       onChange={(e) => setFiles(Array.from(e.target.files ?? []))}
                       className="block w-full cursor-pointer rounded-lg border border-input bg-card text-[13px] file:mr-3 file:cursor-pointer file:border-0 file:bg-accent/10 file:px-3 file:py-2 file:text-accent hover:border-accent/40"
