@@ -73,7 +73,13 @@ Ask one expert a question, answered **only from its wired sources**.
 
 **Response:** `{ "answer": string, "bank": string }`
 
-- **Citation-free by design** — `/ask` never returns citations.
+- **Citation-free by design** — `/ask` never returns citations. Need cited sources
+  (e.g. the Doctor stage)? Use `/opine` with `citations:"on"`.
+- **`/ask` is bare, unsteered Q&A** — it does NOT accept `guides` or `references`. For
+  anything that needs the doctrine injected — **including guided _writing_** — call
+  **`/opine`** instead: it works with **no artifact** (just `instruction` + `guides`, over
+  the Bank's wired sources). Reserve `/ask` for "answer from this Bank's corpus" with
+  nothing to steer it.
 - `409` if the Connection has no wired sources.
 
 ```bash
@@ -154,8 +160,9 @@ limit is the real constraint** — not the API. To stay well under it:
 1. Build one **Bank per expert** (wire its sources; optionally a Persona robot). Publish each
    → one key. Store keys **server-side** in the orchestrator (never client).
 2. Keep the pipeline's shared state (the **Story Bible** blackboard) in the orchestrator.
-3. **Writing stages:** call the relevant expert's `/ask` or `/opine` with the doctrine in
-   `guides` and citations **off** (clean prose).
+3. **Writing stages:** call the expert's **`/opine`** (NOT `/ask`) with the doctrine in
+   `guides`, **no artifact** (the wired sources suffice), and citations **off** (clean
+   prose). `/ask` is only for bare, unsteered Q&A — it can't take `guides`.
 4. **Doctor stage:** call each doctrine expert's `/opine` **separately** (no blending) with
    `citations:"on"`; **merge/dedupe** the notes orchestrator-side; loop write→critique→revise
    until notes are immaterial.
