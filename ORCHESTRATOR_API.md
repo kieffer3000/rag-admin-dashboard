@@ -1,0 +1,166 @@
+# answersDoc — Orchestrator API (`/api/v1`)
+
+Single source of truth for building **external orchestrators** (e.g. a multi-expert
+"room of experts" pipeline) on top of answersDoc's published **Answers Banks**.
+
+- **Base URL:** `https://dash.answersdoc.com`
+- **Two verbs:** `POST /api/v1/ask` (scoped Q&A) · `POST /api/v1/opine` (critique-on-artifact)
+- **These endpoints are public** (NOT Clerk-gated). The **per-Bank API key is the credential.**
+- **Design boundary:** the endpoints are **stateless** — each call is scoped by the key and
+  remembers nothing between calls. Pipeline state (the "Story Bible" blackboard, stage
+  ordering, critique loops) lives in the **orchestrator**, not here. Experts don't know
+  they're in a pipeline; the orchestrator does.
+
+---
+
+## 1. Publishing a Bank → one key per expert
+
+Each **Answers Bank** on the board is published (board → Connect dialog) into a
+**Connection**. Publishing mints one secret key, **shown once**:
+
+```
+ad_live_<random>
+```
+
+The key resolves server-side to a **snapshot** of that Bank's wiring:
+`{ namespace, source_ids[], answer_mode, model, speed, label }`.
+
+- **One Bank ↔ one key.** N experts = N Banks = N keys.
+- **Isolation:** retrieval is filtered to that Bank's wired sources
+  (`filter: { source_id: { $in: source_ids } }`) inside one per-user Pinecone namespace.
+  No cross-expert bleed — as long as a source isn't wired into two Banks.
+- **`namespace` is derived server-side from the owner** — never trusted from the client. A
+  key can only ever read/reason over its own Bank's corpus, read-only.
+- **Re-publish to re-snapshot.** The snapshot is taken at publish time; it is NOT a live
+  pointer to the canvas. If you change a Bank's wired sources, **re-publish/update** the
+  Connection. Recommendation: treat a re-publish as a deliberate **doctrine version bump**
+  and stamp a `doctrineVersion` into your pipeline state for traceability.
+
+## 2. Auth
+
+Send the key one of three ways (Bearer preferred for server-to-server):
+
+```
+Authorization: Bearer ad_live_...      # preferred
+x-api-key: ad_live_...                  # alternative
+{ "key": "ad_live_..." }               # in the JSON body (last resort)
+```
+
+- **Server-to-server (no `Origin` header): always allowed** — the key is the secret. This is
+  the orchestrator path.
+- **Browser (cross-origin):** the request `Origin` must be in the Connection's allowlist
+  (set when publishing) or you get `403`. (Not relevant to a server orchestrator.)
+- The embed widget uses a separate public `x-embed-id` slug — **do not use that for an
+  orchestrator; use the secret key.**
+
+## 3. Rate limit
+
+`60 requests / minute / key` (best-effort, in-memory, per serverless instance — a courtesy
+limit, not a hard boundary; the key scope is the real boundary). One video's pipeline
+(~10–15 sequential expert calls) is well under this. For mass-parallel production through a
+single key, add an orchestrator-side concurrency cap.
+
+## 4. `POST /api/v1/ask` — scoped Q&A
+
+Ask one expert a question, answered **only from its wired sources**.
+
+**Request body:**
+| field | type | notes |
+|---|---|---|
+| `question` | string | **required** |
+| `conversation` | `[{role,content}]` | optional; last 30 turns used for follow-ups |
+| `speed` | `'fast'\|'detailed'\|'research'` | optional; only honored if the publisher enabled speed choice, else the Bank's default |
+
+**Response:** `{ "answer": string, "bank": string }`
+
+- **Citation-free by design** — `/ask` never returns citations.
+- `409` if the Connection has no wired sources.
+
+```bash
+curl -sX POST https://dash.answersdoc.com/api/v1/ask \
+  -H "Authorization: Bearer ad_live_KENNEDY" \
+  -H "Content-Type: application/json" \
+  -d '{"question":"What makes a hook pass the message-to-market match test?"}'
+```
+
+## 5. `POST /api/v1/opine` — critique-on-artifact
+
+Have one expert **reason ABOUT an artifact you supply** (critique, rewrite, assess),
+grounded in its wired sources and optionally steered by per-call doctrine.
+
+**Request body:**
+| field | type | notes |
+|---|---|---|
+| `instruction` | string | **required** — what to do (e.g. "Critique this hook, then rewrite it.") |
+| `artifact` | `{ content?, url?, title? }` | the thing to opine on (the caller supplies it per call). `content` OR `url`; if only `url`, the server loads the page text. |
+| `guides` | `string[]` | **doctrine / persona injected per call** — guaranteed in context (voice/priorities only; never invents facts). This is where the one-page doctrine rubric goes. |
+| `references` | `[{content,title?}]` | optional exemplars ("make it like this"); ≤5, never cited |
+| `grounding` | `'cited'\|'hybrid'` | `cited` = corpus-only; `hybrid` = may add general knowledge |
+| `citations` | `'on'\|'off'` (or `include_citations: true`) | **default OFF.** ON → response adds a `citations[]` array + keeps `[n]` markers |
+| `conversation` / `history` | `[{role,content}]` | optional; last 30 turns |
+
+**Response:**
+- Default: `{ "answer": string, "bank": string }` (citation-free)
+- With `citations:"on"`: `{ "answer": string, "bank": string, "citations": [{ source_id, source_name, snippet, score }] }` (answer keeps `[n]` markers mapping to the array)
+
+- `409` if the Bank has no wired sources **and** no artifact was supplied.
+
+**Writing/assist call (clean prose, no citations):**
+```bash
+curl -sX POST https://dash.answersdoc.com/api/v1/opine \
+  -H "Authorization: Bearer ad_live_KERN" -H "Content-Type: application/json" \
+  -d '{"instruction":"Rewrite this hook in Kern's warm voice.",
+       "artifact":{"content":"<hook text>","title":"Hook v1"},
+       "guides":["<Kern one-page doctrine rubric>"]}'
+```
+
+**Doctor/critique call (sourced, actionable notes):**
+```bash
+curl -sX POST https://dash.answersdoc.com/api/v1/opine \
+  -H "Authorization: Bearer ad_live_KENNEDY" -H "Content-Type: application/json" \
+  -d '{"instruction":"Critique this hook against your doctrine. List concrete fixes.",
+       "artifact":{"content":"<hook text>"},
+       "guides":["<Kennedy one-page doctrine rubric>"],
+       "citations":"on"}'
+```
+
+## 6. Errors
+
+| status | meaning |
+|---|---|
+| `400` | missing `question` (ask) / `instruction` (opine) |
+| `401` | missing / invalid / revoked key |
+| `403` | key is domain-locked and the request `Origin` isn't allowed (browser only) |
+| `409` | nothing to work over (no wired sources; opine also needs no artifact) |
+| `429` | rate limit exceeded |
+| `502` | upstream (Make / reasoning) temporarily unavailable |
+
+## 7. Payload-size guidance (important)
+
+In production, `/opine` **relays to a Make.com scenario**, and **Make's webhook payload
+limit is the real constraint** — not the API. To stay well under it:
+
+- **Scope each expert's artifact to its lane.** Send only what that expert needs — e.g.
+  Headlines/Kennedy sees just the hook (tiny), Voice/Kern sees the VO lines, and only the
+  structure expert (McKee) sees the full body. **Chunk a large body by act** and opine per
+  chunk.
+- Prefer many small, lane-scoped calls over one large blended one (this also preserves
+  expert isolation and gives cleaner, per-lane notes to merge).
+- `timeouts`: both endpoints allow up to ~300s server-side (reasoning/Research can run
+  60–180s+). One-shot responses; no token streaming (poll stage completion instead).
+
+## 8. Recommended "room of experts" pattern
+
+1. Build one **Bank per expert** (wire its sources; optionally a Persona robot). Publish each
+   → one key. Store keys **server-side** in the orchestrator (never client).
+2. Keep the pipeline's shared state (the **Story Bible** blackboard) in the orchestrator.
+3. **Writing stages:** call the relevant expert's `/ask` or `/opine` with the doctrine in
+   `guides` and citations **off** (clean prose).
+4. **Doctor stage:** call each doctrine expert's `/opine` **separately** (no blending) with
+   `citations:"on"`; **merge/dedupe** the notes orchestrator-side; loop write→critique→revise
+   until notes are immaterial.
+5. Stamp a `doctrineVersion` when you re-publish a Bank, for traceability.
+
+> Ownership split: **answersDoc** owns the experts + the two verbs (ask/opine).
+> The **orchestrator** owns per-lane artifact scoping, `doctrineVersion` stamping, the
+> house-model choice, stage ordering, the blackboard, and the critique loop.
