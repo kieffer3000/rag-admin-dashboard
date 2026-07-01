@@ -1708,7 +1708,7 @@ export function BrainMessage({
       // inner-edge make it pop off the canvas like a premium iMessage bubble.
       <div
         className={cn(
-          'nodrag select-text max-w-[88%] self-end whitespace-pre-wrap rounded-[14px] rounded-br-[5px] bg-gradient-to-b from-indigo-500 to-indigo-600 px-3.5 py-2 leading-relaxed text-white shadow-[inset_0_1px_0_rgb(255_255_255/0.25),0_2px_8px_hsl(var(--accent)/0.32)]',
+          'nodrag select-text max-w-[88%] self-end whitespace-pre-wrap rounded-[14px] message-arrival rounded-br-[5px] bg-gradient-to-b from-indigo-500 to-indigo-600 px-3.5 py-2 leading-relaxed text-white shadow-[inset_0_1px_0_rgb(255_255_255/0.25),0_2px_8px_hsl(var(--accent)/0.32)]',
           large ? 'text-[15px]' : 'text-[14px]'
         )}
       >
@@ -1717,7 +1717,7 @@ export function BrainMessage({
     );
   }
   return (
-    <div className="group self-start">
+    <div className="group self-start message-arrival">
       {m.content ? (
         <div
           ref={bodyRef}

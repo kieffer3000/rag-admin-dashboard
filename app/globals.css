@@ -37,6 +37,24 @@
 
     --radius: 1rem;
 
+    /* Spacing & Rhythm Tokens */
+    --space-1: 0.25rem;
+    --space-2: 0.5rem;
+    --space-3: 0.75rem;
+    --space-4: 1rem;
+    --space-5: 1.5rem;
+    --space-6: 2rem;
+    --space-8: 3rem;
+    --space-10: 4rem;
+
+    /* Type Scale Tokens */
+    --type-caption: 0.75rem; /* 12px */
+    --type-body: 0.875rem;   /* 14px */
+    --type-heading: 1.125rem;/* 18px */
+    --type-display: 1.5rem;  /* 24px */
+    --type-hero: 2.25rem;    /* 36px */
+
+
     /* Glass material (light) — warm ivory */
     --glass-bg: 250 248 240;
     --glass-alpha: 0.66;
@@ -472,6 +490,20 @@ input[type='search']::-webkit-search-cancel-button {
   transform: translateY(-2px) scale(1.05);
   box-shadow: 0 2px 6px rgba(0,0,0,0.18), inset 0 1px 0 rgba(255,255,255,0.3);
 }
-.fn-ref:hover {
-  background: hsl(var(--accent) / 0.22);
+
+
+
+/* Motion Polish */
+/* Smooth easing for wire draw */
+.react-flow__edge-path {
+  transition: stroke 0.3s ease, stroke-width 0.3s ease, d 0.3s cubic-bezier(0.25, 1, 0.5, 1);
+}
+
+/* Gentle answer-arrival reveal for the chat message container */
+@keyframes message-arrival {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.message-arrival {
+  animation: message-arrival 0.4s cubic-bezier(0.16, 1, 0.3, 1) both;
 }
