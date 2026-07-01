@@ -12,7 +12,7 @@
 //   2. Set LOGO_SRC below to its path (e.g. '/answersdoc-logo.gif')
 // When LOGO_SRC is set it replaces the SVG mark.
 // ───────────────────────────────────────────────────────────────────────────
-const LOGO_SRC: string | null = null;
+const LOGO_SRC: string | null = '/answersdoc-logo.png';
 
 const CREAM = '#efe9da';
 const CHARCOAL = '#2b2d33';

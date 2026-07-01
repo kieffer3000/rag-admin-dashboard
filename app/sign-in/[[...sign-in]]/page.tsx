@@ -4,25 +4,8 @@ import { SignIn } from '@clerk/nextjs';
 const CREAM = '#efe9da';
 const CHARCOAL = '#2b2d33';
 
-// The AnswersDoc mark (comma head + sweeping tail inside a ring), crisp at any size.
-function AnswersDocMark({ size = 132, color = CHARCOAL }: { size?: number; color?: string }) {
-  return (
-    <svg
-      width={size}
-      height={size}
-      viewBox="0 0 100 100"
-      role="img"
-      aria-label="AnswersDoc"
-    >
-      <circle cx="50" cy="50" r="45" fill="none" stroke={color} strokeWidth="2.4" />
-      <g fill={color}>
-        <circle cx="52" cy="39" r="15" />
-        <path d="M40 46 C 37.5 57, 41.5 67.5, 45 74 C 48.5 67, 53.5 59.5, 61 53.5 C 56.5 48.5, 47.5 44.5, 40 46 Z" />
-        <circle cx="61" cy="64.5" r="5.6" />
-      </g>
-    </svg>
-  );
-}
+// The real AnswersDoc mark (transparent PNG in /public). Sits cleanly on the cream panel.
+const LOGO_SRC = '/answersdoc-logo.png';
 
 export default function SignInPage() {
   return (
@@ -31,11 +14,10 @@ export default function SignInPage() {
       <div className="relative flex w-full flex-col items-center justify-center overflow-hidden bg-background p-6 lg:w-1/2">
         <div className="pointer-events-none absolute -top-40 left-1/2 h-[420px] w-[420px] -translate-x-1/2 rounded-full bg-gradient-to-br from-indigo-400/20 to-violet-500/10 blur-3xl" />
 
-        {/* Compact brand header — only shows on small screens (the right panel carries it on desktop) */}
+        {/* Compact brand header — only on small screens (the right panel carries it on desktop) */}
         <div className="relative mb-8 flex flex-col items-center text-center lg:hidden">
-          <div className="mb-4">
-            <AnswersDocMark size={64} />
-          </div>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={LOGO_SRC} alt="AnswersDoc" width={72} height={72} className="mb-4" draggable={false} />
           <h1 className="text-2xl font-semibold tracking-tight">
             Welcome to <span className="text-accent">answersDoc</span>
           </h1>
@@ -59,7 +41,8 @@ export default function SignInPage() {
         <div className="pointer-events-none absolute -top-24 -left-20 h-[420px] w-[420px] rounded-full bg-black/[0.03] blur-2xl" />
 
         <div className="relative flex flex-col items-center text-center">
-          <AnswersDocMark size={148} />
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={LOGO_SRC} alt="AnswersDoc" width={180} height={180} draggable={false} />
           <h2
             className="mt-8 text-4xl font-semibold tracking-tight"
             style={{ color: CHARCOAL }}
