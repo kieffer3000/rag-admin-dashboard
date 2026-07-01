@@ -19,8 +19,8 @@ import {
   Square,
   Loader2,
   GitFork,
-  PanelLeftClose,
-  PanelLeftOpen,
+  ChevronDown,
+  ChevronUp,
   Wand2,
   Volume2,
   VolumeX,
@@ -426,21 +426,21 @@ export function BoardToolbar(p: BoardToolbarProps) {
           <TooltipTrigger asChild>
             <button
               onClick={() => setCollapsed(false)}
-              className="absolute left-4 top-1/2 z-20 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-[14px] bg-card text-muted-foreground shadow-[0_2px_8px_rgb(0_0_0/0.06),0_12px_40px_rgb(0_0_0/0.10)] transition-colors hover:text-foreground dark:ring-1 dark:ring-white/[0.08]"
+              className="absolute bottom-4 left-1/2 z-20 flex h-10 w-10 -translate-x-1/2 items-center justify-center rounded-[14px] bg-card text-muted-foreground shadow-[0_2px_8px_rgb(0_0_0/0.06),0_12px_40px_rgb(0_0_0/0.10)] transition-colors hover:text-foreground dark:ring-1 dark:ring-white/[0.08]"
             >
-              <PanelLeftOpen className="h-[18px] w-[18px]" />
+              <ChevronUp className="h-[20px] w-[20px]" />
             </button>
           </TooltipTrigger>
-          <TooltipContent side="right" className="text-[11.5px]">
+          <TooltipContent side="top" className="text-[11.5px]">
             Show toolbar
           </TooltipContent>
         </Tooltip>
       ) : (
-        <div className="absolute left-4 top-1/2 z-20 flex max-h-[calc(100%-2rem)] -translate-y-1/2 flex-col gap-0.5 overflow-y-auto rounded-[18px] bg-card p-1.5 shadow-[0_2px_8px_rgb(0_0_0/0.06),0_12px_40px_rgb(0_0_0/0.10)] dark:ring-1 dark:ring-white/[0.08]">
+        <div className="absolute bottom-4 left-1/2 z-20 flex max-w-[calc(100%-2rem)] -translate-x-1/2 flex-row items-center gap-0.5 overflow-x-auto rounded-[18px] bg-card p-1.5 shadow-[0_2px_8px_rgb(0_0_0/0.06),0_12px_40px_rgb(0_0_0/0.10)] dark:ring-1 dark:ring-white/[0.08]">
           <RailButton
-            label="Collapse toolbar"
-            desc="Tuck this rail away to free up the canvas. A small tab brings it back."
-            icon={<PanelLeftClose className="h-[16px] w-[16px]" />}
+            label="Hide toolbar"
+            desc="Tuck this bar away to free up the canvas. A small tab brings it back."
+            icon={<ChevronDown className="h-[18px] w-[18px]" />}
             onClick={() => setCollapsed(true)}
           />
           <RailDivider />
@@ -448,13 +448,13 @@ export function BoardToolbar(p: BoardToolbarProps) {
             label="New Answers Bank"
             desc="Add an Answers Bank (chat) node. Wire sources or boxes into it and ask — it answers only from what's connected, with citations."
             accent
-            icon={<Brain className="h-[17px] w-[17px]" />}
+            icon={<Brain className="h-[19px] w-[19px]" />}
             onClick={p.onAddBrain}
           />
           <RailButton
             label="Upload"
             desc="One place to add anything — long-term knowledge (RAG), a working doc (Artifact), or a supporting example (Reference). It asks what you're adding, then how."
-            icon={<UploadCloud className="h-[17px] w-[17px]" />}
+            icon={<UploadCloud className="h-[19px] w-[19px]" />}
             onClick={() => {
               setUploadStep('category');
               setHelpKind(null);
@@ -468,11 +468,11 @@ export function BoardToolbar(p: BoardToolbarProps) {
                 <RailButton
                   label="Place from Library"
                   desc="Drop a source you've already indexed back onto the canvas as a piece."
-                  icon={<LibraryBig className="h-[17px] w-[17px]" />}
+                  icon={<LibraryBig className="h-[19px] w-[19px]" />}
                 />
               </span>
             </PopoverTrigger>
-            <PopoverContent side="right" align="center" className="w-72 p-2">
+            <PopoverContent side="top" align="center" className="w-72 p-2">
               <div className="flex items-center justify-between gap-2 px-2 pb-1.5 pt-1">
                 <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
                   Library — not on board
@@ -517,7 +517,7 @@ export function BoardToolbar(p: BoardToolbarProps) {
           <RailButton
             label="New box"
             desc="Create a named cluster of intelligence — a sub-project (SEO, PPC…) holding any mix of pieces. Wire the box to query the whole family together."
-            icon={<FolderPlus className="h-[17px] w-[17px]" />}
+            icon={<FolderPlus className="h-[19px] w-[19px]" />}
             onClick={() => {
               setName('');
               setHubOpen(true);
@@ -526,46 +526,46 @@ export function BoardToolbar(p: BoardToolbarProps) {
           <RailButton
             label="Everything hub"
             desc="A shortcut that wires every indexed source in this project into an Answers Bank at once."
-            icon={<Sparkles className="h-[17px] w-[17px] text-accent" />}
+            icon={<Sparkles className="h-[19px] w-[19px] text-accent" />}
             onClick={p.onAddEverything}
           />
           <RailDivider />
           <RailButton
             label="Mind map"
             desc="Sketch a quick tree of ideas. Enter adds a sibling, Tab adds a child. For thinking, not retrieval."
-            icon={<GitFork className="h-[17px] w-[17px]" />}
+            icon={<GitFork className="h-[19px] w-[19px]" />}
             onClick={p.onAddMindmap}
           />
           <RailButton
             label="Context note"
             desc="A scratch instruction wired into an Answers Bank as prompt context — steers the answer but is never indexed."
-            icon={<Type className="h-[17px] w-[17px]" />}
+            icon={<Type className="h-[19px] w-[19px]" />}
             onClick={p.onAddText}
           />
           <RailButton
             label="Annotation"
             desc="A free-floating label to caption a region of the board. Purely visual."
-            icon={<StickyNote className="h-[17px] w-[17px]" />}
+            icon={<StickyNote className="h-[19px] w-[19px]" />}
             onClick={p.onAddAnnotation}
           />
           <RailDivider />
           <RailButton
             label="Draft"
             desc="Your working doc (article, webpage, draft). Wire it to an Answers Bank WITH a Library → it opines on it. Carried whole, never indexed."
-            icon={<FileText className="h-[17px] w-[17px]" />}
+            icon={<FileText className="h-[19px] w-[19px]" />}
             onClick={p.onAddArtifact}
           />
           <RailButton
             label="Examples"
             desc="A sample or template to steer the answer by ('make it like this'). Guides judgment; never indexed, never cited."
-            icon={<BookOpen className="h-[17px] w-[17px]" />}
+            icon={<BookOpen className="h-[19px] w-[19px]" />}
             onClick={p.onAddReference}
           />
           <RailDivider />
           <RailButton
             label="Clean desk"
             desc="Untangle: snaps every piece to its plug around each Answers Bank — Library left, Examples top, Draft right, Persona bottom — so no wires cross."
-            icon={<Wand2 className="h-[17px] w-[17px]" />}
+            icon={<Wand2 className="h-[19px] w-[19px]" />}
             onClick={p.onCleanDesk}
           />
           <RailButton
@@ -577,9 +577,9 @@ export function BoardToolbar(p: BoardToolbarProps) {
             }
             icon={
               sound ? (
-                <Volume2 className="h-[17px] w-[17px]" />
+                <Volume2 className="h-[19px] w-[19px]" />
               ) : (
-                <VolumeX className="h-[17px] w-[17px] opacity-60" />
+                <VolumeX className="h-[19px] w-[19px] opacity-60" />
               )
             }
             onClick={() => {
@@ -1295,7 +1295,7 @@ function RailButton({
           // occluded by the canvas — hover always reveals what a tool does.
           title={desc ? `${label} — ${desc}` : label}
           className={cn(
-            'flex h-9 w-9 items-center justify-center rounded-[12px] transition-all',
+            'flex h-10 w-10 items-center justify-center rounded-[12px] transition-all',
             accent
               ? 'bg-gradient-to-br from-[#84923F] to-[#525C20] text-white shadow-[0_2px_10px_hsl(var(--accent)/0.4)] hover:brightness-110'
               : 'text-muted-foreground hover:bg-[rgb(var(--hairline)/0.06)] hover:text-foreground'
@@ -1305,7 +1305,7 @@ function RailButton({
         </button>
       </TooltipTrigger>
       {/* Rich tooltip: bold title + a description of what the tool does. */}
-      <TooltipContent side="right" className="max-w-[214px]">
+      <TooltipContent side="top" className="max-w-[214px]">
         <p className="text-[12px] font-semibold leading-tight">{label}</p>
         {desc && (
           <p className="mt-0.5 text-[11px] leading-snug text-muted-foreground">
@@ -1318,7 +1318,7 @@ function RailButton({
 }
 
 function RailDivider() {
-  return <div className="mx-2 my-1 h-px bg-[rgb(var(--hairline)/0.08)]" />;
+  return <div className="mx-1 my-0 h-6 w-px shrink-0 bg-[rgb(var(--hairline)/0.08)]" />;
 }
 
 /** A category tile in the unified upload picker. Pass `meta` for a known media

@@ -162,7 +162,7 @@ export function BoardChest({
   return (
     <div
       ref={rootRef}
-      className="absolute bottom-4 left-1/2 z-20 flex -translate-x-1/2 flex-col items-center"
+      className="absolute bottom-4 left-4 z-20 flex flex-col items-start"
     >
       {/* flyout panel */}
       {open && (
