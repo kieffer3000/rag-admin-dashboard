@@ -7,7 +7,6 @@ import {
   MessagesSquare,
   Library,
   Bot,
-  Boxes,
   StickyNote,
   Activity,
   Users,
@@ -232,12 +231,13 @@ export function Sidebar() {
         )}
       >
         <Link href="/" className="flex items-center gap-2.5">
-          <div className="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-[12px] bg-gradient-to-br from-[#84923F] to-[#525C20] text-white shadow-[0_4px_16px_hsl(var(--accent)/0.4)]">
-            <Boxes className="h-[19px] w-[19px]" />
+          <div className="relative flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-[12px] bg-[#efe9da] shadow-[0_4px_16px_hsl(var(--accent)/0.4)]">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/answersdoc-logo.png" alt="answersDoc" className="h-full w-full object-contain p-1" draggable={false} />
           </div>
           {!collapsed && (
             <div className="leading-tight">
-              <div className="text-[15px] font-semibold tracking-tight">Atlas</div>
+              <div className="text-[15px] font-semibold tracking-tight">answersDoc</div>
               <div className="text-[11px] text-muted-foreground/70">Knowledge Base</div>
             </div>
           )}

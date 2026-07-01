@@ -11,7 +11,6 @@ import { Composer } from './composer';
 import { Message, TypingIndicator } from './message';
 import { cn } from '@/lib/utils';
 import {
-  Boxes,
   Sparkles,
   ScrollText,
   GitCompareArrows,
@@ -525,8 +524,9 @@ function EmptyState({
     <div className="flex h-full flex-col items-center justify-center px-6 pb-24">
       <div className="relative mb-6">
         <div className="absolute inset-0 -z-10 rounded-[28px] bg-accent/30 blur-2xl" />
-        <div className="flex h-16 w-16 items-center justify-center rounded-[22px] bg-gradient-to-br from-[#84923F] to-[#525C20] text-white shadow-float">
-          <Boxes className="h-8 w-8" />
+        <div className="flex h-16 w-16 items-center justify-center overflow-hidden rounded-[22px] bg-[#efe9da] shadow-float">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/answersdoc-logo.png" alt="answersDoc" className="h-full w-full object-contain p-1.5" draggable={false} />
         </div>
       </div>
       <h1 className="text-gradient text-[32px] font-semibold leading-tight tracking-tight">

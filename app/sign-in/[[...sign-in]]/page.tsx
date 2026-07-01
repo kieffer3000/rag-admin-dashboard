@@ -28,7 +28,7 @@ export default function SignInPage() {
         </div>
 
         <div className="relative">
-          <SignIn />
+          <SignIn signUpUrl="https://answersdoc.com" />
         </div>
       </div>
 

@@ -219,7 +219,7 @@ export function Composer({ onSend, busy }: ComposerProps) {
           </div>
         </div>
         <p className="mt-2.5 text-center text-[11px] text-muted-foreground/70">
-          Atlas answers only from your selected sources, with citations.
+          answersDoc answers only from your selected sources, with citations.
         </p>
       </div>
     </div>

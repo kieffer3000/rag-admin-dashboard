@@ -12,7 +12,7 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: 'Atlas — Knowledge Base',
+  title: 'answersDoc — Knowledge Base',
   description:
     'A beautiful RAG knowledge base. Chat with your documents, videos, audio and notes — grounded answers with citations.'
 };

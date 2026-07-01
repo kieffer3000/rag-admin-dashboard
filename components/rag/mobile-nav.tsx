@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Menu, Boxes } from 'lucide-react';
+import { Menu } from 'lucide-react';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
@@ -21,10 +21,11 @@ export function MobileNav() {
       </SheetTrigger>
       <SheetContent side="left" className="w-64 p-4">
         <Link href="/" className="mb-5 flex items-center gap-2.5">
-          <div className="flex h-8 w-8 items-center justify-center rounded-[10px] bg-gradient-to-br from-[#84923F] to-[#525C20] text-white">
-            <Boxes className="h-[18px] w-[18px]" />
+          <div className="flex h-8 w-8 items-center justify-center overflow-hidden rounded-[10px] bg-[#efe9da]">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/answersdoc-logo.png" alt="answersDoc" className="h-full w-full object-contain p-0.5" draggable={false} />
           </div>
-          <span className="text-[15px] font-semibold">Atlas</span>
+          <span className="text-[15px] font-semibold">answersDoc</span>
         </Link>
         <div className="mb-4">
           <ProjectSwitcher />

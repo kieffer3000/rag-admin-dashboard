@@ -162,7 +162,7 @@ export function AgentsView() {
             <DialogTitle>{editing ? 'Edit agent' : 'New agent'}</DialogTitle>
             <DialogDescription>
               An agent is an answering persona — drag it onto the board and wire it
-              into a brain to steer how Atlas answers.
+              into a brain to steer how answersDoc answers.
             </DialogDescription>
           </DialogHeader>
 

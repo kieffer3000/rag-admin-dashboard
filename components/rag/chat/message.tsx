@@ -7,7 +7,6 @@ import { MediaIcon } from '@/components/rag/shared';
 import { useRag } from '@/lib/rag/store';
 import { cn } from '@/lib/utils';
 import {
-  Boxes,
   Paperclip,
   Pin,
   Check,
@@ -137,14 +136,19 @@ export function Message({ msg }: { msg: ChatMessage }) {
             'flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[12px] font-semibold',
             isUser
               ? 'bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900'
-              : 'bg-gradient-to-br from-[#84923F] to-[#525C20] text-white'
+              : 'overflow-hidden bg-[#efe9da]'
           )}
         >
-          {isUser ? 'You' : <Boxes className="h-4 w-4" />}
+          {isUser ? (
+            'You'
+          ) : (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src="/answersdoc-logo.png" alt="answersDoc" className="h-full w-full object-contain p-0.5" draggable={false} />
+          )}
         </div>
         <div className="min-w-0 flex-1 pt-0.5">
           <div className="mb-1 flex items-center gap-2">
-            <span className="text-[13px] font-semibold">{isUser ? 'You' : 'Atlas'}</span>
+            <span className="text-[13px] font-semibold">{isUser ? 'You' : 'answersDoc'}</span>
 
             {/* hover actions on assistant messages */}
             {!isUser && (
@@ -180,7 +184,7 @@ export function Message({ msg }: { msg: ChatMessage }) {
                       Copy as Markdown
                     </DropdownMenuItem>
                     <DropdownMenuItem
-                      onClick={() => download('atlas-answer.md', toMarkdown(msg))}
+                      onClick={() => download('answersdoc-answer.md', toMarkdown(msg))}
                       className="gap-2"
                     >
                       <Download className="h-3.5 w-3.5" /> Download .md
@@ -278,8 +282,9 @@ export function TypingIndicator() {
   return (
     <div className="px-4 py-5 sm:px-8">
       <div className="mx-auto flex max-w-3xl gap-4">
-        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-[#84923F] to-[#525C20] text-white">
-          <Boxes className="h-4 w-4" />
+        <div className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-full bg-[#efe9da]">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/answersdoc-logo.png" alt="answersDoc" className="h-full w-full object-contain p-0.5" draggable={false} />
         </div>
         <div className="flex items-center gap-1 pt-2.5">
           <span className="h-2 w-2 animate-bounce rounded-full bg-muted-foreground/50 [animation-delay:-0.3s]" />
