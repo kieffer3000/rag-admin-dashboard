@@ -2187,13 +2187,52 @@ function BoardCanvasInner() {
             return { id, name, file, ocr };
           });
 
+          // Large/binary docs (books!) exceed Vercel's ~4.5MB POST cap, so the
+          // client uploads the RAW file STRAIGHT to CloudConvert (no cap) and the
+          // server indexes the extracted text. Tiny text files (and the
+          // no-CloudConvert fallback) use a direct multipart POST.
+          const BINARY = /\.(pdf|epub|docx|doc|rtf|odt)$/i;
           const upload = async ({ id, name, file, ocr }: (typeof jobs)[number]) => {
-            const fd = new FormData();
-            fd.append('file', file);
-            fd.append('name', name);
-            fd.append('source_id', id);
-            if (ocr) fd.append('ocr', 'true');
+            const ext = (file.name.match(/\.([a-z0-9]+)$/i)?.[1] ?? '').toLowerCase();
             try {
+              if (BINARY.test(file.name)) {
+                const jr = await fetch('/api/doc-job', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ ext, ocr: !!ocr })
+                });
+                if (jr.ok) {
+                  const { jobId, upload: form } = await jr.json();
+                  const ccForm = new FormData();
+                  for (const [k, v] of Object.entries(form?.parameters ?? {}))
+                    ccForm.append(k, v as string);
+                  ccForm.append('file', file);
+                  const ur = await fetch(form.url, { method: 'POST', body: ccForm });
+                  if (!ur.ok && ur.status !== 201)
+                    throw new Error('Upload to the file converter failed.');
+                  const ir = await fetch('/api/index-doc', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ source_id: id, name, cc_job_id: jobId })
+                  });
+                  const ij = await ir.json().catch(() => ({}));
+                  if (!ir.ok || !ij.ok)
+                    throw new Error(ij?.error ?? ij?.note ?? 'index failed');
+                  queueMediaPatch(id, {
+                    status: 'indexed',
+                    chunks: ij.chunks,
+                    source: ij.source_url
+                  });
+                  return;
+                }
+                // doc-job unavailable → fall through to the direct path (small
+                // files still work; big ones will surface a clear 413 error).
+              }
+              const fd = new FormData();
+              fd.append('file', file);
+              fd.append('name', name);
+              fd.append('source_id', id);
+              if (ocr) fd.append('ocr', 'true');
               const r = await fetch('/api/index-doc', { method: 'POST', body: fd });
               const j = await r.json().catch(() => ({}));
               if (!r.ok || !j.ok)
@@ -2203,8 +2242,11 @@ function BoardCanvasInner() {
                 chunks: j.chunks,
                 source: j.source_url
               });
-            } catch {
-              queueMediaPatch(id, { status: 'failed' });
+            } catch (e) {
+              queueMediaPatch(id, {
+                status: 'failed',
+                error: e instanceof Error ? e.message : 'index failed'
+              });
             }
           };
 

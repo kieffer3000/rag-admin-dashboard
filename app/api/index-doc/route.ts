@@ -2,7 +2,7 @@ import { auth } from '@clerk/nextjs/server';
 import { put } from '@vercel/blob';
 import { indexText } from '@/lib/rag/index-core';
 import { nsForUser } from '@/lib/rag/namespace';
-import { extractPdfViaCloudConvert } from '@/lib/rag/cloudconvert';
+import { extractPdfViaCloudConvert, pollDocTextUrl } from '@/lib/rag/cloudconvert';
 
 // Document ingestion (PDF / DOCX / TXT). Text extraction is deterministic
 // parsing (NOT an LLM), done in-route, then handed to the SAME text pipeline
@@ -82,6 +82,88 @@ async function extractEpub(buf: Buffer): Promise<string> {
 export async function POST(req: Request) {
   const { userId } = await auth();
   if (!userId) return Response.json({ error: 'Unauthorized' }, { status: 401 });
+
+  // ── JSON job mode ──────────────────────────────────────────────────────────
+  // The client uploaded the RAW file straight to CloudConvert (no 4.5MB cap) and
+  // sends us the jobId. We poll it, fetch the SMALL extracted text, and run the
+  // identical chunk→embed→Pinecone pipeline. This is how big books get indexed.
+  const contentType = req.headers.get('content-type') ?? '';
+  if (contentType.includes('application/json')) {
+    const body = await req.json().catch(() => null);
+    const sourceId = String(body?.source_id ?? '').trim();
+    const name = String(body?.name ?? '').trim() || 'Document';
+    const ccJobId = String(body?.cc_job_id ?? '').trim();
+    if (!sourceId || !ccJobId) {
+      return Response.json(
+        { ok: false, error: 'source_id and cc_job_id are required' },
+        { status: 400 }
+      );
+    }
+    const txtUrl = await pollDocTextUrl(ccJobId);
+    if (!txtUrl) {
+      return Response.json(
+        { ok: false, error: 'Text extraction failed or timed out.' },
+        { status: 502 }
+      );
+    }
+    let text = '';
+    try {
+      const tr = await fetch(txtUrl);
+      if (!tr.ok) throw new Error(`fetch text ${tr.status}`);
+      text = (await tr.text()).trim();
+    } catch (e: any) {
+      return Response.json(
+        { ok: false, error: `Could not read extracted text: ${e?.message ?? 'error'}` },
+        { status: 502 }
+      );
+    }
+    if (text.length < 20) {
+      return Response.json({
+        ok: false,
+        indexed: false,
+        note: 'No extractable text — possibly a scanned/image PDF. Re-upload with OCR on.'
+      });
+    }
+    // Store the extracted text as the openable source (the raw file stayed on
+    // CloudConvert; the text is what we cite from anyway).
+    let sourceUrl: string | undefined;
+    if (process.env.BLOB_READ_WRITE_TOKEN) {
+      try {
+        const blob = await put(`docs/${userId}/${sourceId}.txt`, text, {
+          access: 'public',
+          addRandomSuffix: true,
+          contentType: 'text/plain'
+        });
+        sourceUrl = blob.url;
+      } catch {
+        /* best-effort */
+      }
+    }
+    try {
+      const r = await indexText({
+        sourceId,
+        name,
+        type: 'document',
+        text,
+        namespace: nsForUser(userId)
+      });
+      return Response.json({
+        ok: true,
+        indexed: true,
+        source_url: sourceUrl,
+        chunks: r.chunks,
+        failed_chunks: r.failed,
+        chars: text.length
+      });
+    } catch (e: any) {
+      const msg = e?.message ?? 'index failed';
+      return Response.json(
+        { ok: false, indexed: false, source_url: sourceUrl, error: msg },
+        { status: /not configured/.test(msg) ? 503 : 502 }
+      );
+    }
+  }
+  // ── end JSON job mode ──────────────────────────────────────────────────────
 
   let form: FormData;
   try {

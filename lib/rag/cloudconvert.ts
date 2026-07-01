@@ -340,3 +340,96 @@ export async function pollAudioOutputUrls(jobId: string): Promise<string[]> {
   }
   return [];
 }
+
+// ---- Document extraction (bypass the ~4.5MB Vercel body cap) -----------------
+// A book PDF/EPUB is far bigger than a Vercel function can accept as a POST body.
+// So — exactly like audio — the CLIENT uploads the RAW file straight to
+// CloudConvert (presigned form, no cap); CloudConvert optimizes/repairs (PDF via
+// 3heights) and converts to plain TEXT; then /api/index-doc polls this job,
+// fetches the SMALL text, and runs the same chunk→embed→Pinecone pipeline. No
+// Make changes — it's the identical text path, just fed a different way.
+
+/** Create a CloudConvert job: uploaded document (PDF/EPUB/DOCX/…) → plain TEXT.
+ *  Returns the jobId + presigned upload form for the client to POST the raw file
+ *  to (no size cap). null when CloudConvert isn't configured. */
+export async function createDocExtractJob(
+  ext: string,
+  opts: { ocr?: boolean } = {}
+): Promise<{ jobId: string; form: { url: string; parameters: Record<string, string> } } | null> {
+  const key = process.env.CLOUDCONVERT_API_KEY;
+  if (!key) return null;
+  const e = (ext || '').toLowerCase().replace(/^\./, '');
+  try {
+    let tasks: Record<string, unknown>;
+    if (e === 'pdf') {
+      const optimize = { operation: 'optimize', input: 'import-1', engine: '3heights', profile: 'max' };
+      tasks = opts.ocr
+        ? {
+            'import-1': { operation: 'import/upload' },
+            'optimize-1': optimize,
+            'docx-1': {
+              operation: 'convert',
+              input: 'optimize-1',
+              output_format: 'docx',
+              engine: 'pdftron-pdf2word',
+              images_ocr: true
+            },
+            'txt-1': { operation: 'convert', input: 'docx-1', output_format: 'txt' },
+            'export-1': { operation: 'export/url', input: 'txt-1' }
+          }
+        : {
+            'import-1': { operation: 'import/upload' },
+            'optimize-1': optimize,
+            'rtf-1': { operation: 'convert', input: 'optimize-1', output_format: 'rtf' },
+            'txt-1': { operation: 'convert', input: 'rtf-1', output_format: 'txt' },
+            'export-1': { operation: 'export/url', input: 'txt-1' }
+          };
+    } else {
+      // epub, docx, doc, rtf, odt, … → txt directly (CloudConvert handles each).
+      tasks = {
+        'import-1': { operation: 'import/upload' },
+        'txt-1': { operation: 'convert', input: 'import-1', output_format: 'txt' },
+        'export-1': { operation: 'export/url', input: 'txt-1' }
+      };
+    }
+    const r = await fetch(`${API}/v2/jobs`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ tasks })
+    });
+    if (!r.ok) return null;
+    const job = (await r.json()).data;
+    const form = job?.tasks?.find((t: any) => t.operation === 'import/upload')?.result?.form;
+    if (!form?.url) return null;
+    return { jobId: job.id, form };
+  } catch {
+    return null;
+  }
+}
+
+/** Poll a doc-extract job → the extracted .txt file URL (single). '' on failure. */
+export async function pollDocTextUrl(jobId: string): Promise<string> {
+  const key = process.env.CLOUDCONVERT_API_KEY;
+  if (!key) return '';
+  const auth = { Authorization: `Bearer ${key}` };
+  const max = Number(process.env.CLOUDCONVERT_DOC_MAX_POLLS ?? 130); // ~260s, under maxDuration
+  for (let i = 0; i < max; i++) {
+    await sleep(POLL_MS);
+    try {
+      const pr = await fetch(`${API}/v2/jobs/${jobId}`, { headers: auth });
+      if (!pr.ok) continue;
+      const data = (await pr.json()).data;
+      if (data.status === 'error') return '';
+      if (data.status === 'finished') {
+        return (
+          ((data.tasks ?? []) as any[]).find(
+            (t) => t.operation === 'export/url' && t.status === 'finished'
+          )?.result?.files?.[0]?.url ?? ''
+        );
+      }
+    } catch {
+      /* keep polling */
+    }
+  }
+  return '';
+}
