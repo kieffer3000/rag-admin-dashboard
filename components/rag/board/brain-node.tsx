@@ -938,18 +938,17 @@ function BrainNodeInner({ id, data, selected }: NodeProps) {
 
       <div
         className={cn(
-          'flex h-full w-full flex-col overflow-hidden rounded-[20px] bg-card',
-          // The brain is the destination — it sits physically ABOVE the
-          // sources: a tight contact shadow + a wide, soft ambient one.
-          'shadow-[0_1px_2px_rgb(0_0_0/0.10),0_8px_16px_rgb(0_0_0/0.10),0_30px_64px_-12px_rgb(0_0_0/0.22)]',
-          'dark:ring-1 dark:ring-white/[0.08]',
-          selected && 'ring-2 ring-accent/60 dark:ring-accent/60'
+          'flex h-full w-full flex-col overflow-hidden rounded-[24px] bg-card',
+          'shadow-[0_1px_2px_rgba(0,0,0,0.1),0_8px_32px_-4px_rgba(0,0,0,0.12),0_20px_48px_-8px_rgba(0,0,0,0.15)]',
+          'dark:shadow-[0_1px_2px_rgba(0,0,0,0.4),0_8px_32px_-4px_rgba(0,0,0,0.5),0_20px_48px_-8px_rgba(0,0,0,0.6)]',
+          'dark:ring-1 dark:ring-white/[0.06]',
+          selected && 'ring-2 ring-accent/60 dark:ring-accent/60 shadow-[0_0_0_4px_rgba(107,115,51,0.08)]'
         )}
       >
         {/* header */}
         <div
           className={cn(
-            'flex shrink-0 items-center gap-2.5 bg-gradient-to-r px-3.5 py-2.5',
+            'flex shrink-0 items-center gap-2.5 bg-gradient-to-r px-4 py-2.5',
             headerColor.from,
             headerColor.to
           )}
@@ -960,7 +959,7 @@ function BrainNodeInner({ id, data, selected }: NodeProps) {
               headerColor.chip
             )}
           >
-            <Landmark className="h-4 w-4" />
+            <Landmark className="h-4.5 w-4.5" />
           </div>
           <div className="min-w-0 flex-1 leading-tight">
             {renaming ? (
@@ -976,7 +975,7 @@ function BrainNodeInner({ id, data, selected }: NodeProps) {
                   if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
                   if (e.key === 'Escape') setRenaming(false);
                 }}
-                className="nodrag w-full rounded-md bg-white/70 px-1.5 py-0.5 text-[13px] font-semibold tracking-tight outline-none ring-1 ring-accent/40 dark:bg-white/10"
+                className="nodrag w-full rounded-md bg-white/70 px-1.5 py-0.5 text-[14px] font-bold tracking-tight text-foreground/90 outline-none ring-1 ring-accent/40 dark:bg-white/10"
               />
             ) : (
               <div
@@ -991,7 +990,7 @@ function BrainNodeInner({ id, data, selected }: NodeProps) {
                 wired-source count changes (key remounts → re-runs the pop). */}
             <span
               key={scopeLabel}
-              className="mt-0.5 inline-flex animate-count-pop items-center gap-1 rounded-full bg-accent/[0.08] py-0.5 pl-1 pr-1.5 text-[10px] font-medium text-accent/90"
+              className="mt-1 inline-flex animate-count-pop items-center gap-1 rounded-full bg-accent/[0.08] py-0.5 pl-1.5 pr-2 text-[10px] font-semibold text-accent/80"
             >
               <span
                 className={cn(
@@ -1182,7 +1181,7 @@ function BrainNodeInner({ id, data, selected }: NodeProps) {
           // selecting still work; buttons click fine (a click isn't a drag).
           // `nowheel` so the mouse-wheel scrolls the answers here instead of
           // zooming the board (React Flow hijacks wheel over the pane otherwise).
-          'nowheel scroll-brain flex min-h-0 flex-1 flex-col gap-2.5 overflow-y-auto py-3',
+          'nowheel scroll-brain flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto py-4',
           // Reading mode: a comfortable ~70ch centered measure (not full-bleed)
           // plus larger type — a premium reading column, not a stretched page.
           sizeMode === 'full'
@@ -1520,29 +1519,30 @@ function BrainNodeInner({ id, data, selected }: NodeProps) {
           edge — so the order reads plug → label → bank and a piece plugs IN.
           Labels are pointer-events-none; the plug stays grabbable for wiring. */}
 
-      {/* LEFT — Library (long-term knowledge) */}
-      <span className="pointer-events-none absolute right-full top-1/2 z-20 mr-2 w-28 -translate-y-1/2 rounded-full bg-accent px-2 py-1 text-center text-[16px] font-bold uppercase tracking-wide text-white shadow-[0_2px_10px_rgb(0_0_0/0.20)] ring-1 ring-white/20">
-        Library
-      </span>
-      <Handle
+      {/* LEFT — Library (knowledge basis) */}
+      <div className="absolute right-full top-1/2 z-20 -translate-y-1/2 flex items-center flex-row-reverse group/port">
+        <div className="relative flex h-10 w-10 items-center justify-center rounded-full bg-card shadow-[inset_0_1px_3px_rgba(0,0,0,0.1)] ring-1 ring-black/5 dark:ring-white/5 group-hover/port:ring-accent/30 transition-all">
+          <Handle
         id="sources"
         type="target"
         position={Position.Left}
         title="Library — your long-term knowledge base; wire boxes & sources here"
         className={cn(
-          '!-left-[140px] !h-9 !w-4 !rounded-full !border-2 !border-card !bg-gradient-to-b !from-accent !to-violet-600',
-          wired
-            ? '!shadow-[0_0_10px_2px_hsl(var(--accent)/0.55)]'
-            : '!shadow-[0_2px_6px_hsl(var(--accent)/0.45)]',
-          busy && 'animate-pulse'
-        )}
-      />
+              '!static !h-5 !w-5 !translate-x-0 !translate-y-0 !rounded-full !border-[3px] !border-card !bg-gradient-to-b !from-accent !to-violet-600',
+              wired ? '!shadow-[0_0_14px_rgba(107,115,51,0.6)]' : '!shadow-sm',
+              busy && 'animate-pulse'
+            )}
+          />
+        </div>
+        <span className="pointer-events-none mr-2 rounded-full bg-accent px-2.5 py-0.5 text-center text-[10px] font-bold uppercase tracking-wider text-white shadow-md ring-1 ring-white/20 transition-transform group-hover/port:-translate-x-1">
+          Library
+        </span>
+      </div>
 
-      {/* RIGHT — Draft (the working doc) */}
-      <span className="pointer-events-none absolute left-full top-1/2 z-20 ml-2 w-28 -translate-y-1/2 rounded-full bg-indigo-500 px-2 py-1 text-center text-[16px] font-bold uppercase tracking-wide text-white shadow-[0_2px_10px_rgb(0_0_0/0.20)] ring-1 ring-white/20">
-        Draft
-      </span>
-      <Handle
+      {/* RIGHT — Draft (working doc) */}
+      <div className="absolute left-full top-1/2 z-20 -translate-y-1/2 flex items-center group/port">
+        <div className="relative flex h-10 w-10 items-center justify-center rounded-full bg-card shadow-[inset_0_1px_3px_rgba(0,0,0,0.1)] ring-1 ring-black/5 dark:ring-white/5 group-hover/port:ring-indigo-400/30 transition-all">
+          <Handle
         id="artifact"
         type="target"
         position={Position.Right}
@@ -1552,36 +1552,45 @@ function BrainNodeInner({ id, data, selected }: NodeProps) {
             : 'Draft — wire the working doc you want help with here'
         }
         className={cn(
-          '!-right-[140px] !h-9 !w-4 !rounded-full !border-2 !border-card !bg-indigo-500',
-          scope.artifact
-            ? '!shadow-[0_0_12px_3px_rgb(99_102_241/0.85)] animate-pulse'
-            : '!shadow-[0_2px_6px_rgb(99_102_241/0.5)]'
-        )}
-      />
+              '!static !h-5 !w-5 !translate-x-0 !translate-y-0 !rounded-full !border-[3px] !border-card !bg-indigo-500',
+              scope.artifact ? '!shadow-[0_0_14px_rgba(99,102,241,0.6)] animate-pulse' : '!shadow-sm'
+            )}
+          />
+        </div>
+        <span className="pointer-events-none ml-2 rounded-full bg-indigo-500 px-2.5 py-0.5 text-center text-[10px] font-bold uppercase tracking-wider text-white shadow-md ring-1 ring-white/20 transition-transform group-hover/port:translate-x-1">
+          Draft
+        </span>
+      </div>
 
-      {/* TOP — Examples (style samples) */}
-      <span className="pointer-events-none absolute bottom-full left-1/2 z-20 mb-2 -translate-x-1/2 rounded-full bg-violet-500 px-3 py-1 text-center text-[16px] font-bold uppercase tracking-wide text-white shadow-[0_2px_10px_rgb(0_0_0/0.20)] ring-1 ring-white/20">
-        Examples
-      </span>
-      <Handle
+      {/* TOP — Examples (reference samples) */}
+      <div className="absolute bottom-full left-1/2 z-20 -translate-x-1/2 flex flex-col-reverse items-center group/port">
+        <div className="relative flex h-10 w-10 items-center justify-center rounded-full bg-card shadow-[inset_0_1px_3px_rgba(0,0,0,0.1)] ring-1 ring-black/5 dark:ring-white/5 group-hover/port:ring-violet-400/30 transition-all">
+          <Handle
         id="references"
         type="target"
         position={Position.Top}
         title="Examples — wire samples that show the style/shape you want"
-        className="!-top-[58px] !h-4 !w-9 !rounded-full !border-2 !border-card !bg-violet-500 !shadow-[0_2px_6px_rgb(139_92_246/0.5)]"
-      />
+        className="!static !h-5 !w-5 !translate-x-0 !translate-y-0 !rounded-full !border-[3px] !border-card !bg-violet-500 !shadow-sm" />
+        </div>
+        <span className="pointer-events-none mb-2 rounded-full bg-violet-500 px-2.5 py-0.5 text-center text-[10px] font-bold uppercase tracking-wider text-white shadow-md ring-1 ring-white/20 transition-transform group-hover/port:-translate-y-1">
+          Examples
+        </span>
+      </div>
 
-      {/* BOTTOM — Persona (the answering voice) */}
-      <span className="pointer-events-none absolute top-full left-1/2 z-20 mt-2 -translate-x-1/2 rounded-full bg-emerald-500 px-3 py-1 text-center text-[16px] font-bold uppercase tracking-wide text-white shadow-[0_2px_10px_rgb(0_0_0/0.20)] ring-1 ring-white/20">
-        Persona
-      </span>
-      <Handle
+      {/* BOTTOM — Persona (voice/robot) */}
+      <div className="absolute top-full left-1/2 z-20 -translate-x-1/2 flex flex-col items-center group/port">
+        <div className="relative flex h-10 w-10 items-center justify-center rounded-full bg-card shadow-[inset_0_1px_3px_rgba(0,0,0,0.1)] ring-1 ring-black/5 dark:ring-white/5 group-hover/port:ring-emerald-400/30 transition-all">
+          <Handle
         id="robot"
         type="target"
         position={Position.Bottom}
         title="Persona — wire ONE agent/voice that shapes how it answers"
-        className="!-bottom-[58px] !h-4 !w-9 !rounded-full !border-2 !border-card !bg-emerald-500 !shadow-[0_2px_6px_rgb(16_185_129/0.5)]"
-      />
+        className="!static !h-5 !w-5 !translate-x-0 !translate-y-0 !rounded-full !border-[3px] !border-card !bg-emerald-500 !shadow-sm" />
+        </div>
+        <span className="pointer-events-none mt-2 rounded-full bg-emerald-500 px-2.5 py-0.5 text-center text-[10px] font-bold uppercase tracking-wider text-white shadow-md ring-1 ring-white/20 transition-transform group-hover/port:translate-y-1">
+          Persona
+        </span>
+      </div>
 
       <ConnectDialog
         open={connectOpen}

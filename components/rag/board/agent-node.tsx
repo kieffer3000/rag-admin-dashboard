@@ -121,8 +121,10 @@ function AgentNodeInner({ id, data, selected, parentId }: NodeProps) {
         </div>
       </div>
 
-      <div className="pointer-events-auto line-clamp-1 max-w-[150px] text-center text-[12px] font-semibold text-emerald-900/90 drop-shadow-[0_1px_1px_rgb(255_255_255/0.6)] dark:text-emerald-100/90 dark:drop-shadow-[0_1px_2px_rgb(0_0_0/0.6)]">
-        {name}
+      <div className="pointer-events-auto mt-1 flex items-center justify-center">
+        <span className="inline-flex max-w-[150px] truncate rounded-full bg-emerald-500/10 px-3 py-1 text-[11px] font-bold uppercase tracking-wider text-emerald-600 ring-1 ring-emerald-500/20 backdrop-blur-sm dark:bg-emerald-500/20 dark:text-emerald-300">
+          {name}
+        </span>
       </div>
 
       {/* Connector on the node's RIGHT EDGE so nothing sits over the edge's cut

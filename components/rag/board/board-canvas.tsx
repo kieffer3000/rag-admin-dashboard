@@ -28,7 +28,8 @@ import {
   Unplug,
   Pencil,
   Trash2,
-  Maximize
+  Maximize,
+  Landmark
 } from 'lucide-react';
 import { ResearchOverlay } from '@/components/rag/board/research-overlay';
 
@@ -1863,6 +1864,30 @@ function BoardCanvasInner() {
       />
 
       {/* Save + garbage bin live in the bottom-middle dock (BoardChest). */}
+
+      {/* Empty State Onboarding */}
+      {liveNodes.length === 0 && hydratedProject === activeProjectId && (
+        <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+          <div className="flex flex-col items-center gap-6 text-center animate-fade-up">
+            <div className="flex h-20 w-20 items-center justify-center rounded-[28%] bg-accent/5 text-accent/40 ring-1 ring-accent/10">
+              <Landmark className="h-10 w-10" />
+            </div>
+            <div className="space-y-2">
+              <h2 className="font-display text-2xl font-bold tracking-tight text-foreground/80">Your Board is empty</h2>
+              <p className="max-w-[340px] text-[15px] leading-relaxed text-muted-foreground/60">
+                Start by adding a source or dropping an Answers Bank from the toolbar below.
+              </p>
+            </div>
+            <div className="flex items-center gap-3 text-[13px] font-bold uppercase tracking-wider text-accent/70">
+              <span>① Add Source</span>
+              <span className="h-1 w-1 rounded-full bg-muted-foreground/30" />
+              <span>② Place Bank</span>
+              <span className="h-1 w-1 rounded-full bg-muted-foreground/30" />
+              <span>③ Ask</span>
+            </div>
+          </div>
+        </div>
+      )}
       <ReactFlow
         nodes={liveNodes as Node[]}
         edges={liveEdges}

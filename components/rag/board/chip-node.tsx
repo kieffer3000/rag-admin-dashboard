@@ -157,7 +157,7 @@ function ChipNodeInner({ id, data, selected, parentId }: NodeProps) {
       {duplicate && (
         <span
           title="Duplicate — this source is already on the board. An Answers Bank only counts it once."
-          className="absolute -right-1.5 -top-1.5 z-10 rounded-full bg-foreground/70 px-1.5 py-0.5 text-[8.5px] font-bold uppercase tracking-wide text-background"
+          className="absolute -right-2 -top-2 z-10 rounded-full bg-foreground px-2 py-0.5 text-[9px] font-black uppercase tracking-tighter text-background shadow-md ring-1 ring-white/10"
         >
           dup
         </span>
@@ -171,7 +171,7 @@ function ChipNodeInner({ id, data, selected, parentId }: NodeProps) {
       <div
         style={{ width: CHIP_W, height: bodyH, clipPath }}
         className={cn(
-          'absolute inset-0 bg-card dark:bg-[hsl(240_8%_14%)]',
+          'absolute inset-0 bg-card dark:bg-card',
           docked && 'rounded-[11px] ring-1 ring-black/[0.04] dark:ring-white/[0.06]'
         )}
       />
