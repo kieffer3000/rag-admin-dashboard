@@ -291,27 +291,25 @@ export function BoardToolbar(p: BoardToolbarProps) {
       if (!files.length) return;
       const imgs = files.filter((f) => f.type.startsWith('image/'));
       const docs = files.filter((f) => !f.type.startsWith('image/'));
-      const ids = [
-        ...imgs.map((f) =>
-          p.onNewImage(
-            files.length === 1 && name.trim() ? name.trim() : stripExt(f.name),
-            f
-          )
-        ),
-        ...(docs.length
-          ? p.onNewDocuments(
-              docs.map((f) => ({
-                name:
-                  files.length === 1 && name.trim()
-                    ? name.trim()
-                    : stripExt(f.name),
-                file: f,
-                ocr
-              }))
-            )
-          : [])
-      ];
-      maybeBox(ids);
+      const nameFor = (f: File) =>
+        files.length === 1 && name.trim() ? name.trim() : stripExt(f.name);
+      const imgIds = imgs.map((f) => p.onNewImage(nameFor(f), f));
+      const docItems = docs.map((f) => ({ name: nameFor(f), file: f, ocr }));
+      const docIds = docItems.length ? p.onNewDocuments(docItems) : [];
+      maybeBox([...imgIds, ...docIds]);
+      // Documents get the live progress popup (per-file status + Retry), just
+      // like link imports — so a failed PDF/EPUB is visible and retryable.
+      if (docIds.length) {
+        setImporting(
+          docIds.map((id, i) => ({ id, url: docItems[i]?.name ?? 'Document' }))
+        );
+        setDupSkipped(0);
+        setDupSkippedList([]);
+        setImportFilter('all');
+        setFiles([]);
+        setName('');
+        return; // stay open — progress view takes over
+      }
     } else if (sourceType === 'audio') {
       // Audio: an uploaded file → transcribe → index. (Recording uses its own
       // dialog + onNewRecording — this branch only fires when a file is chosen.)
@@ -600,7 +598,13 @@ export function BoardToolbar(p: BoardToolbarProps) {
                 <DialogTitle className="flex items-center gap-2">
                   <MediaIcon type={sourceType} size="sm" />
                   Importing {importing.length}{' '}
-                  {importing.length === 1 ? 'link' : 'links'}
+                  {sourceType === 'document'
+                    ? importing.length === 1
+                      ? 'document'
+                      : 'documents'
+                    : importing.length === 1
+                      ? 'link'
+                      : 'links'}
                 </DialogTitle>
                 <DialogDescription>
                   The pieces are already on your board — this stays open so you

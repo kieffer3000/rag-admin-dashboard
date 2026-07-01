@@ -1269,9 +1269,101 @@ function BoardCanvasInner() {
 
   /** Re-run indexing for an EXISTING source (after a failure) — reuses its id,
    *  so retry never creates a duplicate. Routed through the throttle queue. */
+  // Original uploaded document Files, kept in memory so a FAILED doc can be
+  // retried (re-run the presigned CloudConvert → index flow) without re-picking
+  // it. Cleared on reload — then the user just re-uploads.
+  const docFilesRef = useRef<
+    Map<string, { name: string; file: File; ocr?: boolean }>
+  >(new Map());
+
+  // Index ONE document: big/binary files go straight to CloudConvert (no 4.5MB
+  // cap) → extract text → index; tiny text files use the direct POST. Shared by
+  // the initial upload AND retry so both take the identical path.
+  const uploadDocument = useCallback(
+    async ({
+      id,
+      name,
+      file,
+      ocr
+    }: {
+      id: string;
+      name: string;
+      file: File;
+      ocr?: boolean;
+    }) => {
+      const BINARY = /\.(pdf|epub|docx|doc|rtf|odt)$/i;
+      const ext = (file.name.match(/\.([a-z0-9]+)$/i)?.[1] ?? '').toLowerCase();
+      try {
+        if (BINARY.test(file.name)) {
+          const jr = await fetch('/api/doc-job', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ ext, ocr: !!ocr })
+          });
+          if (jr.ok) {
+            const { jobId, upload: form } = await jr.json();
+            const ccForm = new FormData();
+            for (const [k, v] of Object.entries(form?.parameters ?? {}))
+              ccForm.append(k, v as string);
+            ccForm.append('file', file);
+            const ur = await fetch(form.url, { method: 'POST', body: ccForm });
+            if (!ur.ok && ur.status !== 201)
+              throw new Error('Upload to the file converter failed.');
+            const ir = await fetch('/api/index-doc', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ source_id: id, name, cc_job_id: jobId })
+            });
+            const ij = await ir.json().catch(() => ({}));
+            if (!ir.ok || !ij.ok) throw new Error(ij?.error ?? ij?.note ?? 'index failed');
+            queueMediaPatch(id, {
+              status: 'indexed',
+              chunks: ij.chunks,
+              source: ij.source_url
+            });
+            return;
+          }
+          // doc-job unavailable → fall through to the direct path.
+        }
+        const fd = new FormData();
+        fd.append('file', file);
+        fd.append('name', name);
+        fd.append('source_id', id);
+        if (ocr) fd.append('ocr', 'true');
+        const r = await fetch('/api/index-doc', { method: 'POST', body: fd });
+        const j = await r.json().catch(() => ({}));
+        if (!r.ok || !j.ok) throw new Error(j?.error ?? j?.note ?? 'index failed');
+        queueMediaPatch(id, {
+          status: 'indexed',
+          chunks: j.chunks,
+          source: j.source_url
+        });
+      } catch (e) {
+        queueMediaPatch(id, {
+          status: 'failed',
+          error: e instanceof Error ? e.message : 'index failed'
+        });
+      }
+    },
+    [queueMediaPatch]
+  );
+
   const retrySource = useCallback(
     (type: MediaType, id: string, url: string) => {
       updateMedia(id, { status: 'processing', error: undefined });
+      // Documents can't be retried by URL — re-run the file from memory.
+      if (type === 'document') {
+        const job = docFilesRef.current.get(id);
+        if (!job) {
+          queueMediaPatch(id, {
+            status: 'failed',
+            error: 'Re-upload the file to retry (the original isn’t in memory after a reload).'
+          });
+          return;
+        }
+        enqueueIndex(() => uploadDocument({ id, name: job.name, file: job.file, ocr: job.ocr }));
+        return;
+      }
       const cleanName = url
         ? url.replace(/^https?:\/\//, '').replace(/\/.*$/, '')
         : 'Source';
@@ -2184,79 +2276,18 @@ function BoardCanvasInner() {
               position: centerPos(),
               data: { mediaId: id }
             });
+            docFilesRef.current.set(id, { name, file, ocr }); // keep the File for retry
             return { id, name, file, ocr };
           });
 
-          // Large/binary docs (books!) exceed Vercel's ~4.5MB POST cap, so the
-          // client uploads the RAW file STRAIGHT to CloudConvert (no cap) and the
-          // server indexes the extracted text. Tiny text files (and the
-          // no-CloudConvert fallback) use a direct multipart POST.
-          const BINARY = /\.(pdf|epub|docx|doc|rtf|odt)$/i;
-          const upload = async ({ id, name, file, ocr }: (typeof jobs)[number]) => {
-            const ext = (file.name.match(/\.([a-z0-9]+)$/i)?.[1] ?? '').toLowerCase();
-            try {
-              if (BINARY.test(file.name)) {
-                const jr = await fetch('/api/doc-job', {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({ ext, ocr: !!ocr })
-                });
-                if (jr.ok) {
-                  const { jobId, upload: form } = await jr.json();
-                  const ccForm = new FormData();
-                  for (const [k, v] of Object.entries(form?.parameters ?? {}))
-                    ccForm.append(k, v as string);
-                  ccForm.append('file', file);
-                  const ur = await fetch(form.url, { method: 'POST', body: ccForm });
-                  if (!ur.ok && ur.status !== 201)
-                    throw new Error('Upload to the file converter failed.');
-                  const ir = await fetch('/api/index-doc', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ source_id: id, name, cc_job_id: jobId })
-                  });
-                  const ij = await ir.json().catch(() => ({}));
-                  if (!ir.ok || !ij.ok)
-                    throw new Error(ij?.error ?? ij?.note ?? 'index failed');
-                  queueMediaPatch(id, {
-                    status: 'indexed',
-                    chunks: ij.chunks,
-                    source: ij.source_url
-                  });
-                  return;
-                }
-                // doc-job unavailable → fall through to the direct path (small
-                // files still work; big ones will surface a clear 413 error).
-              }
-              const fd = new FormData();
-              fd.append('file', file);
-              fd.append('name', name);
-              fd.append('source_id', id);
-              if (ocr) fd.append('ocr', 'true');
-              const r = await fetch('/api/index-doc', { method: 'POST', body: fd });
-              const j = await r.json().catch(() => ({}));
-              if (!r.ok || !j.ok)
-                throw new Error(j?.error ?? j?.note ?? 'index failed');
-              queueMediaPatch(id, {
-                status: 'indexed',
-                chunks: j.chunks,
-                source: j.source_url
-              });
-            } catch (e) {
-              queueMediaPatch(id, {
-                status: 'failed',
-                error: e instanceof Error ? e.message : 'index failed'
-              });
-            }
-          };
-
-          // Concurrency-capped pool over the batch.
+          // Concurrency-capped pool (3 at a time) over the batch — via the shared
+          // uploadDocument so a failed doc retries through the exact same path.
           let next = 0;
           const CONCURRENCY = 3;
           const runners = Array.from(
             { length: Math.min(CONCURRENCY, jobs.length) },
             async () => {
-              while (next < jobs.length) await upload(jobs[next++]);
+              while (next < jobs.length) await uploadDocument(jobs[next++]);
             }
           );
           void Promise.all(runners);
