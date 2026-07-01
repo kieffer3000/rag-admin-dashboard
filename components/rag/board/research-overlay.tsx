@@ -7,7 +7,8 @@ import {
   useBrainMessages,
   addBrainMessage,
   updateBrainMessage,
-  removeBrainMessage
+  removeBrainMessage,
+  clearBrainMessages
 } from '@/lib/rag/board/brain-messages-store';
 import { useRag } from '@/lib/rag/store';
 import { askBrain, opineBrain } from '@/lib/rag/board/ask';
@@ -25,8 +26,24 @@ import {
   Zap,
   Search,
   Telescope,
-  Mic
+  Mic,
+  MoreHorizontal,
+  Pencil,
+  Plug,
+  Printer,
+  Download,
+  Archive,
+  Trash2
 } from 'lucide-react';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger
+} from '@/components/ui/dropdown-menu';
+import { ConnectDialog } from './connect-dialog';
+import { exportConversation } from '@/lib/rag/board/conversation-export';
 
 /**
  * RESEARCH MODE — a clean, full-screen chat for one brain (Claude-style:
@@ -49,7 +66,8 @@ export function ResearchOverlay({
     setBrainBusy,
     setBoard,
     updateBoardNodeData,
-    nextBoardId
+    nextBoardId,
+    stashBrain
   } = useBoard();
   const { openViewer, activeProjectId } = useRag();
 
@@ -71,6 +89,23 @@ export function ResearchOverlay({
 
   const [question, setQuestion] = useState('');
   const [busy, setBusy] = useState(false);
+  // Top-menu affordances (mirror the brain card's ⋯ menu)
+  const [connectOpen, setConnectOpen] = useState(false);
+  const [renaming, setRenaming] = useState(false);
+  const [draftName, setDraftName] = useState('');
+
+  function commitRename() {
+    const next = draftName.trim();
+    if (next && next !== name) updateBoardNodeData(brainId, { name: next });
+    setRenaming(false);
+  }
+  function clearConversation() {
+    if (messages.length === 0) return;
+    if (window.confirm('Clear this entire conversation? This cannot be undone.')) {
+      clearBrainMessages(brainId);
+      updateBoardNodeData(brainId, { summary: '', summarizedThrough: 0 });
+    }
+  }
   const [voicingId, setVoicingId] = useState<string | null>(null);
   const taRef = useRef<HTMLTextAreaElement>(null);
   // Dictation — mirrors the brain card: MAI-Transcribe (record WAV → accurate
@@ -433,21 +468,123 @@ export function ResearchOverlay({
     >
       {/* minimal top bar */}
       <header className="flex h-14 shrink-0 items-center gap-2 px-5">
-        <div className="flex items-center gap-2 text-[14px] font-semibold">
-          <Brain className="h-4 w-4 text-accent" />
-          <span className="truncate">{name}</span>
-          <span className="ml-1 rounded-full bg-accent/10 px-2 py-0.5 text-[11px] font-medium text-accent">
+        <div className="flex min-w-0 items-center gap-2 text-[14px] font-semibold">
+          <Brain className="h-4 w-4 shrink-0 text-accent" />
+          {renaming ? (
+            <input
+              autoFocus
+              value={draftName}
+              onChange={(e) => setDraftName(e.target.value)}
+              onBlur={commitRename}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') commitRename();
+                if (e.key === 'Escape') setRenaming(false);
+              }}
+              className="min-w-0 rounded-md border border-accent/30 bg-transparent px-2 py-0.5 text-[14px] font-semibold outline-none focus:border-accent"
+            />
+          ) : (
+            <span className="truncate">{name}</span>
+          )}
+          <span className="ml-1 shrink-0 rounded-full bg-accent/10 px-2 py-0.5 text-[11px] font-medium text-accent">
             {scopeCount} source{scopeCount === 1 ? '' : 's'} wired
           </span>
         </div>
-        <button
-          onClick={onExit}
-          title="Minimize research mode (Esc)"
-          className="ml-auto flex items-center gap-1.5 rounded-full bg-accent px-4 py-1.5 text-[13px] font-semibold text-white shadow-[0_2px_10px_hsl(var(--accent)/0.4)] transition-all hover:brightness-110"
-        >
-          <Minimize2 className="h-4 w-4" />
-          Minimize
-        </button>
+
+        <div className="ml-auto flex items-center gap-2">
+          {/* Overflow menu — the same actions as the brain card's ⋯ menu, surfaced
+              here because Research mode is a full-screen surface. */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button
+                title="More"
+                className="flex h-9 w-9 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-black/[0.06] hover:text-foreground dark:hover:bg-white/[0.08]"
+              >
+                <MoreHorizontal className="h-5 w-5" />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent
+              align="end"
+              className="w-56 border-black/10 bg-popover/90 shadow-[0_10px_34px_-6px_rgb(0_0_0/0.28)] backdrop-blur-xl dark:border-white/10"
+            >
+              <DropdownMenuItem
+                onClick={() => {
+                  setDraftName(name);
+                  setRenaming(true);
+                }}
+                className="gap-2.5"
+              >
+                <Pencil className="h-4 w-4 text-foreground/70" /> Rename Answers Bank
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setConnectOpen(true)} className="gap-2.5">
+                <Plug className="h-4 w-4 text-accent" /> Connect to another app
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                onClick={() =>
+                  exportConversation({ messages, title: name, format: 'pdf', scrollEl: scrollRef.current })
+                }
+                disabled={messages.length === 0}
+                className="gap-2.5"
+              >
+                <Printer className="h-4 w-4 text-foreground/70" /> Print / Save PDF
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onClick={() =>
+                  exportConversation({ messages, title: name, format: 'doc', scrollEl: scrollRef.current })
+                }
+                disabled={messages.length === 0}
+                className="gap-2.5"
+              >
+                <Download className="h-4 w-4 text-foreground/70" /> Export Word (.doc)
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onClick={() =>
+                  exportConversation({ messages, title: name, format: 'md', scrollEl: scrollRef.current })
+                }
+                disabled={messages.length === 0}
+                className="gap-2.5"
+              >
+                <Download className="h-4 w-4 text-foreground/70" /> Export Markdown
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onClick={() =>
+                  exportConversation({ messages, title: name, format: 'txt', scrollEl: scrollRef.current })
+                }
+                disabled={messages.length === 0}
+                className="gap-2.5"
+              >
+                <Download className="h-4 w-4 text-foreground/70" /> Export Text
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                onClick={() => {
+                  stashBrain(brainId);
+                  onExit();
+                }}
+                className="gap-2.5"
+              >
+                <Archive className="h-4 w-4 text-foreground/70" /> Send to Chest
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                onClick={clearConversation}
+                disabled={messages.length === 0}
+                className="gap-2.5 text-red-600 focus:text-red-600"
+              >
+                <Trash2 className="h-4 w-4" /> Clear conversation
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+
+          <button
+            onClick={onExit}
+            title="Minimize research mode (Esc)"
+            className="flex items-center gap-1.5 rounded-full bg-accent px-4 py-1.5 text-[13px] font-semibold text-white shadow-[0_2px_10px_hsl(var(--accent)/0.4)] transition-all hover:brightness-110"
+          >
+            <Minimize2 className="h-4 w-4" />
+            Minimize
+          </button>
+        </div>
       </header>
 
       {/* messages — a "document page" floating on a desk (Word/Docs feel) */}
@@ -627,6 +764,16 @@ export function ResearchOverlay({
           </p>
         </div>
       </div>
+
+      <ConnectDialog
+        open={connectOpen}
+        onOpenChange={setConnectOpen}
+        bankLabel={name}
+        sourceIds={resolveBrainScope(brainId).items.map((m) => m.id)}
+        answerMode={answerMode}
+        model={modelId}
+        speed={speed}
+      />
     </div>
   );
 }
