@@ -1,6 +1,6 @@
 'use client';
 
-import { memo } from 'react';
+import { memo, useEffect, useRef } from 'react';
 import { Handle, Position, useStore, type NodeProps } from '@xyflow/react';
 import { cn } from '@/lib/utils';
 import { useRag } from '@/lib/rag/store';
@@ -73,6 +73,23 @@ function ChipNodeInner({ id, data, selected, parentId }: NodeProps) {
     };
   }, (a, b) => a.above === b.above && a.below === b.below && a.stackSize === b.stackSize && a.duplicate === b.duplicate);
 
+  const settle = (d.settle as number) ?? 0;
+  // Replay the settle jiggle WITHOUT remounting (the old key={`settle-${n}`}
+  // remounted the whole chip subtree — a hard flash, worst during imports).
+  // Classic restart: drop the class, force a reflow, re-add it.
+  // (Hooks live ABOVE the early return to keep the hook order stable.)
+  const rootRef = useRef<HTMLDivElement>(null);
+  const lastSettle = useRef(settle);
+  useEffect(() => {
+    if (settle === lastSettle.current) return;
+    lastSettle.current = settle;
+    const el = rootRef.current;
+    if (!el) return;
+    el.classList.remove('animate-stack-settle');
+    void el.offsetWidth; // reflow → animation restarts on re-add
+    el.classList.add('animate-stack-settle');
+  }, [settle]);
+
   if (!item) return null;
 
   const note = item.userNote;
@@ -90,7 +107,6 @@ function ChipNodeInner({ id, data, selected, parentId }: NodeProps) {
     item.thumbnail || (item.type === 'image' ? item.source : undefined);
   const pulse = !!d.pulse; // a citation in some brain is pointing at this piece
   const snapTarget = !!d.snapTarget; // a dragged piece is about to click onto this
-  const settle = (d.settle as number) ?? 0;
 
   // Free chip = full puzzle shape; bottom of a welded column = flat bottom
   // (no dangling tab); docked tile = clean rounded rectangle (no clip).
@@ -124,14 +140,17 @@ function ChipNodeInner({ id, data, selected, parentId }: NodeProps) {
 
   return (
     <div
-      key={`settle-${settle}`}
+      ref={rootRef}
       style={{
         width: CHIP_W,
         height: bodyH,
         filter
       }}
       className={cn(
-        'group relative transition-all',
+        // JITTER RULE: never `transition-all` on a node whose filter/geometry is
+        // recomputed per re-render — scope it. And never remount (key=) to replay
+        // an animation — the settle jiggle restarts via the reflow trick below.
+        'group relative transition-[filter,opacity]',
         settle > 0 && 'animate-stack-settle',
         snapTarget && 'animate-pulse',
         // a duplicate copy reads as redundant — desaturated + faded

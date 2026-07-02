@@ -481,7 +481,10 @@ input[type='search']::-webkit-search-cancel-button {
   color: #fff;
   background: hsl(var(--accent));
   box-shadow: 0 1px 3px rgba(0,0,0,0.12), inset 0 1px 0 rgba(255,255,255,0.2);
-  transition: all 0.15s cubic-bezier(0.16, 1, 0.3, 1);
+  /* SCOPED (jitter rule): `all` re-animated on every streaming re-render */
+  transition: background 0.15s cubic-bezier(0.16, 1, 0.3, 1),
+    transform 0.15s cubic-bezier(0.16, 1, 0.3, 1),
+    box-shadow 0.15s cubic-bezier(0.16, 1, 0.3, 1);
   transform: translateY(-1px);
   text-decoration: none !important;
 }

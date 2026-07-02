@@ -154,7 +154,10 @@ function HubNodeInner({ id, data, selected }: NodeProps) {
         // The tray BODY is a bezel/lip flush with the desk: frosted white,
         // a crisp ultra-fine outer border, a gentle raise. The recess lives
         // in the inner WELL below (separate, darker surface).
-        'group relative rounded-[18px] backdrop-blur-xl transition-all',
+        // JITTER RULE: transition is SCOPED — `all` animated the dynamic
+        // width/height on this backdrop-blur surface every time a member
+        // landed (box visibly stretched/jittered during imports).
+        'group relative rounded-[18px] backdrop-blur-xl transition-[box-shadow,border-color,background-color,opacity]',
         everything
           ? 'bg-gradient-to-br from-indigo-500/[0.09] to-violet-500/[0.13] ring-1 ring-accent/25'
           : 'bg-white/72 ring-1 ring-black/[0.07] shadow-[0_1px_2px_rgb(0_0_0/0.04),0_6px_20px_-8px_rgb(0_0_0/0.12)] dark:bg-white/[0.045] dark:ring-white/[0.08]',
