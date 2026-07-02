@@ -249,14 +249,29 @@ export function RagProvider({ children }: { children: ReactNode }) {
         /* private mode */
       }
 
-      // Merge by id (a real saved project always wins over the seed).
+      // Merge by id (a real saved project always wins over the seed). When two
+      // entries share an id (the reset-counter collision that once minted a new
+      // project with an EXISTING project's id), keep the RICHER one — more
+      // sourceIds, else the earlier — so a phantom duplicate ("2", 0 sources)
+      // can never replace the real project's name/membership.
       const byId = new Map<string, Project>();
+      const setRicher = (p: Project) => {
+        const cur = byId.get(p.id);
+        if (!cur) {
+          byId.set(p.id, p);
+          return;
+        }
+        const curN = (cur.sourceIds ?? []).length;
+        const newN = (p.sourceIds ?? []).length;
+        if (newN > curN) byId.set(p.id, p);
+        // ties keep the existing (earlier) entry
+      };
       const seedIds = new Set(MOCK_PROJECTS.map((p) => p.id));
-      for (const p of lsList) byId.set(p.id, p);
+      for (const p of lsList) setRicher(p);
       for (const p of dbList ?? []) {
         // Don't let the bare seed clobber a real project of the same id.
         if (seedIds.has(p.id) && byId.has(p.id)) continue;
-        byId.set(p.id, p);
+        setRicher(p);
       }
 
       // RECOVER orphaned boards: any locally-saved board whose project isn't in
@@ -308,6 +323,20 @@ export function RagProvider({ children }: { children: ReactNode }) {
 
       let list = Array.from(byId.values());
       if (!list.length) list = MOCK_PROJECTS; // genuinely first run
+
+      // CRITICAL: advance the module-level id counter past every loaded
+      // project id. It resets to its seed each page load; without this bump a
+      // NEW project could mint an EXISTING project's id (media ids get this
+      // via hydrateMedia — projects never did) → two directory entries with
+      // one identity: both show "active", the new one can never be opened,
+      // and deleting either kills both.
+      for (const p of list) {
+        const m = /(\d+)$/.exec(p.id);
+        if (m) {
+          const n = parseInt(m[1], 10);
+          if (n > idCounter) idCounter = n;
+        }
+      }
 
       setProjects(list);
       let last: string | null = null;
@@ -600,7 +629,13 @@ export function RagProvider({ children }: { children: ReactNode }) {
 
   const addProject = useCallback(
     (p: { name: string; icon: string; description: string }) => {
-      const id = nextId('proj');
+      // COLLISION-PROOF: never mint an id an existing project already owns
+      // (the reset-counter bug once created "2" with youtube's id — both
+      // showed active and the new project was unenterable). The hydration
+      // bump makes this rare; the loop makes it impossible.
+      const taken = new Set(projects.map((x) => x.id));
+      let id = nextId('proj');
+      while (taken.has(id)) id = nextId('proj');
       setProjects((prev) => [
         ...prev,
         { ...p, id, sourceIds: [], createdAt: now().slice(0, 10) }
@@ -609,7 +644,7 @@ export function RagProvider({ children }: { children: ReactNode }) {
       setActiveConversationId(null);
       setSelectedIds(new Set());
     },
-    []
+    [projects]
   );
 
   const updateProject = useCallback((id: string, patch: Partial<Project>) => {
