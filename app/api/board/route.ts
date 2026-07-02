@@ -1,5 +1,6 @@
 import { auth } from '@clerk/nextjs/server';
-import { sql, ensureBoardSchema } from '@/lib/board-db';
+import { createHash } from 'crypto';
+import { sql, ensureBoardSchema, ensureSnapshotsSchema } from '@/lib/board-db';
 
 // Persistence for the Board canvas + brain chats. One JSONB document per
 // (scope, project), where scope = Clerk org (the client) or the user. This is
@@ -71,11 +72,44 @@ export async function PUT(req: Request) {
     }
   }
 
+  const json = JSON.stringify(data);
   await sql`
     INSERT INTO board_state (scope, project_id, user_id, data, updated_at)
-    VALUES (${scopeOf(orgId, userId)}, ${projectId}, ${userId}, ${JSON.stringify(data)}::jsonb, now())
+    VALUES (${scope}, ${projectId}, ${userId}, ${json}::jsonb, now())
     ON CONFLICT (scope, project_id)
     DO UPDATE SET data = EXCLUDED.data, user_id = EXCLUDED.user_id, updated_at = now()
   `;
+
+  // ---- VERSION HISTORY: append an immutable snapshot of every accepted save.
+  // Hash-deduplicated (identical states don't stack copies) and best-effort
+  // (a snapshot hiccup never fails the save). Retention: everything from the
+  // last 48h is kept untouched; beyond that, only the newest 40 per board.
+  // This is the "files can never be lost" guarantee — any past state is a
+  // 2-minute restore, never archaeology (2026-07-02 incident).
+  try {
+    await ensureSnapshotsSchema();
+    const hash = createHash('md5').update(json).digest('hex');
+    const last = await sql`
+      SELECT hash FROM board_snapshots
+      WHERE scope=${scope} AND project_id=${projectId}
+      ORDER BY saved_at DESC LIMIT 1`;
+    if (last[0]?.hash !== hash) {
+      await sql`
+        INSERT INTO board_snapshots (scope, project_id, user_id, hash, node_count, media_count, bytes, data)
+        VALUES (${scope}, ${projectId}, ${userId}, ${hash}, ${incNodes}, ${incMedia}, ${json.length}, ${json}::jsonb)`;
+      await sql`
+        DELETE FROM board_snapshots
+        WHERE scope=${scope} AND project_id=${projectId}
+          AND saved_at < now() - interval '48 hours'
+          AND id NOT IN (
+            SELECT id FROM board_snapshots
+            WHERE scope=${scope} AND project_id=${projectId}
+            ORDER BY saved_at DESC LIMIT 40
+          )`;
+    }
+  } catch (e) {
+    console.error('[board] snapshot failed (save itself succeeded)', e);
+  }
+
   return Response.json({ ok: true });
 }

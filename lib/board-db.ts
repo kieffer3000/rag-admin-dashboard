@@ -26,6 +26,33 @@ export async function ensureBoardSchema() {
   ensured = true;
 }
 
+let snapshotsEnsured = false;
+
+/** Idempotent schema bootstrap for board SNAPSHOTS — the append-only version
+ *  history. Every accepted board save also appends an immutable copy here
+ *  (hash-deduplicated), so no save can ever destroy a past state: recovery is
+ *  "pick a snapshot", not archaeology. Born from the 2026-07-02 incident. */
+export async function ensureSnapshotsSchema() {
+  if (!sql || snapshotsEnsured) return;
+  await sql`
+    CREATE TABLE IF NOT EXISTS board_snapshots (
+      id bigserial PRIMARY KEY,
+      scope text NOT NULL,
+      project_id text NOT NULL,
+      user_id text,
+      saved_at timestamptz NOT NULL DEFAULT now(),
+      hash text NOT NULL,
+      node_count integer NOT NULL DEFAULT 0,
+      media_count integer NOT NULL DEFAULT 0,
+      bytes integer NOT NULL DEFAULT 0,
+      data jsonb NOT NULL
+    )
+  `;
+  await sql`CREATE INDEX IF NOT EXISTS board_snapshots_proj_idx
+            ON board_snapshots (scope, project_id, saved_at DESC)`;
+  snapshotsEnsured = true;
+}
+
 let agentsEnsured = false;
 
 /** Idempotent schema bootstrap for agents — one JSONB array per scope (Clerk
