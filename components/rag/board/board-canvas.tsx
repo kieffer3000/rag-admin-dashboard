@@ -2512,6 +2512,7 @@ function BoardCanvasInner() {
               queueMediaPatch(id, { status: 'failed', error });
             }
           })();
+          return id; // so the toolbar can collect it into a box, like images
         }}
       />
 

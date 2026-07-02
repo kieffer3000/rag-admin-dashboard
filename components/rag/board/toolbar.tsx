@@ -66,8 +66,9 @@ export interface BoardToolbarProps {
   onNewImage: (name: string, file: File) => string;
   /** Upload PDF/DOCX/TXT/… → extract text → chunk + index. Returns media ids. */
   onNewDocuments: (docs: { name: string; file: File; ocr?: boolean }[]) => string[];
-  /** Upload an audio file → transcribe → index the transcript. */
-  onNewAudio: (name: string, file: File) => void;
+  /** Upload an audio file → transcribe → index the transcript.
+   *  Returns the created media id (so it can be collected into a box). */
+  onNewAudio: (name: string, file: File) => string;
   /** Existing boxes (clusters) on the board, for "add to an existing box". */
   boxes: { id: string; name: string }[];
   /** Gather freshly-imported media into a box — a NEW one ({name}) or an
@@ -312,12 +313,13 @@ export function BoardToolbar(p: BoardToolbarProps) {
       }
     } else if (sourceType === 'audio') {
       // Audio: uploaded file(s) → transcribe → index, one source per file —
-      // same bulk pattern as image/document above. (Recording uses its own
-      // dialog + onNewRecording — this branch only fires when file(s) are chosen.)
+      // same bulk-and-box pattern as image/document above. (Recording uses its
+      // own dialog + onNewRecording — this branch only fires when file(s) chosen.)
       if (!files.length) return;
       const nameFor = (f: File) =>
         files.length === 1 && name.trim() ? name.trim() : stripExt(f.name);
-      files.forEach((f) => p.onNewAudio(nameFor(f), f));
+      const audioIds = files.map((f) => p.onNewAudio(nameFor(f), f));
+      maybeBox(audioIds);
     } else if (URL_TYPES.includes(sourceType)) {
       // One or many links, one per line — each auto-titles itself. Keep the
       // dialog OPEN and show per-link progress so a piece is never "lost".
@@ -940,9 +942,8 @@ export function BoardToolbar(p: BoardToolbarProps) {
                 )}
 
                 {/* Add to a box — dock this whole import into a cluster (new or
-                    an existing one). Audio uploads index on their own, so the
-                    box option doesn't apply there. */}
-                {sourceType !== 'audio' && (
+                    an existing one). Available for every file-upload type,
+                    audio included, so all uploads share the same procedure. */}
                 <div className="space-y-2 rounded-lg border border-dashed border-[rgb(var(--hairline)/0.25)] p-2.5">
                   <label className="flex cursor-pointer items-center gap-2 text-[13px] font-medium">
                     <input
@@ -984,7 +985,6 @@ export function BoardToolbar(p: BoardToolbarProps) {
                     </>
                   )}
                 </div>
-                )}
               </div>
               <div className="flex justify-end gap-2 pt-1">
                 <Button variant="ghost" onClick={closeSource}>
