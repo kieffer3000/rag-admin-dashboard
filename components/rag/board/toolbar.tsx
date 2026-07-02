@@ -311,11 +311,13 @@ export function BoardToolbar(p: BoardToolbarProps) {
         return; // stay open — progress view takes over
       }
     } else if (sourceType === 'audio') {
-      // Audio: an uploaded file → transcribe → index. (Recording uses its own
-      // dialog + onNewRecording — this branch only fires when a file is chosen.)
+      // Audio: uploaded file(s) → transcribe → index, one source per file —
+      // same bulk pattern as image/document above. (Recording uses its own
+      // dialog + onNewRecording — this branch only fires when file(s) are chosen.)
       if (!files.length) return;
-      const f = files[0];
-      p.onNewAudio(name.trim() || stripExt(f.name), f);
+      const nameFor = (f: File) =>
+        files.length === 1 && name.trim() ? name.trim() : stripExt(f.name);
+      files.forEach((f) => p.onNewAudio(nameFor(f), f));
     } else if (URL_TYPES.includes(sourceType)) {
       // One or many links, one per line — each auto-titles itself. Keep the
       // dialog OPEN and show per-link progress so a piece is never "lost".
@@ -869,9 +871,10 @@ export function BoardToolbar(p: BoardToolbarProps) {
                       <Label>Audio file</Label>
                       <input
                         type="file"
+                        multiple
                         accept="audio/*,.mp3,.m4a,.wav,.aac,.flac,.ogg"
                         onChange={(e) =>
-                          setFiles(Array.from(e.target.files ?? []).slice(0, 1))
+                          setFiles(Array.from(e.target.files ?? []))
                         }
                         className="block w-full cursor-pointer rounded-lg border border-input bg-card text-[13px] file:mr-3 file:cursor-pointer file:border-0 file:bg-accent/10 file:px-3 file:py-2 file:text-accent hover:border-accent/40"
                       />
@@ -881,10 +884,16 @@ export function BoardToolbar(p: BoardToolbarProps) {
                           {(files[0].size / 1048576).toFixed(1)} MB — transcribed,
                           then indexed.
                         </p>
+                      ) : files.length > 1 ? (
+                        <p className="text-[11.5px] text-accent">
+                          {files.length} files ·{' '}
+                          {(files.reduce((s, f) => s + f.size, 0) / 1048576).toFixed(1)} MB
+                          total — each is transcribed and indexed as its own source.
+                        </p>
                       ) : (
                         <p className="text-[11.5px] text-muted-foreground/55">
-                          MP3, M4A, WAV, AAC, FLAC, or OGG. We transcribe it and
-                          index the transcript so you can query what was said.
+                          MP3, M4A, WAV, AAC, FLAC, or OGG — select as many as you
+                          like. Each is transcribed and indexed as its own source.
                         </p>
                       )}
                     </div>

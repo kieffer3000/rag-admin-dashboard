@@ -483,7 +483,8 @@ export async function askBrain(
 
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
-    throw new Error(err.error ?? `Query failed (${res.status})`);
+    const msg = err.error ?? `Query failed (${res.status})`;
+    throw new Error(err.detail ? `${msg}: ${err.detail}` : msg);
   }
 
   const data = unwrapMakeJson(await res.json());
@@ -568,7 +569,8 @@ export async function opineBrain(
 
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
-    throw new Error(err.error ?? `Opine failed (${res.status})`);
+    const msg = err.error ?? `Opine failed (${res.status})`;
+    throw new Error(err.detail ? `${msg}: ${err.detail}` : msg);
   }
 
   const data = unwrapMakeJson(await res.json());

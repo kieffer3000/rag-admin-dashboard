@@ -29,8 +29,11 @@ import { getOrgOpenrouterKey, scopeOf } from '@/lib/org-settings';
 
 export const runtime = 'nodejs';
 // Wait for Make's actual response (it returns its own errors) — don't cut a slow
-// research query off mid-flight. 180s — generous for Make.
-export const maxDuration = 180;
+// research query off mid-flight. An observed Make run took exactly 5min (300s) —
+// the old 180s ceiling caused a Vercel 504 → false "unreachable". 800s is the
+// Fluid Compute ceiling for this project — max headroom available; if a run
+// ever exceeds THIS, the fix is the async job+poll redesign, not a bigger number.
+export const maxDuration = 800;
 
 const NOMATCH_THRESHOLD = Number(process.env.RAG_NOMATCH_THRESHOLD ?? 0.6);
 
@@ -200,7 +203,19 @@ async function callMake(
       speed
     })
   });
-  if (!res.ok) throw new Error(`Query webhook returned ${res.status}`);
+  if (!res.ok) {
+    // Make's error-handler Webhook-response module (if wired) returns a JSON
+    // body like { error, stage, detail } on a non-2xx status — surface it
+    // instead of just the status code, so the board shows what actually broke.
+    const text = await res.text().catch(() => '');
+    let msg = `Query webhook returned ${res.status}`;
+    try {
+      const body = JSON.parse(text);
+      if (body?.error) msg = body.stage ? `${body.error} (${body.stage})` : body.error;
+      if (body?.detail) msg += `: ${body.detail}`;
+    } catch { /* not JSON — keep the status-code message */ }
+    throw new Error(msg);
+  }
 
   const data = unwrapMakeJson(await res.json());
 

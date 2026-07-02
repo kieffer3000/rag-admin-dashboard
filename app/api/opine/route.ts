@@ -18,9 +18,11 @@ import { fetchReadablePage } from '@/lib/rag/web-extract';
 
 export const runtime = 'nodejs';
 // Wait for Make's ACTUAL response (success or Make's own error) — never cut it
-// off mid-flight. 180s — generous for Make, under the platform ceiling; Make handles real errors itself,
-// so we don't impose a premature client timeout on top.
-export const maxDuration = 180;
+// off mid-flight. An observed Make run took exactly 5min (300s) — the old 180s
+// ceiling caused a Vercel 504 → false "unreachable". 800s is the Fluid Compute
+// ceiling for this project — max headroom available; if a run ever exceeds
+// THIS, the fix is the async job+poll redesign, not a bigger number.
+export const maxDuration = 800;
 
 const NOMATCH_THRESHOLD = Number(process.env.RAG_NOMATCH_THRESHOLD ?? 0.6);
 const HISTORY_MAX_MESSAGES = 30;
@@ -100,10 +102,17 @@ export async function POST(req: Request) {
       });
       const text = await mres.text();
       if (!mres.ok) {
-        return Response.json(
-          { error: `Make relay failed (${mres.status})`, detail: text.slice(0, 500) },
-          { status: 502 }
-        );
+        // Make's error-handler Webhook-response module (if wired) returns a
+        // JSON body like { error, stage, detail } on a non-2xx status —
+        // surface it instead of just the status code.
+        let errMsg = `Make relay failed (${mres.status})`;
+        let detail = text.slice(0, 500);
+        try {
+          const parsed = JSON.parse(text);
+          if (parsed?.error) errMsg = parsed.stage ? `${parsed.error} (${parsed.stage})` : parsed.error;
+          if (parsed?.detail) detail = String(parsed.detail).slice(0, 500);
+        } catch { /* not JSON — keep the raw text as detail */ }
+        return Response.json({ error: errMsg, detail }, { status: 502 });
       }
       // Stage 1 → Make returns a plain-text answer; Stage 2 → JSON { answer, … }.
       let out: Record<string, unknown> = { answer: text };

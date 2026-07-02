@@ -661,10 +661,14 @@ function BrainNodeInner({ id, data, selected }: NodeProps) {
       citations = r.citations;
       noMatch = r.noMatch;
       suggestedQuestions = r.suggestedQuestions;
-    } catch {
+    } catch (e) {
       // Honest failure — NEVER fabricate a "mock answer" in a citation app.
+      // Surface Make's actual error-handler message when one comes through
+      // (see ask.ts) instead of always showing a generic string.
       content =
-        'The answer service is temporarily unreachable. Please try again in a moment.';
+        e instanceof Error && e.message
+          ? `The answer service failed: ${e.message}`
+          : 'The answer service is temporarily unreachable. Please try again in a moment.';
       citations = [];
       noMatch = true;
     }
