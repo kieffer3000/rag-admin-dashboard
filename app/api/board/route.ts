@@ -1,6 +1,11 @@
 import { auth } from '@clerk/nextjs/server';
 import { createHash } from 'crypto';
 import { sql, ensureBoardSchema, ensureSnapshotsSchema } from '@/lib/board-db';
+import {
+  deriveBoardEvents,
+  appendBoardEvents,
+  type BoardDoc
+} from '@/lib/board-events';
 
 // Persistence for the Board canvas + brain chats. One JSONB document per
 // (scope, project), where scope = Clerk org (the client) or the user. This is
@@ -54,6 +59,12 @@ export async function PUT(req: Request) {
   // never be saved — it freezes the board. Real source counts are in the low
   // thousands; reject anything absurd so a frozen tab can't re-persist it.
   if (incMedia > 12000) {
+    // Ledger: rejected saves used to be invisible — now they're on the record.
+    try {
+      await appendBoardEvents(scope, projectId, userId, [
+        { event: 'save_rejected', detail: { reason: 'media-overflow', incMedia } }
+      ]);
+    } catch {}
     return Response.json({ ok: false, rejected: 'media-overflow', incMedia }, { status: 200 });
   }
   const exRows = await sql`
@@ -65,6 +76,14 @@ export async function PUT(req: Request) {
     const mediaShrank = exMedia > 100 && incMedia < exMedia * 0.5;
     const nodesShrank = exNodes > 3 && incNodes <= 1;
     if (mediaShrank || nodesShrank) {
+      try {
+        await appendBoardEvents(scope, projectId, userId, [
+          {
+            event: 'save_rejected',
+            detail: { reason: 'anti-shrink', exMedia, incMedia, exNodes, incNodes }
+          }
+        ]);
+      } catch {}
       return Response.json(
         { ok: false, rejected: 'anti-shrink', exMedia, incMedia, exNodes, incNodes },
         { status: 200 }
@@ -109,6 +128,20 @@ export async function PUT(req: Request) {
     }
   } catch (e) {
     console.error('[board] snapshot failed (save itself succeeded)', e);
+  }
+
+  // ---- EVENT LEDGER (Phase 2): derive events by diffing the previous stored
+  // doc against this accepted save — place/dock/undock/remove/rename/delete,
+  // each with the item's name at event time. Server-side derivation = complete
+  // coverage regardless of client version. Best-effort, never fails the save.
+  try {
+    const events = ex
+      ? deriveBoardEvents(ex as BoardDoc, inc as BoardDoc)
+      : // First save of a board: one baseline row, not thousands of adds.
+        [{ event: 'baseline', detail: { nodes: incNodes, media: incMedia } }];
+    await appendBoardEvents(scope, projectId, userId, events);
+  } catch (e) {
+    console.error('[board] event ledger failed (save itself succeeded)', e);
   }
 
   return Response.json({ ok: true });

@@ -53,6 +53,37 @@ export async function ensureSnapshotsSchema() {
   snapshotsEnsured = true;
 }
 
+let eventsEnsured = false;
+
+/** Idempotent schema bootstrap for the board EVENT LEDGER — append-only.
+ *  Events are DERIVED server-side by diffing each accepted board save against
+ *  the previous stored document (see lib/board-events.ts), so coverage is
+ *  complete by construction: any client, any code version, any tab. Each row
+ *  carries the item's name AT EVENT TIME. No retention deletion — rows are
+ *  tiny; board_snapshots carries the heavy copies. Phase 2 of the
+ *  never-lose-a-file plan (2026-07-02 incident). */
+export async function ensureEventsSchema() {
+  if (!sql || eventsEnsured) return;
+  await sql`
+    CREATE TABLE IF NOT EXISTS board_events (
+      id bigserial PRIMARY KEY,
+      scope text NOT NULL,
+      project_id text NOT NULL,
+      user_id text,
+      at timestamptz NOT NULL DEFAULT now(),
+      event text NOT NULL,
+      entity_id text,
+      name text,
+      detail jsonb NOT NULL DEFAULT '{}'::jsonb
+    )
+  `;
+  await sql`CREATE INDEX IF NOT EXISTS board_events_proj_idx
+            ON board_events (scope, project_id, at DESC)`;
+  await sql`CREATE INDEX IF NOT EXISTS board_events_entity_idx
+            ON board_events (scope, project_id, entity_id)`;
+  eventsEnsured = true;
+}
+
 let agentsEnsured = false;
 
 /** Idempotent schema bootstrap for agents — one JSONB array per scope (Clerk
