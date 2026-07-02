@@ -313,13 +313,25 @@ export function BoardToolbar(p: BoardToolbarProps) {
       }
     } else if (sourceType === 'audio') {
       // Audio: uploaded file(s) → transcribe → index, one source per file —
-      // same bulk-and-box pattern as image/document above. (Recording uses its
-      // own dialog + onNewRecording — this branch only fires when file(s) chosen.)
+      // the IDENTICAL bulk-box-AND-progress-popup path as documents. (Recording
+      // uses its own dialog + onNewRecording — this only fires on file upload.)
       if (!files.length) return;
       const nameFor = (f: File) =>
         files.length === 1 && name.trim() ? name.trim() : stripExt(f.name);
-      const audioIds = files.map((f) => p.onNewAudio(nameFor(f), f));
+      const named = files.map((f) => ({ name: nameFor(f), file: f }));
+      const audioIds = named.map((n) => p.onNewAudio(n.name, n.file));
       maybeBox(audioIds);
+      // Same live progress popup as documents (per-file Indexing/Imported/Failed
+      // pills + Retry) so a failed transcription is visible and retryable.
+      setImporting(
+        audioIds.map((id, i) => ({ id, url: named[i]?.name ?? 'Audio' }))
+      );
+      setDupSkipped(0);
+      setDupSkippedList([]);
+      setImportFilter('all');
+      setFiles([]);
+      setName('');
+      return; // stay open — progress view takes over
     } else if (URL_TYPES.includes(sourceType)) {
       // One or many links, one per line — each auto-titles itself. Keep the
       // dialog OPEN and show per-link progress so a piece is never "lost".
@@ -606,9 +618,13 @@ export function BoardToolbar(p: BoardToolbarProps) {
                     ? importing.length === 1
                       ? 'document'
                       : 'documents'
-                    : importing.length === 1
-                      ? 'link'
-                      : 'links'}
+                    : sourceType === 'audio'
+                      ? importing.length === 1
+                        ? 'audio file'
+                        : 'audio files'
+                      : importing.length === 1
+                        ? 'link'
+                        : 'links'}
                 </DialogTitle>
                 <DialogDescription>
                   The pieces are already on your board — this stays open so you

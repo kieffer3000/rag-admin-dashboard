@@ -1275,6 +1275,11 @@ function BoardCanvasInner() {
   const docFilesRef = useRef<
     Map<string, { name: string; file: File; ocr?: boolean }>
   >(new Map());
+  // Same idea for audio — keep the original File so a failed transcription can
+  // be retried through the identical path (mirrors docFilesRef).
+  const audioFilesRef = useRef<Map<string, { name: string; file: File }>>(
+    new Map()
+  );
 
   // Index ONE document: big/binary files go straight to CloudConvert (no 4.5MB
   // cap) → extract text → index; tiny text files use the direct POST. Shared by
@@ -1348,6 +1353,36 @@ function BoardCanvasInner() {
     [queueMediaPatch]
   );
 
+  // Index ONE audio file: transcribe (with per-phrase timestamps) → index the
+  // [M:SS]-marked transcript. Shared by the initial upload AND retry so both
+  // take the identical path (mirrors uploadDocument).
+  const uploadAudio = useCallback(
+    async ({ id, name, file }: { id: string; name: string; file: File }) => {
+      try {
+        const transcript = timestampedTranscript(
+          await transcribeAudioDetailed(file)
+        );
+        const r = await fetch('/api/index', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ source_id: id, name, type: 'audio', text: transcript })
+        });
+        if (!r.ok) throw new Error(`Indexing failed (HTTP ${r.status})`);
+        queueMediaPatch(id, { status: 'indexed', content: transcript });
+      } catch (e: unknown) {
+        const status = (e as { status?: number })?.status;
+        const error =
+          status === 501 || status === 503
+            ? 'High-accuracy transcription isn’t configured yet.'
+            : e instanceof Error && e.message
+              ? e.message
+              : 'Indexing failed';
+        queueMediaPatch(id, { status: 'failed', error });
+      }
+    },
+    [queueMediaPatch]
+  );
+
   const retrySource = useCallback(
     (type: MediaType, id: string, url: string) => {
       updateMedia(id, { status: 'processing', error: undefined });
@@ -1362,6 +1397,19 @@ function BoardCanvasInner() {
           return;
         }
         enqueueIndex(() => uploadDocument({ id, name: job.name, file: job.file, ocr: job.ocr }));
+        return;
+      }
+      // Audio: same as documents — re-run the original File from memory.
+      if (type === 'audio') {
+        const job = audioFilesRef.current.get(id);
+        if (!job) {
+          queueMediaPatch(id, {
+            status: 'failed',
+            error: 'Re-upload the file to retry (the original isn’t in memory after a reload).'
+          });
+          return;
+        }
+        enqueueIndex(() => uploadAudio({ id, name: job.name, file: job.file }));
         return;
       }
       const cleanName = url
@@ -2466,8 +2514,10 @@ function BoardCanvasInner() {
             );
         }}
         onNewAudio={(name, file) => {
-          // Uploaded audio file → transcribe (MAI-Transcribe) → the transcript
-          // IS the embedded text. Optimistic chip now; status flips on index.
+          // Uploaded audio file → transcribe → the transcript IS the embedded
+          // text. Optimistic chip now; status flips on index. Routed through the
+          // shared uploadAudio via the throttled queue, and the File is kept in
+          // audioFilesRef for Retry — the IDENTICAL path documents take.
           const id = addMedia(
             {
               type: 'audio',
@@ -2484,34 +2534,8 @@ function BoardCanvasInner() {
             position: centerPos(),
             data: { mediaId: id }
           });
-          (async () => {
-            try {
-              // Transcribe WITH per-phrase timestamps → index a [M:SS]-marked
-              // transcript so audio citations can point to the moment.
-              const transcript = timestampedTranscript(await transcribeAudioDetailed(file));
-              const r = await fetch('/api/index', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                  source_id: id,
-                  name,
-                  type: 'audio',
-                  text: transcript
-                })
-              });
-              if (!r.ok) throw new Error(`Indexing failed (HTTP ${r.status})`);
-              queueMediaPatch(id, { status: 'indexed', content: transcript });
-            } catch (e: unknown) {
-              const status = (e as { status?: number })?.status;
-              const error =
-                status === 501 || status === 503
-                  ? 'High-accuracy transcription isn’t configured yet.'
-                  : e instanceof Error && e.message
-                    ? e.message
-                    : 'Indexing failed';
-              queueMediaPatch(id, { status: 'failed', error });
-            }
-          })();
+          audioFilesRef.current.set(id, { name, file }); // keep the File for retry
+          enqueueIndex(() => uploadAudio({ id, name, file }));
           return id; // so the toolbar can collect it into a box, like images
         }}
       />
