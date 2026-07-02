@@ -122,8 +122,13 @@ export async function GET(req: Request) {
     return { ...m, name: t.name, type: t.type ?? m.type, thumbnail: undefined, source: undefined };
   });
 
-  if (apply && renamed > 0) {
-    const newData = { ...data, media: repaired };
+  if (apply) {
+    // ALWAYS bump the doc's internal savedAt on apply: the client's load path
+    // prefers whichever copy (DB vs local cache) has the newer savedAt, and
+    // the browser's damaged cache post-dates the repair — without this bump
+    // the app would load the damaged local copy and its first autosave would
+    // overwrite the repair.
+    const newData = { ...data, media: repaired, savedAt: Date.now() };
     await sql`
       UPDATE board_state SET data=${JSON.stringify(newData)}::jsonb, updated_at=now()
       WHERE scope=${scope} AND project_id=${pid}`;
@@ -138,7 +143,7 @@ export async function GET(req: Request) {
     alreadyCorrect: matched,
     renamed,
     noVectorFound: missing,
-    applied: apply && renamed > 0,
+    applied: apply,
     samples
   });
 }

@@ -58,7 +58,7 @@ interface RagState {
     opts?: { simulate?: boolean }
   ) => string;
   /** Merge persisted media back in on load (board persistence). */
-  hydrateMedia: (items: MediaItem[], projectId: string) => void;
+  hydrateMedia: (items: MediaItem[], projectId: string, opts?: { authoritative?: boolean }) => void;
   updateMedia: (id: string, patch: Partial<MediaItem>) => void;
   /** Like updateMedia but COALESCED: many rapid calls (e.g. a big import where
    *  items finish one after another) are buffered and applied in a single state
@@ -589,7 +589,7 @@ export function RagProvider({ children }: { children: ReactNode }) {
   );
   useEffect(() => () => flushMediaPatches(), [flushMediaPatches]);
 
-  const hydrateMedia = useCallback((items: MediaItem[], projectId: string) => {
+  const hydrateMedia = useCallback((items: MediaItem[], projectId: string, opts?: { authoritative?: boolean }) => {
     if (!items?.length) return;
     // Advance the id counter past every loaded id. The counter is module-level
     // and resets to its seed on each page load, so without this a fresh import
@@ -607,6 +607,23 @@ export function RagProvider({ children }: { children: ReactNode }) {
     setMedia((prev) => {
       const have = new Set(prev.map((m) => m.id));
       const add = items.filter((i) => !have.has(i.id));
+      // AUTHORITATIVE hydration (media-id collision guard): historical id
+      // collisions mean two projects can hold DIFFERENT sources under one id.
+      // When a board hydrates authoritatively, ITS doc wins the identity of
+      // ids it owns — otherwise the earlier-loaded project's items "squat"
+      // the ids, the board renders the wrong faces, and its autosave then
+      // persists the wrong names into its doc (the 2026-07-02 incident).
+      if (opts?.authoritative) {
+        const byId = new Map(items.map((i) => [i.id, i]));
+        const next = prev.map((m) => {
+          const inc = byId.get(m.id);
+          if (!inc) return m;
+          if ((inc.name ?? '') === (m.name ?? '') && inc.type === m.type) return m;
+          // Replace identity fields only; keep runtime state (status, chunks).
+          return { ...m, name: inc.name, type: inc.type, thumbnail: inc.thumbnail, source: inc.source };
+        });
+        return add.length ? [...add, ...next] : next;
+      }
       return add.length ? [...add, ...prev] : prev;
     });
     setProjects((prev) =>

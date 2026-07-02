@@ -317,6 +317,11 @@ export function BoardProvider({ children }: { children: ReactNode }) {
     }
   }, [researchBrainId, activeProjectId]);
 
+  // Per-project media snapshot from each board's OWN doc (session memory) —
+  // re-asserted on every switch so a project always renders + saves ITS OWN
+  // source identities despite historical media-id collisions across projects.
+  const mediaDocsRef = useRef<Map<string, MediaItem[]>>(new Map());
+
   // ---- LOAD persisted board on project mount/switch (Neon via /api/board) ----
   useEffect(() => {
     const pid = activeProjectId;
@@ -329,6 +334,10 @@ export function BoardProvider({ children }: { children: ReactNode }) {
       // every "stuck on loading when I switch projects" report — MEASURED:
       // the board GET returned 200 and autosaves kept ticking behind the
       // splash while the user was locked out.
+      // Re-assert THIS project's media identities from its own doc (collision
+      // guard) so it never renders/saves another project's names.
+      const ownMedia = mediaDocsRef.current.get(pid);
+      if (ownMedia?.length) hydrateMedia(ownMedia, pid, { authoritative: true });
       setHydratedProject(pid);
       return;
     }
@@ -382,7 +391,12 @@ export function BoardProvider({ children }: { children: ReactNode }) {
           if (!cancelled && data) {
             // Hydrate the source list from the chosen snapshot only. (A previous
             // union-of-both-snapshots attempt caused runaway media duplication.)
-            if (Array.isArray(data.media)) hydrateMedia(data.media, pid);
+            if (Array.isArray(data.media)) {
+              // AUTHORITATIVE: this board's doc owns its ids' identities (see
+              // media-id collision guard); stash for switch-back re-assertion.
+              mediaDocsRef.current.set(pid, data.media);
+              hydrateMedia(data.media, pid, { authoritative: true });
+            }
             bumpCounterFrom([
               ...(data.nodes ?? []).map((n: { id: string }) => n.id),
               ...(data.edges ?? []).map((e: { id: string }) => e.id)
