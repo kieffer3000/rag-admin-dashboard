@@ -1,6 +1,7 @@
 import { authorizeConnection, rateLimited, openCors } from '@/lib/rag/public-api';
 import { runOpine, type Artifact } from '@/lib/rag/opine';
 import { fetchReadablePage } from '@/lib/rag/web-extract';
+import { longFetch, isRelayTimeout } from '@/lib/rag/long-fetch';
 
 // PUBLIC, key-authed OPINE (critique-on-artifact) over one published Answers
 // Bank — the external twin of the in-app /api/opine. NOT Clerk-gated (see
@@ -19,9 +20,12 @@ import { fetchReadablePage } from '@/lib/rag/web-extract';
 //           stages want clean prose). (or { error })
 
 export const runtime = 'nodejs';
-// Opine's two-pass rubric→check reasoning (in Make) can run long, like Research
-// on /api/v1/ask. Match the project Fluid ceiling so it's never cut mid-flight.
-export const maxDuration = 300;
+// Opine's reasoning (in Make) can run LONG — a real full-doctrine critique
+// MEASURED 5min, exactly at the old 300s wall (route died while the scenario
+// finished fine). 800 = the Fluid ceiling; the relay fetch below uses a
+// matched undici Agent (780s) because Node's global fetch dies at ~300s
+// regardless of maxDuration.
+export const maxDuration = 800;
 
 const HISTORY_MAX = 30;
 
@@ -172,7 +176,10 @@ export async function POST(req: Request) {
     // ── Prod path: relay to the Make opine scenario (mirrors /api/opine). ──
     const MAKE_URL = process.env.MAKE_OPINE_WEBHOOK_URL;
     if (MAKE_URL) {
-      const mres = await fetch(MAKE_URL, {
+      // longFetch: matched undici set w/ 780s window — a long critique runs
+      // past global fetch's ~300s default and the scenario COMPLETES; don't
+      // abandon an answer Make is still writing.
+      const mres = await longFetch(MAKE_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -195,7 +202,20 @@ export async function POST(req: Request) {
       const text = await mres.text();
       if (!mres.ok) {
         console.error('[v1/opine] make relay', mres.status, text.slice(0, 300));
-        return Response.json({ error: 'Critique service temporarily unavailable. Try again.' }, { status: 502, headers: cors });
+        // Distinct error for the orchestrator: the SCENARIO answered with an
+        // error (retryable if 5xx). Surface Make's own {error,stage,detail}
+        // body when the error-handler webhook responses are wired.
+        let msg = 'The Bank’s reasoning scenario returned an error.';
+        let detail: string | undefined = text.slice(0, 300) || undefined;
+        try {
+          const j = JSON.parse(text);
+          if (j?.error) msg = j.stage ? `${j.error} (${j.stage})` : String(j.error);
+          if (j?.detail) detail = String(j.detail).slice(0, 300);
+        } catch { /* non-JSON body → keep snippet as detail */ }
+        return Response.json(
+          { error: msg, code: 'scenario_error', upstream_status: mres.status, detail },
+          { status: 502, headers: cors }
+        );
       }
       let answer = text;
       let parsed: Record<string, unknown> | null = null;
@@ -247,8 +267,21 @@ export async function POST(req: Request) {
     return Response.json({ answer: stripCitations(result.answer), bank: conn.label }, { headers: cors });
   } catch (e) {
     console.error('[v1/opine]', e);
+    // Distinct errors so the orchestrator can choose retry-vs-wait:
+    // relay_timeout = WE gave up waiting (the scenario may still finish —
+    // don't hammer-retry; wait or split the artifact). engine_error =
+    // network/in-code failure (safe to retry).
+    if (isRelayTimeout(e)) {
+      return Response.json(
+        {
+          error: 'The critique ran past the relay window (~13min). The scenario may still complete — wait before retrying, or split the artifact into smaller lanes.',
+          code: 'relay_timeout'
+        },
+        { status: 504, headers: cors }
+      );
+    }
     return Response.json(
-      { error: 'Critique service temporarily unavailable. Try again.' },
+      { error: 'Critique service temporarily unavailable. Try again.', code: 'engine_error' },
       { status: 502, headers: cors }
     );
   }

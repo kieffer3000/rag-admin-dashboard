@@ -1,5 +1,6 @@
 import { authorizeConnection, rateLimited, openCors } from '@/lib/rag/public-api';
 import { relayPublicQuery } from '@/lib/rag/query-relay';
+import { isRelayTimeout } from '@/lib/rag/long-fetch';
 
 // PUBLIC, key-authed Q&A over one published Answers Bank. NOT Clerk-gated
 // (see middleware isPublicRoute) — a per-Bank API key is the credential. The
@@ -8,13 +9,12 @@ import { relayPublicQuery } from '@/lib/rag/query-relay';
 // leaves the server.
 
 export const runtime = 'nodejs';
-// RESEARCH mode's Make reasoning can run 60–180s — the same heavy path the in-app
-// /api/query route already allows 180s for. At 60s the embed widget's Research
-// requests were killed mid-flight (504 FUNCTION_INVOCATION_TIMEOUT) while Fast/
-// Normal (well under 60s) succeeded. This is NOT a cross-site cookie issue: the
-// widget is a public, NON-Clerk route authed by the embed slug (no cookies), so a
-// 504 can only be a server timeout. Match the project Fluid ceiling (300s).
-export const maxDuration = 300;
+// RESEARCH mode's Make reasoning can run long — a real run MEASURED 5min,
+// exactly at the old 300s wall. 800 = the Fluid ceiling; the relay itself uses
+// a matched undici Agent (780s window, lib/rag/long-fetch.ts) because Node's
+// global fetch dies at ~300s regardless of maxDuration. (History: 60s killed
+// widget Research mid-flight; 300s killed long critiques the same way.)
+export const maxDuration = 800;
 
 // Auth (key/slug), CORS, and per-key throttle are shared with /api/v1/opine —
 // see lib/rag/public-api.ts.
@@ -119,8 +119,19 @@ export async function POST(req: Request) {
     );
   } catch (e) {
     console.error('[v1/ask]', e);
+    // Distinct errors so the orchestrator can choose retry-vs-wait (mirrors
+    // /api/v1/opine): relay_timeout = we gave up waiting; engine_error = retry.
+    if (isRelayTimeout(e)) {
+      return Response.json(
+        {
+          error: 'The answer ran past the relay window (~13min). The scenario may still complete — wait before retrying.',
+          code: 'relay_timeout'
+        },
+        { status: 504, headers: cors }
+      );
+    }
     return Response.json(
-      { error: 'Answer service temporarily unavailable. Try again.' },
+      { error: 'Answer service temporarily unavailable. Try again.', code: 'engine_error' },
       { status: 502, headers: cors }
     );
   }

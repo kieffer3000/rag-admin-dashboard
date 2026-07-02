@@ -1,4 +1,5 @@
 import { auth } from '@clerk/nextjs/server';
+import { longFetch } from '@/lib/rag/long-fetch';
 import { nsForUser } from '@/lib/rag/namespace';
 import { runOpine, type Artifact } from '@/lib/rag/opine';
 import { fetchReadablePage } from '@/lib/rag/web-extract';
@@ -70,7 +71,8 @@ export async function POST(req: Request) {
     const aUrl = typeof a.url === 'string' ? a.url.trim() : '';
     const aContent = typeof a.content === 'string' ? a.content : '';
     try {
-      const mres = await fetch(MAKE_URL, {
+      // longFetch: matched undici set w/ 780s window — global fetch dies ~300s.
+      const mres = await longFetch(MAKE_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

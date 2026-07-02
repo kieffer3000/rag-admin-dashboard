@@ -1,4 +1,5 @@
 import { auth } from '@clerk/nextjs/server';
+import { longFetch } from '@/lib/rag/long-fetch';
 import { runUtilityLLM } from '@/lib/rag/utility-llm';
 import { fetchSummaries, wantsSummary } from '@/lib/rag/summary-core';
 import { nsForUser } from '@/lib/rag/namespace';
@@ -164,7 +165,9 @@ async function callMake(
   injectedContext = '',
   openrouterKey = ''
 ): Promise<MakeResult> {
-  const res = await fetch(url, {
+  // longFetch: matched undici set w/ 780s window — Node's global fetch dies at
+  // ~300s regardless of maxDuration (a real Make run measured 5min).
+  const res = await longFetch(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({

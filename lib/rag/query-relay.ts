@@ -1,5 +1,7 @@
 import 'server-only';
 
+import { longFetch } from '@/lib/rag/long-fetch';
+
 // Minimal relay to the Make.com Query scenario for the PUBLIC keyed endpoint.
 // Mirrors the contract of /api/query (the in-app path) but stripped to the
 // essentials a one-shot external question needs: question + namespace +
@@ -62,7 +64,9 @@ export async function relayPublicQuery(input: RelayInput): Promise<PublicAnswer>
   if (!url) throw new Error('MAKE_QUERY_WEBHOOK_URL is not configured');
 
   const sourceIds = input.sourceIds ?? [];
-  const res = await fetch(url, {
+  // longFetch: Research-speed runs can exceed global fetch's ~300s default —
+  // matched undici set w/ a 780s window (see lib/rag/long-fetch.ts).
+  const res = await longFetch(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
