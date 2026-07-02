@@ -17,6 +17,7 @@ import {
   ReactNode
 } from 'react';
 import { useRag } from '../store';
+import { idbGetBoard, idbPutBoard } from './idb-cache';
 
 // ---- Save status lives in a TINY external store, NOT the board context. Its
 // saving↔saved flips happen on every save/keystroke; if it were a context field
@@ -333,7 +334,15 @@ export function BoardProvider({ children }: { children: ReactNode }) {
         } catch {
           /* network/DB down — fall back to local */
         }
-        const localData = readLocal(pid);
+        // Local cache lives in TWO places since the IDB migration: periodic
+        // autosaves → IndexedDB (async, no jank); pagehide flush → legacy
+        // localStorage (sync). Take whichever is newer.
+        const idbData = await idbGetBoard(pid);
+        const lsData = readLocal(pid);
+        const localData =
+          idbData && (!lsData || (idbData.savedAt ?? 0) >= (lsData.savedAt ?? 0))
+            ? idbData
+            : lsData;
         let data = dbData;
         if (
           localData &&
@@ -499,15 +508,29 @@ export function BoardProvider({ children }: { children: ReactNode }) {
     }
     latestDoc.current = { pid, doc };
     dirty.current = false;
-    writeLocal(pid, doc);
     setSaveStatus('saving');
-    fetch('/api/board', {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ projectId: pid, data: doc })
-    })
-      .then((r) => setSaveStatus(r.ok ? 'saved' : 'local'))
-      .catch(() => setSaveStatus('local'));
+    // JANK FIX: the old path did a synchronous multi-MB JSON.stringify +
+    // localStorage.setItem here — on a 3000-node board that froze the main
+    // thread for hundreds of ms EVERY autosave tick (visible as periodic
+    // "uncontrollable jitter" during imports, when the board is always
+    // dirty). Now: the local copy goes to IndexedDB (async, no stringify),
+    // the doc is stringified ONCE (the network PUT needs it anyway), and the
+    // heavy tail runs on an IDLE frame. The pagehide flush below still does
+    // the sync localStorage write — the only moment sync is both safe and
+    // required.
+    const run = () => {
+      idbPutBoard(pid, doc);
+      fetch('/api/board', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ projectId: pid, data: doc })
+      })
+        .then((r) => setSaveStatus(r.ok ? 'saved' : 'local'))
+        .catch(() => setSaveStatus('local'));
+    };
+    if (typeof requestIdleCallback === 'function')
+      requestIdleCallback(run, { timeout: 2000 });
+    else setTimeout(run, 0);
   }, []);
 
   // ---- Mark dirty on any change (cheap: a flag, no serialization). ----
