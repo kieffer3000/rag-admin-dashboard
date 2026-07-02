@@ -42,9 +42,12 @@ export async function GET(req: Request) {
   }
   if (!sql) return Response.json({ error: 'no db' }, { status: 500 });
 
-  const host = process.env.PINECONE_HOST;
+  const rawHost = process.env.PINECONE_HOST;
   const key = process.env.PINECONE_API_KEY;
-  if (!host || !key) return Response.json({ error: 'pinecone env missing' }, { status: 500 });
+  if (!rawHost || !key) return Response.json({ error: 'pinecone env missing' }, { status: 500 });
+  // PINECONE_HOST is stored WITHOUT a scheme in prod — normalize or fetch
+  // throws ERR_INVALID_URL (measured: first dry-run 500'd exactly here).
+  const host = rawHost.startsWith('http') ? rawHost : `https://${rawHost}`;
 
   const url = new URL(req.url);
   const pid = url.searchParams.get('projectId') ?? '';
@@ -69,25 +72,32 @@ export async function GET(req: Request) {
   const truth = new Map<string, { name: string; type?: string }>();
   const ids = media.map((m) => m.id).filter(Boolean);
   const BATCH = 80;
-  for (let i = 0; i < ids.length; i += BATCH) {
-    const batch = ids.slice(i, i + BATCH);
-    const qs = batch.map((id) => `ids=${encodeURIComponent(`${id}#0`)}`).join('&');
-    const r = await fetch(`${host}/vectors/fetch?${qs}&namespace=${encodeURIComponent(ns)}`, {
-      headers: { 'Api-Key': key }
-    });
-    if (!r.ok) {
-      return Response.json(
-        { error: `pinecone fetch failed (${r.status})`, at: i, detail: (await r.text()).slice(0, 200) },
-        { status: 502 }
-      );
+  try {
+    for (let i = 0; i < ids.length; i += BATCH) {
+      const batch = ids.slice(i, i + BATCH);
+      const qs = batch.map((id) => `ids=${encodeURIComponent(`${id}#0`)}`).join('&');
+      const r = await fetch(`${host}/vectors/fetch?${qs}&namespace=${encodeURIComponent(ns)}`, {
+        headers: { 'Api-Key': key }
+      });
+      if (!r.ok) {
+        return Response.json(
+          { error: `pinecone fetch failed (${r.status})`, at: i, detail: (await r.text()).slice(0, 200) },
+          { status: 502 }
+        );
+      }
+      const j = (await r.json()) as { vectors?: Record<string, { metadata?: Record<string, unknown> }> };
+      for (const [vid, v] of Object.entries(j.vectors ?? {})) {
+        const sid = vid.replace(/#0$/, '');
+        const md = v.metadata ?? {};
+        const name = String(md.source_name ?? md.name ?? '');
+        if (name) truth.set(sid, { name, type: md.type ? String(md.type) : undefined });
+      }
     }
-    const j = (await r.json()) as { vectors?: Record<string, { metadata?: Record<string, unknown> }> };
-    for (const [vid, v] of Object.entries(j.vectors ?? {})) {
-      const sid = vid.replace(/#0$/, '');
-      const md = v.metadata ?? {};
-      const name = String(md.source_name ?? md.name ?? '');
-      if (name) truth.set(sid, { name, type: md.type ? String(md.type) : undefined });
-    }
+  } catch (e) {
+    return Response.json(
+      { error: `pinecone lookup error: ${e instanceof Error ? e.message : 'unknown'}` },
+      { status: 502 }
+    );
   }
 
   // Diff + repair: only entries whose Pinecone truth DIFFERS get touched.
