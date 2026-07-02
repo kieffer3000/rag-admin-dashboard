@@ -329,10 +329,15 @@ export function BoardProvider({ children }: { children: ReactNode }) {
         // outage still restores from this device.
         let dbData: any = null;
         try {
-          const res = await fetch(`/api/board?projectId=${encodeURIComponent(pid)}`);
+          // 20s cap: hydration must NEVER hang on a single await — a hung
+          // fetch (AV/VPN) or unsettled cache read leaves the splash blocking
+          // every click ("can't enter my project"). Same rule as idbGetBoard.
+          const res = await fetch(`/api/board?projectId=${encodeURIComponent(pid)}`, {
+            signal: AbortSignal.timeout(20_000)
+          });
           if (res.ok) dbData = (await res.json()).data;
         } catch {
-          /* network/DB down — fall back to local */
+          /* network/DB down or timed out — fall back to local */
         }
         // Local cache lives in TWO places since the IDB migration: periodic
         // autosaves → IndexedDB (async, no jank); pagehide flush → legacy

@@ -25,22 +25,34 @@ function openDb(): Promise<IDBDatabase> {
     };
     req.onsuccess = () => resolve(req.result);
     req.onerror = () => reject(req.error);
+    // IDB can fire onblocked (another connection pinning an old version) —
+    // neither success nor error — and on flaky profiles the callbacks can
+    // simply never fire. Reject instead of hanging forever.
+    req.onblocked = () => reject(new Error('IndexedDB open blocked'));
   });
 }
 
-/** Load a project's cached board doc (null on miss/any failure). */
+/** Load a project's cached board doc (null on miss/any failure).
+ *  HARD-CAPPED: this sits on the board-hydration critical path, and an
+ *  unsettled IDB open once left the splash blocking ALL clicks ("can't enter
+ *  my new project"). A cache read must never hold hydration hostage — after
+ *  1.5s we proceed without it (DB + localStorage still load the board). */
 export async function idbGetBoard(pid: string): Promise<any | null> {
-  try {
-    const db = await openDb();
-    return await new Promise((resolve) => {
-      const tx = db.transaction(STORE, 'readonly');
-      const rq = tx.objectStore(STORE).get(pid);
-      rq.onsuccess = () => resolve(rq.result ?? null);
-      rq.onerror = () => resolve(null);
-    });
-  } catch {
-    return null;
-  }
+  const read = (async () => {
+    try {
+      const db = await openDb();
+      return await new Promise<any | null>((resolve) => {
+        const tx = db.transaction(STORE, 'readonly');
+        const rq = tx.objectStore(STORE).get(pid);
+        rq.onsuccess = () => resolve(rq.result ?? null);
+        rq.onerror = () => resolve(null);
+      });
+    } catch {
+      return null;
+    }
+  })();
+  const capped = new Promise<null>((resolve) => setTimeout(() => resolve(null), 1500));
+  return Promise.race([read, capped]);
 }
 
 /** Fire-and-forget cache write (async, structured clone — never blocks). */
