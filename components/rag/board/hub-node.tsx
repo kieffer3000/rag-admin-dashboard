@@ -156,8 +156,12 @@ function HubNodeInner({ id, data, selected }: NodeProps) {
         // in the inner WELL below (separate, darker surface).
         // JITTER RULE: transition is SCOPED — `all` animated the dynamic
         // width/height on this backdrop-blur surface every time a member
-        // landed (box visibly stretched/jittered during imports).
-        'group relative rounded-[18px] backdrop-blur-xl transition-[box-shadow,border-color,background-color,opacity]',
+        // landed (box visibly stretched/jittered during imports). Blur is MD
+        // not XL: Firefox resamples backdrop-filters on the main thread every
+        // time content behind/inside repaints (import spinners) — cost scales
+        // with area × radius, and trays can be huge. The body is ~72% opaque
+        // so the visual difference is negligible.
+        'group relative rounded-[18px] backdrop-blur-md transition-[box-shadow,border-color,background-color,opacity]',
         everything
           ? 'bg-gradient-to-br from-indigo-500/[0.09] to-violet-500/[0.13] ring-1 ring-accent/25'
           : 'bg-white/72 ring-1 ring-black/[0.07] shadow-[0_1px_2px_rgb(0_0_0/0.04),0_6px_20px_-8px_rgb(0_0_0/0.12)] dark:bg-white/[0.045] dark:ring-white/[0.08]',

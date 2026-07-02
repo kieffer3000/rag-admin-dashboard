@@ -17,12 +17,14 @@ const DialogOverlay = React.forwardRef<
   <DialogPrimitive.Overlay
     ref={ref}
     className={cn(
-      // GPU-isolate the full-screen blur ([transform:translateZ(0)] +
-      // [isolation:isolate]): without its own compositor layer, every repaint
-      // of the board UNDERNEATH (import status ticks, spinners) re-composited
-      // the whole backdrop-blur → visible flashing between board and dialog
-      // (same fix as the research overlay — see journal).
-      'fixed inset-0 z-50 bg-zinc-900/30 backdrop-blur-sm [transform:translateZ(0)] [isolation:isolate] data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0',
+      // NO backdrop-blur here — a full-screen backdrop-filter must RE-SAMPLE
+      // the board behind it every time that board repaints (import spinners,
+      // status ticks), and Firefox does that resample on the main thread →
+      // the whole screen strobes between board and dialog during uploads.
+      // GPU-layer hints (translateZ/isolation) fixed Chrome but Firefox
+      // ignores them for backdrop-filter. A slightly deeper solid dim reads
+      // nearly identical and makes the flash physically impossible.
+      'fixed inset-0 z-50 bg-zinc-900/45 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0',
       className
     )}
     {...props}
