@@ -1367,37 +1367,54 @@ function BoardCanvasInner() {
     }) => {
       const BINARY = /\.(pdf|epub|docx|doc|rtf|odt)$/i;
       const ext = (file.name.match(/\.([a-z0-9]+)$/i)?.[1] ?? '').toLowerCase();
+      // Direct-path ceiling: Vercel's edge body cap is ~4.5MB — files under
+      // this can ALWAYS fall back to the same-origin multipart route when the
+      // browser→CloudConvert hop fails client-side (AV/VPN TLS inspection
+      // blocks third-party domains → "Failed to fetch" while the server never
+      // sees anything; MEASURED: file + CC chain healthy end-to-end).
+      const DIRECT_MAX = 4 * 1024 * 1024;
       try {
         if (BINARY.test(file.name)) {
-          const jr = await fetch('/api/doc-job', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ ext, ocr: !!ocr })
-          });
-          if (jr.ok) {
-            const { jobId, upload: form } = await jr.json();
-            const ccForm = new FormData();
-            for (const [k, v] of Object.entries(form?.parameters ?? {}))
-              ccForm.append(k, v as string);
-            ccForm.append('file', file);
-            const ur = await fetch(form.url, { method: 'POST', body: ccForm });
-            if (!ur.ok && ur.status !== 201)
-              throw new Error('Upload to the file converter failed.');
-            const ir = await fetch('/api/index-doc', {
+          try {
+            const jr = await fetch('/api/doc-job', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ source_id: id, name, cc_job_id: jobId })
+              body: JSON.stringify({ ext, ocr: !!ocr })
             });
-            const ij = await ir.json().catch(() => ({}));
-            if (!ir.ok || !ij.ok) throw new Error(ij?.error ?? ij?.note ?? 'index failed');
-            queueMediaPatch(id, {
-              status: 'indexed',
-              chunks: ij.chunks,
-              source: ij.source_url
-            });
-            return;
+            if (jr.ok) {
+              const { jobId, upload: form } = await jr.json();
+              const ccForm = new FormData();
+              for (const [k, v] of Object.entries(form?.parameters ?? {}))
+                ccForm.append(k, v as string);
+              ccForm.append('file', file);
+              const ur = await fetch(form.url, { method: 'POST', body: ccForm });
+              if (!ur.ok && ur.status !== 201)
+                throw new Error('Upload to the file converter failed.');
+              const ir = await fetch('/api/index-doc', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ source_id: id, name, cc_job_id: jobId })
+              });
+              const ij = await ir.json().catch(() => ({}));
+              if (!ir.ok || !ij.ok) throw new Error(ij?.error ?? ij?.note ?? 'index failed');
+              queueMediaPatch(id, {
+                status: 'indexed',
+                chunks: ij.chunks,
+                source: ij.source_url
+              });
+              return;
+            }
+            // doc-job unavailable → fall through to the direct path.
+          } catch (ccErr) {
+            // The CloudConvert hop failed (typically the browser→third-party
+            // upload dying client-side). Small PDF/DOCX/EPUB retry through the
+            // direct same-origin route instead of surfacing "Failed to fetch";
+            // big files can't fit the edge cap and legacy .doc/.rtf/.odt need
+            // CloudConvert to convert at all — those surface the real error.
+            if (file.size > DIRECT_MAX || !/\.(pdf|docx|epub)$/i.test(file.name))
+              throw ccErr;
+            console.warn('[doc-upload] CloudConvert hop failed, retrying via direct route:', ccErr);
           }
-          // doc-job unavailable → fall through to the direct path.
         }
         const fd = new FormData();
         fd.append('file', file);
