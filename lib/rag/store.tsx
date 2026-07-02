@@ -207,19 +207,31 @@ export function RagProvider({ children }: { children: ReactNode }) {
   // Projects persist to Neon (account-global) + a localStorage cache, so a
   // project you create survives a refresh (its board/sources already persist).
   const projectsHydrated = useRef(false);
+  // Tombstones for REAL deletions — the server PUT is a non-destructive union
+  // (absence never deletes), so removals must be explicit. Persisted so a
+  // reload can't resurrect a deliberately-deleted project.
+  const projectTombstones = useRef<string[]>([]);
 
   useEffect(() => {
     let cancelled = false;
     (async () => {
+      try {
+        const t = localStorage.getItem('answersdoc_project_tombstones_v1');
+        if (t) projectTombstones.current = JSON.parse(t);
+      } catch {
+        /* private mode */
+      }
       // Pull projects from BOTH the DB and localStorage and UNION them — neither
       // source may ever wipe the other (that was the data-loss bug). Then RECOVER
       // any saved board whose project went missing, so nothing becomes orphaned.
       let dbList: Project[] | null = null;
+      let dbBoardIds: string[] = [];
       try {
         const r = await fetch('/api/projects');
         if (r.ok) {
           const j = await r.json();
           if (Array.isArray(j.projects)) dbList = j.projects;
+          if (Array.isArray(j.boardProjectIds)) dbBoardIds = j.boardProjectIds;
         }
       } catch {
         /* offline → rely on localStorage */
@@ -257,6 +269,7 @@ export function RagProvider({ children }: { children: ReactNode }) {
           if (!m) continue;
           const pid = m[1];
           if (byId.has(pid)) continue;
+          if (projectTombstones.current.includes(pid)) continue;
           let count = 0;
           try {
             const doc = JSON.parse(localStorage.getItem(key) || '{}');
@@ -276,6 +289,22 @@ export function RagProvider({ children }: { children: ReactNode }) {
       } catch {
         /* private mode */
       }
+      // RECOVER from the SERVER too: a board_state row whose project id is in
+      // no list means the DIRECTORY entry was lost (e.g. a partial-load save
+      // clobbered the projects row — how "siu" vanished) while the board and
+      // its sources survived. Resurrect it; opening it brings everything back.
+      for (const pid of dbBoardIds) {
+        if (byId.has(pid)) continue;
+        if (projectTombstones.current.includes(pid)) continue;
+        byId.set(pid, {
+          id: pid,
+          name: 'Recovered project',
+          icon: '🗂️',
+          description: 'Restored from the server — rename me',
+          sourceIds: [],
+          createdAt: new Date().toISOString().slice(0, 10)
+        });
+      }
 
       let list = Array.from(byId.values());
       if (!list.length) list = MOCK_PROJECTS; // genuinely first run
@@ -290,13 +319,17 @@ export function RagProvider({ children }: { children: ReactNode }) {
       setActiveProjectId(last && list.some((p) => p.id === last) ? last : list[0].id);
 
       projectsHydrated.current = true;
-      // Re-save the merged/recovered list so the recovery sticks (and a wiped DB
-      // row is restored).
-      fetch('/api/projects', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ projects: list })
-      }).catch(() => {});
+      // Re-save the merged/recovered list so the recovery sticks — but ONLY
+      // when the DB read succeeded. Saving after a FAILED load is how the
+      // directory got clobbered ("siu" lost). The server PUT is also a
+      // non-destructive union now, but don't even try on a blind merge.
+      if (dbList !== null) {
+        fetch('/api/projects', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ projects: list, deletedIds: projectTombstones.current })
+        }).catch(() => {});
+      }
     })();
     return () => {
       cancelled = true;
@@ -315,7 +348,9 @@ export function RagProvider({ children }: { children: ReactNode }) {
       fetch('/api/projects', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ projects })
+        // deletedIds: the server union keeps everything it already has unless
+        // explicitly tombstoned — absence never deletes.
+        body: JSON.stringify({ projects, deletedIds: projectTombstones.current })
       }).catch(() => {});
     }, 400);
     return () => clearTimeout(t);
@@ -583,6 +618,19 @@ export function RagProvider({ children }: { children: ReactNode }) {
 
   const deleteProject = useCallback(
     (id: string) => {
+      // Tombstone the id (persisted) — the server PUT is a non-destructive
+      // union, so this is the ONLY way a project leaves the server list.
+      if (!projectTombstones.current.includes(id)) {
+        projectTombstones.current = [...projectTombstones.current, id];
+        try {
+          localStorage.setItem(
+            'answersdoc_project_tombstones_v1',
+            JSON.stringify(projectTombstones.current)
+          );
+        } catch {
+          /* private mode */
+        }
+      }
       setProjects((prev) => {
         const remaining = prev.filter((p) => p.id !== id);
         if (remaining.length === 0) {
