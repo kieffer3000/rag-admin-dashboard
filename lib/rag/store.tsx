@@ -250,21 +250,34 @@ export function RagProvider({ children }: { children: ReactNode }) {
       }
 
       // Merge by id (a real saved project always wins over the seed). When two
-      // entries share an id (the reset-counter collision that once minted a new
-      // project with an EXISTING project's id), keep the RICHER one — more
-      // sourceIds, else the earlier — so a phantom duplicate ("2", 0 sources)
-      // can never replace the real project's name/membership.
+      // DIFFERENT-named entries share one id (the reset-counter collision that
+      // once minted a new project with an EXISTING project's id), NEVER hide
+      // either: the richer entry (more sourceIds; ties → earlier) keeps the
+      // id, and the other is DISPLACED — re-minted below with a fresh id so
+      // it stays in the list under its own name. Nothing is ever collapsed
+      // away silently.
       const byId = new Map<string, Project>();
+      const displaced: Project[] = [];
       const setRicher = (p: Project) => {
         const cur = byId.get(p.id);
         if (!cur) {
           byId.set(p.id, p);
           return;
         }
+        // Identical name = the same entry from two stores (LS + DB) — one copy.
+        if ((cur.name ?? '') === (p.name ?? '')) {
+          if ((p.sourceIds ?? []).length > (cur.sourceIds ?? []).length)
+            byId.set(p.id, p);
+          return;
+        }
         const curN = (cur.sourceIds ?? []).length;
         const newN = (p.sourceIds ?? []).length;
-        if (newN > curN) byId.set(p.id, p);
-        // ties keep the existing (earlier) entry
+        if (newN > curN) {
+          displaced.push(cur);
+          byId.set(p.id, p);
+        } else {
+          displaced.push(p);
+        }
       };
       const seedIds = new Set(MOCK_PROJECTS.map((p) => p.id));
       for (const p of lsList) setRicher(p);
@@ -335,6 +348,20 @@ export function RagProvider({ children }: { children: ReactNode }) {
         if (m) {
           const n = parseInt(m[1], 10);
           if (n > idCounter) idCounter = n;
+        }
+      }
+
+      // Re-mint DISPLACED collision duplicates (see setRicher above) with
+      // fresh ids AFTER the bump, so an entry like "2" stays visible in the
+      // list under its own name instead of being silently collapsed into the
+      // project whose id it accidentally shared.
+      if (displaced.length) {
+        const taken = new Set(list.map((p) => p.id));
+        for (const d of displaced) {
+          let nid = nextId('proj');
+          while (taken.has(nid)) nid = nextId('proj');
+          taken.add(nid);
+          list.push({ ...d, id: nid, sourceIds: d.sourceIds ?? [] });
         }
       }
 
