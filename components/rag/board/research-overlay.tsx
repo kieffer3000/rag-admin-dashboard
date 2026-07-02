@@ -773,6 +773,8 @@ export function ResearchOverlay({
         open={connectOpen}
         onOpenChange={setConnectOpen}
         bankLabel={name}
+        bankId={brainId}
+        projectId={activeProjectId}
         sourceIds={resolveBrainScope(brainId).items.map((m) => m.id)}
         answerMode={answerMode}
         model={modelId}

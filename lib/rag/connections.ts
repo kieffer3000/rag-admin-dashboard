@@ -32,6 +32,11 @@ export interface ConnectionRow {
    *  works inside the widget, which is frame-locked to allowed_origins. The
    *  secret API key is never put in a URL. */
   embed_slug: string;
+  /** Board node id of the Bank this connection was published from + its
+   *  project — the link AUTO-SYNC uses to follow the Bank's live wiring.
+   *  Null on legacy rows until the first Re-sync stamps them. */
+  bank_node_id: string | null;
+  project_id: string | null;
   created_at: string;
   last_used_at: string | null;
   calls: number;
@@ -64,6 +69,8 @@ async function ensureSchema() {
   // Idempotent adds for tables created before these columns existed.
   await sql`ALTER TABLE connections ADD COLUMN IF NOT EXISTS allow_speed_choice boolean NOT NULL DEFAULT false`;
   await sql`ALTER TABLE connections ADD COLUMN IF NOT EXISTS embed_slug text`;
+  await sql`ALTER TABLE connections ADD COLUMN IF NOT EXISTS bank_node_id text`;
+  await sql`ALTER TABLE connections ADD COLUMN IF NOT EXISTS project_id text`;
   await sql`CREATE INDEX IF NOT EXISTS connections_key_hash_idx ON connections (key_hash)`;
   await sql`CREATE INDEX IF NOT EXISTS connections_embed_slug_idx ON connections (embed_slug)`;
   await sql`CREATE INDEX IF NOT EXISTS connections_scope_idx ON connections (scope)`;
@@ -107,6 +114,9 @@ export interface CreateConnectionInput {
   speed?: string;
   allowSpeedChoice?: boolean;
   allowedOrigins?: string[];
+  /** Bank node + project link for auto-sync. */
+  bankNodeId?: string;
+  projectId?: string;
 }
 
 /** Create a connection and return the plaintext key ONCE (never stored). */
@@ -128,12 +138,12 @@ export async function createConnection(
   const allowSpeedChoice = !!input.allowSpeedChoice;
   await sql`
     INSERT INTO connections
-      (id, scope, user_id, label, namespace, source_ids, answer_mode, model, speed, allow_speed_choice, allowed_origins, key_hash, key_prefix, embed_slug)
+      (id, scope, user_id, label, namespace, source_ids, answer_mode, model, speed, allow_speed_choice, allowed_origins, key_hash, key_prefix, embed_slug, bank_node_id, project_id)
     VALUES
       (${id}, ${input.scope}, ${input.userId}, ${input.label || 'Untitled'},
        ${input.namespace}, ${JSON.stringify(sourceIds)}::jsonb, ${answerMode},
        ${input.model ?? ''}, ${speed}, ${allowSpeedChoice}, ${JSON.stringify(origins)}::jsonb,
-       ${hashKey(key)}, ${prefix}, ${slug})
+       ${hashKey(key)}, ${prefix}, ${slug}, ${input.bankNodeId ?? null}, ${input.projectId ?? null})
   `;
   const rows = await sql`SELECT * FROM connections WHERE id=${id}`;
   return { row: rowOf(rows[0]), key };
@@ -160,7 +170,7 @@ export async function deleteConnection(scope: string, id: string): Promise<void>
 export async function updateConnectionSources(
   scope: string,
   id: string,
-  patch: { sourceIds?: string[]; answerMode?: string; model?: string; speed?: string; allowSpeedChoice?: boolean; label?: string; allowedOrigins?: string[] }
+  patch: { sourceIds?: string[]; answerMode?: string; model?: string; speed?: string; allowSpeedChoice?: boolean; label?: string; allowedOrigins?: string[]; bankNodeId?: string; projectId?: string }
 ): Promise<void> {
   if (!sql) return;
   await ensureSchema();
@@ -182,7 +192,9 @@ export async function updateConnectionSources(
       speed=${patch.speed ?? cur.speed},
       allow_speed_choice=${allowSpeedChoice},
       label=${patch.label ?? cur.label},
-      allowed_origins=${JSON.stringify(origins)}::jsonb
+      allowed_origins=${JSON.stringify(origins)}::jsonb,
+      bank_node_id=${patch.bankNodeId ?? cur.bank_node_id},
+      project_id=${patch.projectId ?? cur.project_id}
     WHERE scope=${scope} AND id=${id}
   `;
 }
@@ -230,6 +242,8 @@ function rowOf(r: Record<string, unknown>): ConnectionRow {
     allowed_origins: arr(r.allowed_origins),
     key_prefix: String(r.key_prefix ?? ''),
     embed_slug: String(r.embed_slug ?? ''),
+    bank_node_id: r.bank_node_id ? String(r.bank_node_id) : null,
+    project_id: r.project_id ? String(r.project_id) : null,
     created_at: String(r.created_at ?? ''),
     last_used_at: r.last_used_at ? String(r.last_used_at) : null,
     calls: Number(r.calls ?? 0)

@@ -31,6 +31,8 @@ export function ConnectDialog({
   open,
   onOpenChange,
   bankLabel,
+  bankId,
+  projectId,
   sourceIds,
   answerMode,
   model,
@@ -39,6 +41,11 @@ export function ConnectDialog({
   open: boolean;
   onOpenChange: (o: boolean) => void;
   bankLabel: string;
+  /** Board node id of this Bank + its project — stored on the connection so
+   *  AUTO-SYNC can follow the Bank's live wiring (add/delete a file → the
+   *  snapshot refreshes itself; the key never changes). */
+  bankId: string;
+  projectId: string;
   sourceIds: string[];
   answerMode: string;
   model: string;
@@ -97,7 +104,9 @@ export function ConnectDialog({
           model,
           speed: widgetMode === 'choice' ? 'detailed' : widgetMode,
           allowSpeedChoice: widgetMode === 'choice',
-          allowedOrigins: parsedOrigins
+          allowedOrigins: parsedOrigins,
+          bankNodeId: bankId,
+          projectId
         })
       });
       const data = await res.json();
@@ -129,11 +138,15 @@ export function ConnectDialog({
         answerMode,
         model,
         speed: widgetMode === 'choice' ? 'detailed' : widgetMode,
-        allowSpeedChoice: widgetMode === 'choice'
+        allowSpeedChoice: widgetMode === 'choice',
+        // Stamps the Bank link on legacy connections → adopted into AUTO-SYNC
+        // (from then on the snapshot follows the Bank's wiring by itself).
+        bankNodeId: bankId,
+        projectId
       })
     });
     await load();
-    window.alert(`Re-synced — this key now answers from the Bank's current ${sourceIds.length} sources.`);
+    window.alert(`Re-synced — this key now answers from the Bank's current ${sourceIds.length} sources, and will follow this Bank automatically from now on.`);
   }
 
   function copy(text: string, tag: string) {

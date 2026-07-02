@@ -1600,6 +1600,8 @@ function BrainNodeInner({ id, data, selected }: NodeProps) {
         open={connectOpen}
         onOpenChange={setConnectOpen}
         bankLabel={d.name || 'Answers Bank'}
+        bankId={id}
+        projectId={activeProjectId}
         sourceIds={scope.items.map((m) => m.id)}
         answerMode={answerMode}
         model={modelId}

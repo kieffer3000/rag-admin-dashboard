@@ -61,7 +61,10 @@ export async function POST(req: Request) {
     model: typeof body.model === 'string' ? body.model : '',
     speed: typeof body.speed === 'string' ? body.speed : 'detailed',
     allowSpeedChoice: body.allowSpeedChoice === true,
-    allowedOrigins
+    allowedOrigins,
+    // Bank link → auto-sync follows this Bank's live wiring.
+    bankNodeId: typeof body.bankNodeId === 'string' ? body.bankNodeId : undefined,
+    projectId: typeof body.projectId === 'string' ? body.projectId : undefined
   });
 
   if (!created) {
@@ -99,7 +102,10 @@ export async function PATCH(req: Request) {
     label: typeof body.label === 'string' ? body.label : undefined,
     allowedOrigins: Array.isArray(body.allowedOrigins)
       ? (body.allowedOrigins as unknown[]).filter((s): s is string => typeof s === 'string')
-      : undefined
+      : undefined,
+    // Stamping these on a Re-sync adopts a LEGACY connection into auto-sync.
+    bankNodeId: typeof body.bankNodeId === 'string' ? body.bankNodeId : undefined,
+    projectId: typeof body.projectId === 'string' ? body.projectId : undefined
   });
   return Response.json({ ok: true });
 }

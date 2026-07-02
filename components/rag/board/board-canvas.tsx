@@ -209,7 +209,7 @@ const FILL_MAX_ZOOM = 2;
 const FILL_MIN_ZOOM = 0.2;
 
 function BoardCanvasInner() {
-  const { board, setBoard, setBoardSilent, nextBoardId, busyBrains, saveNow, removeBoardNode, connectArtifactToBrain, setBrainPicker, setAgentEditor, pendingDelete, setPendingDelete, hydratedProject, researchBrainId, setResearchBrainId } =
+  const { board, setBoard, setBoardSilent, nextBoardId, busyBrains, saveNow, removeBoardNode, connectArtifactToBrain, setBrainPicker, setAgentEditor, pendingDelete, setPendingDelete, hydratedProject, researchBrainId, setResearchBrainId, resolveBrainScope } =
     useBoard();
   const { media, projectMedia, addMedia, updateMedia, queueMediaPatch, deleteMedia, activeProjectId, activeProject, pendingBox, setPendingBox } = useRag();
 
@@ -471,6 +471,75 @@ function BoardCanvasInner() {
     }, 400);
     return () => clearTimeout(t);
   }, [hydratedProject, activeProjectId, board.nodes, fitToFill]);
+
+  // ---- AUTO-SYNC published connections (write-time propagation) ------------
+  // When a published Bank's wired set changes — a file added/deleted, a chip
+  // wired directly or dropped into a wired box — PATCH the connection's
+  // snapshot so the ad_live_ key follows the Bank by itself. SAME key, fresh
+  // source_ids; rotation stays a deliberate act (Revoke + Publish). Legacy
+  // connections join on their first manual ↻ Re-sync (which stamps
+  // bank_node_id). Debounced 3s; the wiring signature is computed INSIDE the
+  // debounce so drags/renders cost nothing. Two safety rules: never sync a
+  // half-loaded board (hydration guard), never auto-shrink a snapshot to
+  // EMPTY (emptying a key's corpus is Revoke's job, not a side effect —
+  // mirrors persistNow's blank-board rule).
+  const autoSyncTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastWiringSig = useRef('');
+  useEffect(() => {
+    if (hydratedProject !== activeProjectId) return;
+    if (autoSyncTimer.current) clearTimeout(autoSyncTimer.current);
+    autoSyncTimer.current = setTimeout(async () => {
+      // Signature of everything that can change a Bank's wired set: edges,
+      // chip↔box membership + media identity, and the project media list
+      // (for 'everything' Banks). Positions are excluded — drags never sync.
+      const parts: string[] = [];
+      for (const e of board.edges) parts.push(`${e.source}>${e.target}`);
+      for (const n of board.nodes)
+        if (n.type === 'chip') parts.push(`${n.parentId ?? ''}#${n.data?.mediaId ?? ''}`);
+      parts.sort();
+      parts.push('m:' + projectMedia.map((m) => m.id).join(','));
+      const sig = `${activeProjectId}|${parts.join('|')}`;
+      if (sig === lastWiringSig.current) return;
+      lastWiringSig.current = sig;
+      try {
+        const r = await fetch('/api/connections');
+        if (!r.ok) return;
+        const { connections } = (await r.json()) as {
+          connections?: Array<{
+            id: string;
+            bank_node_id?: string | null;
+            project_id?: string | null;
+            source_ids?: string[];
+          }>;
+        };
+        for (const c of connections ?? []) {
+          if (!c.bank_node_id || c.project_id !== activeProjectId) continue;
+          // The Bank must still exist on this board.
+          if (!board.nodes.some((n) => n.id === c.bank_node_id && n.type === 'brain'))
+            continue;
+          const live = resolveBrainScope(c.bank_node_id)
+            .items.map((m) => m.id)
+            .sort();
+          if (!live.length) continue; // never auto-shrink to empty
+          const snap = [...(c.source_ids ?? [])].sort();
+          if (live.join('\n') === snap.join('\n')) continue;
+          await fetch('/api/connections', {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ id: c.id, sourceIds: live })
+          });
+          console.info(
+            `[auto-sync] connection ${c.id}: snapshot → ${live.length} sources (key unchanged)`
+          );
+        }
+      } catch {
+        /* best-effort — the next wiring change retries */
+      }
+    }, 3000);
+    return () => {
+      if (autoSyncTimer.current) clearTimeout(autoSyncTimer.current);
+    };
+  }, [board.nodes, board.edges, projectMedia, activeProjectId, hydratedProject, resolveBrainScope]);
 
   // RESEARCH MODE is a dedicated full-screen overlay (ResearchOverlay), rendered
   // below — it covers the whole canvas, so nothing here needs to change.

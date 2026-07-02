@@ -31,15 +31,21 @@ The key resolves server-side to a **snapshot** of that Bank's wiring:
   No cross-expert bleed — as long as a source isn't wired into two Banks.
 - **`namespace` is derived server-side from the owner** — never trusted from the client. A
   key can only ever read/reason over its own Bank's corpus, read-only.
-- **Re-sync to re-snapshot — the KEY VALUE NEVER CHANGES.** The snapshot is taken at
-  publish time; it is NOT a live pointer to the canvas. When a Bank's wired sources
-  change (e.g. new books added), open the Bank's **Connect** dialog and click **↻ Re-sync**
-  on the existing connection row: the `{source_ids, answer_mode, model, speed}` snapshot
-  refreshes **in place, same bearer token** — no env update or redeploy on the consumer
-  side. (Do NOT click Publish again — that CREATES a second connection with a NEW key.)
-  Key rotation is a deliberate act only: **Revoke** the connection, then Publish fresh.
-  Recommendation: treat a re-sync as a deliberate **doctrine version bump** and stamp a
-  `doctrineVersion` into your pipeline state for traceability.
+- **AUTO-SYNC: the snapshot follows the Bank — the KEY VALUE NEVER CHANGES.** Connections
+  are linked to their Bank (board node). When the Bank's wired sources change — a file
+  added or deleted, wired directly or via a box — the snapshot refreshes **automatically**
+  (within a few seconds of the change, while the board is open): same bearer token, fresh
+  `source_ids`. No env update or redeploy on the consumer side, no manual step.
+  - **Legacy connections** (published before auto-sync) join on their first manual
+    **↻ Re-sync** in the Connect dialog, which stamps the Bank link; from then on they
+    follow automatically.
+  - Auto-sync never shrinks a snapshot to EMPTY — emptying a key's corpus is a deliberate
+    act (**Revoke**), not a side effect. Key rotation likewise: Revoke, then Publish fresh
+    (Publish always mints a NEW key — don't use it to "refresh").
+  - The sync runs from the owner's open board (write-time propagation). If sources are
+    added and the board is closed before it settles (~3s), the next board visit syncs.
+  - Traceability: if your pipeline stamps a `doctrineVersion`, bump it when you
+    deliberately change doctrine sources, not on every auto-sync.
 
 ## 2. Auth
 
