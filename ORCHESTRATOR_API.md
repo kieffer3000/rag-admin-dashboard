@@ -31,10 +31,15 @@ The key resolves server-side to a **snapshot** of that Bank's wiring:
   No cross-expert bleed — as long as a source isn't wired into two Banks.
 - **`namespace` is derived server-side from the owner** — never trusted from the client. A
   key can only ever read/reason over its own Bank's corpus, read-only.
-- **Re-publish to re-snapshot.** The snapshot is taken at publish time; it is NOT a live
-  pointer to the canvas. If you change a Bank's wired sources, **re-publish/update** the
-  Connection. Recommendation: treat a re-publish as a deliberate **doctrine version bump**
-  and stamp a `doctrineVersion` into your pipeline state for traceability.
+- **Re-sync to re-snapshot — the KEY VALUE NEVER CHANGES.** The snapshot is taken at
+  publish time; it is NOT a live pointer to the canvas. When a Bank's wired sources
+  change (e.g. new books added), open the Bank's **Connect** dialog and click **↻ Re-sync**
+  on the existing connection row: the `{source_ids, answer_mode, model, speed}` snapshot
+  refreshes **in place, same bearer token** — no env update or redeploy on the consumer
+  side. (Do NOT click Publish again — that CREATES a second connection with a NEW key.)
+  Key rotation is a deliberate act only: **Revoke** the connection, then Publish fresh.
+  Recommendation: treat a re-sync as a deliberate **doctrine version bump** and stamp a
+  `doctrineVersion` into your pipeline state for traceability.
 
 ## 2. Auth
 
