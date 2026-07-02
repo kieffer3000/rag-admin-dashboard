@@ -110,7 +110,9 @@ function HubNodeInner({ id, data, selected }: NodeProps) {
   // Virtualized DOM-grid window — fixed-height tiles make the math deterministic.
   // Only the rows intersecting the viewport (+ a small buffer) are rendered.
   const gridCols = gridExpanded ? 4 : 3;
-  const GRID_TILE_H = 44;
+  // Tall enough for the icon/thumb AND a name strip — every tile shows its
+  // file name (truncated; full name in the hover tooltip), like big-box chips.
+  const GRID_TILE_H = 60;
   const GRID_GAP = 6;
   const gridRowH = GRID_TILE_H + GRID_GAP;
   const gridTotalRows = Math.ceil(members.length / gridCols);
@@ -233,23 +235,28 @@ function HubNodeInner({ id, data, selected }: NodeProps) {
                   key={nodeId}
                   title={m?.name}
                   style={{ height: GRID_TILE_H }}
-                  className="group/tile relative overflow-hidden rounded-md bg-black/[0.06] ring-1 ring-black/[0.05] dark:bg-white/[0.06]"
+                  className="group/tile relative flex flex-col overflow-hidden rounded-md bg-black/[0.06] ring-1 ring-black/[0.05] dark:bg-white/[0.06]"
                 >
                   {m?.thumbnail ? (
                     <img
                       src={m.thumbnail}
                       alt=""
                       loading="lazy"
-                      className="h-full w-full object-cover"
+                      className="min-h-0 w-full flex-1 object-cover"
                     />
                   ) : (
-                    <span className="flex h-full w-full items-center justify-center">
+                    <span className="flex min-h-0 w-full flex-1 items-center justify-center">
                       <MediaIcon
                         type={(m?.type ?? 'document') as MediaType}
                         size="sm"
                       />
                     </span>
                   )}
+                  {/* name strip — every tile shows its file name, same as the
+                      full-size chips in small boxes (truncate; tooltip = full) */}
+                  <span className="block w-full shrink-0 truncate px-1 pb-0.5 text-center text-[8.5px] font-semibold leading-[1.2] text-foreground/75">
+                    {m?.name ?? ''}
+                  </span>
                   {m?.status === 'failed' && (
                     <span className="absolute right-0.5 top-0.5 h-1.5 w-1.5 rounded-full bg-red-500 ring-1 ring-white" />
                   )}
