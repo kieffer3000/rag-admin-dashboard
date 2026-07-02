@@ -320,7 +320,18 @@ export function BoardProvider({ children }: { children: ReactNode }) {
   // ---- LOAD persisted board on project mount/switch (Neon via /api/board) ----
   useEffect(() => {
     const pid = activeProjectId;
-    if (hydrated.current.has(pid)) return;
+    if (hydrated.current.has(pid)) {
+      // Already loaded THIS SESSION — nothing to fetch, but the splash gate
+      // must still be lowered for THIS project. Without this line, switching
+      // BACK to any previously-visited project left hydratedProject pointing
+      // at the previous one → the full-screen splash (which blocks all
+      // clicks) stayed up forever over a perfectly loaded board. This was
+      // every "stuck on loading when I switch projects" report — MEASURED:
+      // the board GET returned 200 and autosaves kept ticking behind the
+      // splash while the user was locked out.
+      setHydratedProject(pid);
+      return;
+    }
     let cancelled = false;
     (async () => {
       try {
