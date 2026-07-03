@@ -2064,8 +2064,8 @@ function BoardCanvasInner() {
     const el = spotRef.current;
     const rect = wrapRef.current?.getBoundingClientRect();
     if (!el || !rect) return;
-    el.style.setProperty('--spot-x', `${e.clientX - rect.left}px`);
-    el.style.setProperty('--spot-y', `${e.clientY - rect.top}px`);
+    // Transform-only move — compositor work, never a repaint (jitter round 4).
+    el.style.transform = `translate3d(${e.clientX - rect.left}px, ${e.clientY - rect.top}px, 0)`;
   }, []);
 
   return (
@@ -2079,15 +2079,26 @@ function BoardCanvasInner() {
       {/* Branded loading splash — covers the board until the saved board loads,
           so a refresh never flashes the bare canvas / starter Answers Bank. */}
       <BrandSplash visible={hydratedProject !== activeProjectId} />
-      <div
-        ref={spotRef}
-        aria-hidden
-        className="pointer-events-none absolute inset-0"
-        style={{
-          background:
-            'radial-gradient(560px circle at var(--spot-x, 50%) var(--spot-y, 40%), hsl(var(--accent) / 0.06), transparent 70%)'
-        }}
-      />
+      {/* Cursor spotlight — a FIXED-SIZE gradient blob moved with transform:
+          translate3d (compositor-only). The old version repositioned a
+          full-canvas radial-gradient via CSS vars, which forced Firefox to
+          REPAINT the entire layer on every pointer move — measurable as
+          constant flicker while the mouse moved over a big board (jitter
+          round 4). The gradient itself is painted once; only its transform
+          changes. overflow-hidden clips it at the edges like before. */}
+      <div aria-hidden className="pointer-events-none absolute inset-0 overflow-hidden">
+        <div
+          ref={spotRef}
+          className="absolute h-[1120px] w-[1120px] will-change-transform"
+          style={{
+            top: '-560px',
+            left: '-560px',
+            transform: 'translate3d(50vw, 40vh, 0)',
+            background:
+              'radial-gradient(closest-side circle, hsl(var(--accent) / 0.06), transparent 70%)'
+          }}
+        />
+      </div>
 
       {/* Save + garbage bin live in the bottom-middle dock (BoardChest). */}
 

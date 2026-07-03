@@ -515,6 +515,36 @@ export function BoardProvider({ children }: { children: ReactNode }) {
   buildDocRef.current = buildDoc;
   pidRef.current = activeProjectId;
 
+  // ---- Save WORKER (jitter round 4): stringify + PUT + IDB write run OFF the
+  // main thread. Rounds 1-3 deferred the save to an idle frame, but the
+  // stringify/clone still BLOCKED for its duration when it ran — dropped
+  // frames on every autosave/chat-settle save of a 3,000-node board (user-
+  // correlated with the save indicator). Lazy-created; null = fall back to
+  // the in-thread path (old browsers / worker failed to boot).
+  const saveWorker = useRef<Worker | null>(null);
+  const saveSeq = useRef(0);
+  useEffect(() => {
+    try {
+      const w = new Worker(new URL('./save-worker.ts', import.meta.url));
+      w.onmessage = (ev: MessageEvent<{ seq: number; ok: boolean }>) => {
+        // Only the LATEST save's outcome drives the indicator.
+        if (ev.data.seq === saveSeq.current)
+          setSaveStatus(ev.data.ok ? 'saved' : 'local');
+      };
+      w.onerror = () => {
+        // Worker died — fall back to in-thread saves from here on.
+        saveWorker.current = null;
+      };
+      saveWorker.current = w;
+      return () => {
+        saveWorker.current = null;
+        w.terminate();
+      };
+    } catch {
+      saveWorker.current = null;
+    }
+  }, []);
+
   /** Serialize once and persist (local + cloud). The ONLY place the whole board
    *  doc is stringified — called on a timer / on chat / on page-hide, never per
    *  pointer-move. */
@@ -549,6 +579,18 @@ export function BoardProvider({ children }: { children: ReactNode }) {
     // the sync localStorage write — the only moment sync is both safe and
     // required.
     const run = () => {
+      // Preferred: hand the doc to the save worker (structured clone — cheap)
+      // and let stringify + PUT + IDB happen off-thread. Fallback: the old
+      // in-thread path (still idle-deferred).
+      const w = saveWorker.current;
+      if (w) {
+        try {
+          w.postMessage({ seq: ++saveSeq.current, pid, doc });
+          return;
+        } catch {
+          saveWorker.current = null; // clone/post failed → in-thread fallback
+        }
+      }
       idbPutBoard(pid, doc);
       fetch('/api/board', {
         method: 'PUT',
