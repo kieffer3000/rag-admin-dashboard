@@ -444,7 +444,7 @@ export function BoardroomView() {
                     {n} sources
                     {dv > 0 && (
                       <span
-                        title={`Doctrine v${dv} loaded`}
+                        title={`Expertise v${dv} loaded`}
                         className="flex items-center gap-0.5 rounded-full bg-accent/10 px-1 text-accent"
                       >
                         <ScrollText className="h-2.5 w-2.5" />v{dv}

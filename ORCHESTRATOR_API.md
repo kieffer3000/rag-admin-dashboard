@@ -186,8 +186,8 @@ limit is the real constraint** — not the API. To stay well under it:
 ## 9. Doctrine-on-Bank (server-injected guides) — 2026-07-03
 
 Each Bank can now carry a stored **doctrine** (its one-page judgment rubric), edited in-app via
-the Bank's ⋮ menu → **Doctrine** (versioned, with a changelog and a "Refine against sources"
-self-correction loop). When present, the doctrine is **injected server-side as the first
+the Bank's ⋮ menu → **Expertise** (the UI label; "doctrine" remains the technical/API term) —
+versioned, with a changelog and a "Refine against sources" self-correction loop. When present, the doctrine is **injected server-side as the first
 `guides[]` entry on every keyed call** — both `/ask` and `/opine`.
 
 Implications for orchestrators:

@@ -73,7 +73,7 @@ export function DoctrineDialog({
           setDraft(data.doctrine);
         }
       } catch {
-        if (!cancelled) setError('Could not load the stored doctrine — try reopening.');
+        if (!cancelled) setError('Could not load the saved expertise — try reopening.');
       }
     })();
     return () => {
@@ -121,7 +121,7 @@ export function DoctrineDialog({
   // critique of itself. Citations ON so corrections come sourced.
   const refine = useCallback(async () => {
     if (!draft.trim()) {
-      setError('Write a draft doctrine first — the sources need something to correct.');
+      setError('Write a draft first — the sources need something to correct.');
       return;
     }
     if (sourceIds.length === 0) {
@@ -173,7 +173,7 @@ export function DoctrineDialog({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <ScrollText className="h-5 w-5 text-accent" />
-            Doctrine — {bankLabel}
+            Expertise — {bankLabel}
             {rec && rec.version > 0 && (
               <span className="rounded-full bg-accent/10 px-2 py-0.5 text-[11px] font-bold text-accent">
                 v{rec.version}
@@ -181,9 +181,9 @@ export function DoctrineDialog({
             )}
           </DialogTitle>
           <DialogDescription>
-            The Bank&apos;s judgment, distilled — a one-page rubric that rides every answer this
-            Bank gives (chat, research, and connected apps). Refine it against the sources so the
-            books correct the rules.
+            What this expert believes and how it judges — optional. It quietly rides every answer
+            this Bank gives (chat, research, the Boardroom, and connected apps). Refine it against
+            the sources and the books correct the rules.
           </DialogDescription>
         </DialogHeader>
 

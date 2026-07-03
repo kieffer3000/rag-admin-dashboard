@@ -1130,7 +1130,7 @@ function BrainNodeInner({ id, data, selected }: NodeProps) {
                 <Plug className="h-4 w-4 text-accent" /> Connect to another app
               </DropdownMenuItem>
               <DropdownMenuItem onClick={() => setDoctrineOpen(true)} className="gap-2.5">
-                <ScrollText className="h-4 w-4 text-accent" /> Doctrine
+                <ScrollText className="h-4 w-4 text-accent" /> Expertise
               </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem
