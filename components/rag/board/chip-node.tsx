@@ -382,10 +382,13 @@ function ChipNodeInner({ id, data, selected, parentId }: NodeProps) {
       />
       {/* STRING-LINK landing point: drag another piece's string here to tie
           the two into one group (no puzzle-aiming needed; cut the string to
-          separate). Subtle until hovered; gone while docked (box = the plug). */}
+          separate). Subtle until hovered; gone while docked (box = the plug).
+          A native tooltip explains it on hover — a per-chip "?" would litter a
+          canvas of thousands of pieces, so the affordance IS the explanation. */}
       <Handle
         type="target"
         position={Position.Top}
+        title="Tie a string here — drag from another piece's dot onto this one to group them (they'll wire together). Cut the string to separate."
         className={cn(
           '!h-4 !w-4 !border-2 !border-card !bg-accent/50 !opacity-0 transition-opacity group-hover:!opacity-100',
           parentId && '!pointer-events-none'

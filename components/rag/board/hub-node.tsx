@@ -38,6 +38,13 @@ import {
 } from 'lucide-react';
 import { useRag } from '@/lib/rag/store';
 import { useBoard } from '@/lib/rag/board/store';
+import { HelpDot } from '@/components/rag/help-dot';
+
+const HELP_FACE = `Show this box as a portrait instead of a tray — an "Einstein box" can wear Einstein's face.
+
+Pick a preset, or upload your own image (a transparent PNG floats best; a plain photo works too).
+
+It's just a look: the box's contents, wiring, and count are unchanged, and the "Box" button flips it back anytime.`;
 
 /**
  * The BOX — a puzzle TRAY. Not a media-type bin: a user-named cluster of
@@ -441,7 +448,11 @@ function HubNodeInner({ id, data, selected }: NodeProps) {
       />
       {/* face-picker menu — preset male/female or upload your own */}
       {facePick && (
-        <div className="nodrag absolute -right-2 top-6 z-20 w-44 rounded-xl border border-black/[0.08] bg-card p-1 text-[12px] shadow-[0_8px_28px_-6px_rgb(0_0_0/0.3)]">
+        <div className="nodrag absolute -right-2 top-6 z-20 w-52 rounded-xl border border-black/[0.08] bg-card p-1 text-[12px] shadow-[0_8px_28px_-6px_rgb(0_0_0/0.3)]">
+          <div className="flex items-center justify-between px-2 pb-1 pt-0.5 text-[10.5px] font-semibold uppercase tracking-wide text-muted-foreground/60">
+            Represent as a face
+            <HelpDot text={HELP_FACE} side="left" />
+          </div>
           <button
             onClick={(e) => {
               e.stopPropagation();

@@ -14,6 +14,7 @@ import {
   ScrollText
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { HelpDot } from '@/components/rag/help-dot';
 import { useRag } from '@/lib/rag/store';
 import { useBoard } from '@/lib/rag/board/store';
 import { askBrain, opineBrain } from '@/lib/rag/board/ask';
@@ -65,6 +66,25 @@ const TRANSCRIPT_CAP = 60;
  *  not essays. The user can always ask an expert to go deeper. */
 const ROOM_GUIDE =
   'You are speaking in a boardroom meeting. Answer in the first person, in your own voice, and keep it under 150 words unless the question explicitly asks for depth. Take a position — if you disagree with common advice, say so plainly.';
+
+const HELP_ROOM = `Your invisible counselors, around one table.
+
+Ask one question and EVERY seated expert answers at once — each in their own voice, from their own sources. When they disagree, you see it (that's the point — never a blended average).
+
+The experts here are the Answers Banks in this project; build or wire them on the Board.`;
+
+const HELP_SEATS = `Each chair is an expert (an Answers Bank in this project). Click a chair to seat or excuse that expert. Only seated experts answer.
+
+"12 sources" = its wired knowledge. A 📜 v-chip means it has Expertise loaded (a rulebook that shapes how it judges).`;
+
+const HELP_TABLE = `Put a document (a draft, letter, plan, script) on the table, and every question after that becomes a critique OF it — each expert reviewing it through their own lens, with citations on demand.
+
+Take it off the table anytime with the ✕.`;
+
+const HELP_DEPTH = `Fast = meeting tempo — quick, concise answers.
+Detailed = the full pipeline — slower, deeper, more thorough.
+
+Switch anytime; it applies to the next question.`;
 
 function loadRoom(pid: string): RoomDoc | null {
   try {
@@ -369,13 +389,17 @@ export function BoardroomView() {
           <Landmark className="h-5 w-5" />
         </span>
         <div className="min-w-0 flex-1">
-          <h1 className="font-display text-[17px] font-bold leading-tight">The Boardroom</h1>
+          <h1 className="flex items-center gap-1.5 font-display text-[17px] font-bold leading-tight">
+            The Boardroom
+            <HelpDot text={HELP_ROOM} />
+          </h1>
           <p className="truncate text-[12px] text-muted-foreground">
             Your invisible counselors — one question, every expert answers. Disagreement is the
             point.
           </p>
         </div>
         {/* Depth: fast = meeting tempo; detailed = full pipeline */}
+        <HelpDot text={HELP_DEPTH} />
         <div className="flex overflow-hidden rounded-lg ring-1 ring-border">
           {(['fast', 'detailed'] as const).map((s) => (
             <button
@@ -401,7 +425,12 @@ export function BoardroomView() {
       </div>
 
       {/* ---- Seats ---- */}
-      <div className="flex gap-2.5 overflow-x-auto border-b border-border px-5 py-3">
+      <div className="flex items-center gap-2.5 overflow-x-auto border-b border-border px-5 py-3">
+        {hydrated && banks.length > 0 && (
+          <span className="flex shrink-0 items-center gap-1 self-center text-[11px] font-semibold uppercase tracking-wide text-muted-foreground/60">
+            Seats <HelpDot text={HELP_SEATS} />
+          </span>
+        )}
         {!hydrated ? (
           <span className="flex items-center gap-2 text-[13px] text-muted-foreground">
             <Loader2 className="h-4 w-4 animate-spin" /> Setting the chairs…
@@ -412,7 +441,7 @@ export function BoardroomView() {
             <Link href="/board" className="font-semibold text-accent underline">
               Board
             </Link>{' '}
-            first (wire a Library, add a doctrine), then walk back in.
+            first (wire a Library, add Expertise), then walk back in.
           </span>
         ) : (
           banks.map((b) => {
@@ -483,12 +512,15 @@ export function BoardroomView() {
             }}
           />
         ) : (
-          <button
-            onClick={() => setTableOpen(true)}
-            className="flex items-center gap-1.5 text-[12.5px] font-medium text-muted-foreground transition-colors hover:text-accent"
-          >
-            <FileText className="h-3.5 w-3.5" /> Table a document — the room will critique it
-          </button>
+          <span className="flex items-center gap-1.5">
+            <button
+              onClick={() => setTableOpen(true)}
+              className="flex items-center gap-1.5 text-[12.5px] font-medium text-muted-foreground transition-colors hover:text-accent"
+            >
+              <FileText className="h-3.5 w-3.5" /> Table a document — the room will critique it
+            </button>
+            <HelpDot text={HELP_TABLE} />
+          </span>
         )}
       </div>
 

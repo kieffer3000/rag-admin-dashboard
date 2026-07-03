@@ -10,34 +10,8 @@ import {
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger
-} from '@/components/ui/tooltip';
-import { ScrollText, Sparkles, History, Loader2, HelpCircle } from 'lucide-react';
-
-/** A little "?" that explains a feature in plain English on hover — the
- *  concept-load rule: sell the button, explain on demand, never lecture. */
-function HelpDot({ text }: { text: string }) {
-  return (
-    <Tooltip delayDuration={100}>
-      <TooltipTrigger asChild>
-        <button
-          type="button"
-          aria-label="What is this?"
-          onClick={(e) => e.preventDefault()}
-          className="inline-flex h-4 w-4 shrink-0 items-center justify-center text-muted-foreground/50 transition-colors hover:text-accent"
-        >
-          <HelpCircle className="h-3.5 w-3.5" />
-        </button>
-      </TooltipTrigger>
-      <TooltipContent side="bottom" className="max-w-[340px] whitespace-pre-line py-2 text-[12.5px] leading-relaxed">
-        {text}
-      </TooltipContent>
-    </Tooltip>
-  );
-}
+import { HelpDot } from '@/components/rag/help-dot';
+import { ScrollText, Sparkles, History, Loader2 } from 'lucide-react';
 
 const HELP_EXPERTISE = `Optional — a standing instruction this expert keeps in its pocket, quietly attached to EVERY answer it gives (chat, research, the Boardroom, connected apps).
 
