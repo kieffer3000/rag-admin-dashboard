@@ -10,7 +10,48 @@ import {
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { ScrollText, Sparkles, History, Loader2 } from 'lucide-react';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger
+} from '@/components/ui/tooltip';
+import { ScrollText, Sparkles, History, Loader2, HelpCircle } from 'lucide-react';
+
+/** A little "?" that explains a feature in plain English on hover — the
+ *  concept-load rule: sell the button, explain on demand, never lecture. */
+function HelpDot({ text }: { text: string }) {
+  return (
+    <Tooltip delayDuration={100}>
+      <TooltipTrigger asChild>
+        <button
+          type="button"
+          aria-label="What is this?"
+          onClick={(e) => e.preventDefault()}
+          className="inline-flex h-4 w-4 shrink-0 items-center justify-center text-muted-foreground/50 transition-colors hover:text-accent"
+        >
+          <HelpCircle className="h-3.5 w-3.5" />
+        </button>
+      </TooltipTrigger>
+      <TooltipContent side="bottom" className="max-w-[340px] whitespace-pre-line py-2 text-[12.5px] leading-relaxed">
+        {text}
+      </TooltipContent>
+    </Tooltip>
+  );
+}
+
+const HELP_EXPERTISE = `Optional — a standing instruction this expert keeps in its pocket, quietly attached to EVERY answer it gives (chat, research, the Boardroom, connected apps).
+
+It shapes HOW the expert judges — e.g. "judge hooks ONLY by these 5 rules; the old 12-point list is superseded."
+
+It never changes the knowledge base: the books and their vectors stay exactly as they are.`;
+
+const HELP_REFINE = `Fact-checks THIS text against the expert's own sources: "read your books — is this note right?"
+
+The sources reply with numbered corrections (rules that are missing, overstated, or out of order). Apply what convinces you, then Save.
+
+Read-only on the knowledge base — it never adds, deletes, or changes any vectors. You'll rarely need it: once after first writing this, and again after adding a pile of new sources.`;
+
+const HELP_VERSION = `Every Save bumps the version (v1 → v2 …) and your change note becomes a changelog entry — so you can see how this expert's rules evolved.`;
 
 // DOCTRINE editor — Boardroom build order item 1 (BOARDROOM_BRIEF.md).
 // A doctrine is the Bank's judgment distilled into a one-page rubric,
@@ -174,9 +215,11 @@ export function DoctrineDialog({
           <DialogTitle className="flex items-center gap-2">
             <ScrollText className="h-5 w-5 text-accent" />
             Expertise — {bankLabel}
+            <HelpDot text={HELP_EXPERTISE} />
             {rec && rec.version > 0 && (
-              <span className="rounded-full bg-accent/10 px-2 py-0.5 text-[11px] font-bold text-accent">
+              <span className="flex items-center gap-1 rounded-full bg-accent/10 px-2 py-0.5 text-[11px] font-bold text-accent">
                 v{rec.version}
+                <HelpDot text={HELP_VERSION} />
               </span>
             )}
           </DialogTitle>
@@ -222,6 +265,7 @@ export function DoctrineDialog({
               )}
               Refine against sources
             </Button>
+            <HelpDot text={HELP_REFINE} />
           </div>
 
           {refining && (
