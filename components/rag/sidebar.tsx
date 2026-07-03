@@ -16,6 +16,7 @@ import {
   Check,
   FolderOpen,
   Workflow,
+  Landmark,
   PanelLeftClose,
   PanelLeftOpen
 } from 'lucide-react';
@@ -48,6 +49,7 @@ import { Label } from '@/components/ui/label';
 
 export const NAV = [
   { href: '/board', label: 'Board', icon: Workflow },
+  { href: '/boardroom', label: 'Boardroom', icon: Landmark },
   { href: '/', label: 'Chat', icon: MessagesSquare },
   { href: '/library', label: 'Library', icon: Library },
   { href: '/agents', label: 'Agents', icon: Bot },
