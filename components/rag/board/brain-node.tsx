@@ -15,6 +15,7 @@ import { streamText } from '@/lib/rag/mock-answer';
 import { useScrollStyle } from '@/lib/rag/scroll-style';
 import { askBrain, opineBrain } from '@/lib/rag/board/ask';
 import { ConnectDialog } from './connect-dialog';
+import { DoctrineDialog } from './doctrine-dialog';
 import {
   useBrainMessages,
   addBrainMessage,
@@ -63,6 +64,7 @@ import {
   Trash2,
   Download,
   Printer,
+  ScrollText,
   Pencil,
   Quote,
   Sparkles,
@@ -208,6 +210,7 @@ function BrainNodeInner({ id, data, selected }: NodeProps) {
   const [busy, setBusy] = useState(false);
   const [renaming, setRenaming] = useState(false);
   const [connectOpen, setConnectOpen] = useState(false);
+  const [doctrineOpen, setDoctrineOpen] = useState(false);
   const answerMode: 'cited' | 'hybrid' = d.answerMode ?? 'cited';
   // ⚡ Fast (lightning, fewer round-trips) vs 🔍 Detailed (full pipeline).
   // Defaults to Fast and persists with the brain (stays on across sessions).
@@ -641,7 +644,8 @@ function BrainNodeInner({ id, data, selected }: NodeProps) {
             d.citations === false ? 'off' : 'on',
             answerMode,
             history,
-            activeProjectId
+            activeProjectId,
+            id // Bank id → server injects its stored doctrine
           )
         : await askBrain(
             q,
@@ -655,7 +659,8 @@ function BrainNodeInner({ id, data, selected }: NodeProps) {
             speed,
             scope.clusterIds,
             scope.everything,
-            activeProjectId
+            activeProjectId,
+            id // Bank id → server injects its stored doctrine
           );
       content = r.answer;
       citations = r.citations;
@@ -1123,6 +1128,9 @@ function BrainNodeInner({ id, data, selected }: NodeProps) {
               </DropdownMenuItem>
               <DropdownMenuItem onClick={() => setConnectOpen(true)} className="gap-2.5">
                 <Plug className="h-4 w-4 text-accent" /> Connect to another app
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setDoctrineOpen(true)} className="gap-2.5">
+                <ScrollText className="h-4 w-4 text-accent" /> Doctrine
               </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem
@@ -1606,6 +1614,14 @@ function BrainNodeInner({ id, data, selected }: NodeProps) {
         answerMode={answerMode}
         model={modelId}
         speed={speed}
+      />
+      <DoctrineDialog
+        open={doctrineOpen}
+        onOpenChange={setDoctrineOpen}
+        bankLabel={d.name || 'Answers Bank'}
+        bankId={id}
+        projectId={activeProjectId}
+        sourceIds={scope.items.map((m) => m.id)}
       />
     </div>
   );

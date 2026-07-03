@@ -1,5 +1,6 @@
 import { auth } from '@clerk/nextjs/server';
 import { longFetch } from '@/lib/rag/long-fetch';
+import { doctrineFor, injectDoctrine } from '@/lib/rag/doctrines';
 import { nsForUser } from '@/lib/rag/namespace';
 import { runOpine, type Artifact } from '@/lib/rag/opine';
 import { fetchReadablePage } from '@/lib/rag/web-extract';
@@ -29,7 +30,7 @@ const NOMATCH_THRESHOLD = Number(process.env.RAG_NOMATCH_THRESHOLD ?? 0.6);
 const HISTORY_MAX_MESSAGES = 30;
 
 export async function POST(req: Request) {
-  const { userId } = await auth();
+  const { userId, orgId } = await auth();
   if (!userId) {
     return Response.json({ error: 'Unauthorized' }, { status: 401 });
   }
@@ -38,6 +39,18 @@ export async function POST(req: Request) {
   if (!body || typeof body.instruction !== 'string' || !body.instruction.trim()) {
     return Response.json({ error: 'instruction is required' }, { status: 400 });
   }
+
+  // DOCTRINE-ON-BANK (Boardroom item 1): prepend this Bank's stored doctrine
+  // server-side. Mutating body.guides here covers BOTH branches below (the
+  // Make relay and the in-code fallback read body.guides). Callers that omit
+  // bank_node_id (e.g. the doctrine refine loop itself, which must critique
+  // the rubric WITHOUT being steered by it) get no injection.
+  body.guides = injectDoctrine(
+    (Array.isArray(body.guides) ? body.guides : []).filter(
+      (g: unknown): g is string => typeof g === 'string' && g.trim() !== ''
+    ),
+    await doctrineFor(orgId ?? `user:${userId}`, body.project_id, body.bank_node_id)
+  );
 
   const sourceIds: string[] = Array.isArray(body.source_ids)
     ? body.source_ids.filter((s: unknown) => typeof s === 'string' && s)

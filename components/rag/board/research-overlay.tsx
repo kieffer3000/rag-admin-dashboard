@@ -400,7 +400,8 @@ export function ResearchOverlay({
             data.citations === false ? 'off' : 'on',
             answerMode,
             history,
-            activeProjectId
+            activeProjectId,
+            brainId // Bank id → server injects its stored doctrine
           )
         : await askBrain(
             q,
@@ -414,7 +415,8 @@ export function ResearchOverlay({
             speed,
             scope.clusterIds,
             scope.everything,
-            activeProjectId
+            activeProjectId,
+            brainId // Bank id → server injects its stored doctrine
           );
       content = r.answer;
       citations = r.citations;

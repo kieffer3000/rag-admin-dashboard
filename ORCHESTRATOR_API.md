@@ -182,3 +182,19 @@ limit is the real constraint** — not the API. To stay well under it:
 > Ownership split: **answersDoc** owns the experts + the two verbs (ask/opine).
 > The **orchestrator** owns per-lane artifact scoping, `doctrineVersion` stamping, the
 > house-model choice, stage ordering, the blackboard, and the critique loop.
+
+## 9. Doctrine-on-Bank (server-injected guides) — 2026-07-03
+
+Each Bank can now carry a stored **doctrine** (its one-page judgment rubric), edited in-app via
+the Bank's ⋮ menu → **Doctrine** (versioned, with a changelog and a "Refine against sources"
+self-correction loop). When present, the doctrine is **injected server-side as the first
+`guides[]` entry on every keyed call** — both `/ask` and `/opine`.
+
+Implications for orchestrators:
+- You may stop shipping the doctrine per-call. Callers that still send it are safe: an exact
+  duplicate of the stored text is skipped (never injected twice). Note the dedupe is EXACT-match —
+  if your per-call copy diverges from the stored version, BOTH will ride; migrate by clearing your
+  per-call copy once the stored doctrine is authoritative.
+- `/ask` now honours doctrine guidance too (previously bare Q&A): the doctrine wraps the
+  generation prompt while retrieval still uses the raw question.
+- Legacy connections without a `bank_node_id` stamp (never Re-synced) skip injection entirely.

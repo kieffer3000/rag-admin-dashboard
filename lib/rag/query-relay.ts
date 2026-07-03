@@ -55,6 +55,10 @@ export interface RelayInput {
   model?: string;
   speed?: 'fast' | 'detailed' | 'research';
   conversation?: string;
+  /** Instruction guides (e.g. the Bank's stored doctrine). Embedded into the
+   *  GENERATION question the same way /api/query's buildPrompt does — the raw
+   *  question still drives retrieval via query_text. */
+  guides?: string[];
 }
 
 /** POST one question to the Make Query scenario and shape the reply. Throws on
@@ -64,13 +68,21 @@ export async function relayPublicQuery(input: RelayInput): Promise<PublicAnswer>
   if (!url) throw new Error('MAKE_QUERY_WEBHOOK_URL is not configured');
 
   const sourceIds = input.sourceIds ?? [];
+  const guides = (input.guides ?? []).filter((g) => g && g.trim());
+  // Guides (doctrine) wrap the GENERATION question deterministically, exactly
+  // like /api/query's buildPrompt — retrieval keeps the raw question below.
+  const prompted = guides.length
+    ? `Additional instructions (follow all of these):\n${guides
+        .map((g) => `- ${g}`)
+        .join('\n')}\n\nQuestion: ${input.question}`
+    : input.question;
   // longFetch: Research-speed runs can exceed global fetch's ~300s default —
   // matched undici set w/ a 780s window (see lib/rag/long-fetch.ts).
   const res = await longFetch(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      question: input.question,
+      question: prompted,
       query_text: input.question,
       conversation: input.conversation ?? '',
       summary: '',

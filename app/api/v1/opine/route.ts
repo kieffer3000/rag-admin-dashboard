@@ -1,4 +1,5 @@
 import { authorizeConnection, rateLimited, openCors } from '@/lib/rag/public-api';
+import { doctrineFor, injectDoctrine } from '@/lib/rag/doctrines';
 import { runOpine, type Artifact } from '@/lib/rag/opine';
 import { fetchReadablePage } from '@/lib/rag/web-extract';
 import { longFetch, isRelayTimeout } from '@/lib/rag/long-fetch';
@@ -153,9 +154,18 @@ export async function POST(req: Request) {
     );
   }
 
-  const guides: string[] = Array.isArray(body.guides)
+  let guides: string[] = Array.isArray(body.guides)
     ? (body.guides as unknown[]).filter((g): g is string => typeof g === 'string' && g.trim() !== '')
     : [];
+  // DOCTRINE-ON-BANK (Boardroom item 1): the Bank's stored doctrine is
+  // injected server-side on every keyed call — external orchestrators no
+  // longer need to ship rubrics per-call (exact duplicates are skipped, so
+  // callers that still do are safe). Legacy connections without a
+  // bank_node_id stamp simply skip this.
+  guides = injectDoctrine(
+    guides,
+    await doctrineFor(conn.scope, conn.project_id, conn.bank_node_id)
+  );
   const references: Artifact[] = Array.isArray(body.references)
     ? (body.references as unknown[])
         .filter((r): r is Artifact => !!r && typeof (r as Artifact).content === 'string')

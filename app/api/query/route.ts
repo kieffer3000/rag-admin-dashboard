@@ -5,6 +5,7 @@ import { fetchSummaries, wantsSummary } from '@/lib/rag/summary-core';
 import { nsForUser } from '@/lib/rag/namespace';
 import { retrieveExpandedContext } from '@/lib/rag/expand';
 import { getOrgOpenrouterKey, scopeOf } from '@/lib/org-settings';
+import { doctrineFor, injectDoctrine } from '@/lib/rag/doctrines';
 
 // Proxies the Board's brain queries to the Make.com Query scenario.
 //
@@ -325,8 +326,15 @@ export async function POST(req: Request) {
   const body = await req.json();
   const sourceIds: string[] = body.source_ids ?? [];
   const contextTexts: string[] = body.context_texts ?? [];
-  const guides: string[] = (body.guides ?? []).filter(
+  let guides: string[] = (body.guides ?? []).filter(
     (g: unknown) => typeof g === 'string' && g.trim()
+  );
+  // DOCTRINE-ON-BANK (Boardroom item 1): the Bank's stored doctrine rides
+  // EVERY call to it, injected server-side — the client only identifies the
+  // Bank (bank_node_id). Best-effort; a lookup hiccup never fails the answer.
+  guides = injectDoctrine(
+    guides,
+    await doctrineFor(scopeOf(orgId, userId), body.project_id, body.bank_node_id)
   );
 
   if (!body.question || sourceIds.length === 0) {

@@ -1,4 +1,5 @@
 import { authorizeConnection, rateLimited, openCors } from '@/lib/rag/public-api';
+import { doctrineFor } from '@/lib/rag/doctrines';
 import { relayPublicQuery } from '@/lib/rag/query-relay';
 import { isRelayTimeout } from '@/lib/rag/long-fetch';
 
@@ -101,6 +102,11 @@ export async function POST(req: Request) {
       conn.allow_speed_choice && validSpeeds.includes(reqSpeed) ? reqSpeed : conn.speed
     ) as 'fast' | 'detailed' | 'research';
 
+    // DOCTRINE-ON-BANK (Boardroom item 1): the Bank's stored doctrine rides
+    // every keyed ask too — the expert answers with its judgment, not just
+    // its library. Legacy connections without a bank_node_id stamp skip this.
+    const doctrine = await doctrineFor(conn.scope, conn.project_id, conn.bank_node_id);
+
     const result = await relayPublicQuery({
       question,
       namespace: conn.namespace,
@@ -108,7 +114,8 @@ export async function POST(req: Request) {
       answerMode: conn.answer_mode === 'hybrid' ? 'hybrid' : 'cited',
       model: conn.model,
       speed: speed ?? 'detailed',
-      conversation
+      conversation,
+      guides: doctrine ? [doctrine] : []
     });
 
     // Citations are intentionally NOT exposed via the public API — only the

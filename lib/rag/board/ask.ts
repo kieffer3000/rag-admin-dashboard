@@ -460,7 +460,9 @@ export async function askBrain(
    *  use the precomputed box or project rollup instead of re-synthesizing. */
   clusterIds: string[] = [],
   everything = false,
-  projectId?: string
+  projectId?: string,
+  /** The Bank's node id — lets the server inject its stored doctrine. */
+  bankNodeId?: string
 ): Promise<AskResult> {
   const res = await fetch('/api/query', {
     method: 'POST',
@@ -477,7 +479,8 @@ export async function askBrain(
       speed,
       cluster_ids: clusterIds,
       everything,
-      project_id: projectId
+      project_id: projectId,
+      bank_node_id: bankNodeId
     })
   });
 
@@ -549,7 +552,9 @@ export async function opineBrain(
   citations: 'on' | 'off' = 'on',
   grounding: 'cited' | 'hybrid' = 'cited',
   history: { role: 'user' | 'assistant'; content: string }[] = [],
-  projectId?: string
+  projectId?: string,
+  /** The Bank's node id — lets the server inject its stored doctrine. */
+  bankNodeId?: string
 ): Promise<AskResult> {
   const res = await fetch('/api/opine', {
     method: 'POST',
@@ -563,7 +568,8 @@ export async function opineBrain(
       citations,
       grounding,
       history,
-      project_id: projectId
+      project_id: projectId,
+      bank_node_id: bankNodeId
     })
   });
 
