@@ -1093,14 +1093,40 @@ export function BoardProvider({ children }: { children: ReactNode }) {
       const typeOf = (n: BoardNode) =>
         media.find((m) => m.id === n.data.mediaId)?.type;
 
+      // STRING-LINKED pieces: a chip→chip edge ties two pieces into one group
+      // without physical snapping. Adjacency is bidirectional; groups are
+      // transitive (A—B—C = one group), and each linked piece still brings its
+      // own welded stack along.
+      const linkAdj = new Map<string, string[]>();
+      for (const e of edges) {
+        const a = byId.get(e.source);
+        const b = byId.get(e.target);
+        if (a?.type === 'chip' && b?.type === 'chip') {
+          linkAdj.set(a.id, [...(linkAdj.get(a.id) ?? []), b.id]);
+          linkAdj.set(b.id, [...(linkAdj.get(b.id) ?? []), a.id]);
+        }
+      }
+
       for (const e of edges) {
         if (e.target !== brainId) continue;
         const src = byId.get(e.source);
         if (!src) continue;
         if (src.type === 'chip') {
-          // A puzzle stack is ONE piece: wiring any member wires them all.
-          for (const member of stackOf(src, nodes, typeOf)) {
-            ids.push(member.data.mediaId as string);
+          // A wired piece brings its whole GROUP: welded stack members AND
+          // string-linked pieces, followed transitively.
+          const seen = new Set<string>();
+          const queue: BoardNode[] = [src];
+          while (queue.length) {
+            const n = queue.pop()!;
+            if (seen.has(n.id)) continue;
+            seen.add(n.id);
+            ids.push(n.data.mediaId as string);
+            for (const mate of stackOf(n, nodes, typeOf))
+              if (!seen.has(mate.id)) queue.push(mate);
+            for (const nb of linkAdj.get(n.id) ?? []) {
+              const m = byId.get(nb);
+              if (m && !seen.has(m.id)) queue.push(m);
+            }
           }
         } else if (src.type === 'hub') {
           if (src.data.mediaType === 'everything') {

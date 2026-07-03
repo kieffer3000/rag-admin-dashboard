@@ -26,6 +26,13 @@ export interface HubData extends Record<string, unknown> {
    *  forced expanded, `undefined` = AUTO (minimized once it passes
    *  HUB_AUTOCOLLAPSE_AT members). See hubCollapsed(). */
   collapsed?: boolean;
+  /** FACE VIEW — represent the box as a portrait instead of a tray (an
+   *  "Einstein box" wears Einstein's face). `face` = 'preset:male' |
+   *  'preset:female' | a downscaled image data-URL (transparent PNGs float
+   *  best); `faceOn` toggles the view. Purely visual — contents, wiring and
+   *  the plug are untouched, and a button flips back to the box anytime. */
+  face?: string;
+  faceOn?: boolean;
 }
 
 export interface BrainData extends Record<string, unknown> {
@@ -233,14 +240,27 @@ export function hubGridExpanded(
   return hubUsesGrid(data, memberCount) && !hubCollapsed(data, memberCount);
 }
 
+/** FACE VIEW footprint — a portrait card (header + image + name strip). */
+export const HUB_FACE_SIZE = { width: 172, height: 236 } as const;
+
+/** Is this hub wearing its face? (cluster boxes only) */
+export function hubFaced(data: {
+  mediaType?: HubType;
+  face?: string;
+  faceOn?: boolean;
+}): boolean {
+  return data.mediaType === 'cluster' && !!data.faceOn && !!data.face;
+}
+
 /** Real on-canvas size of a hub (collapse-aware). Overlap math + Clean Desk
  *  must reserve the ACTUAL footprint — a grid box is HUB_MINI/EXPANDED_SIZE, not
  *  its full grid — or auto-minimized boxes leave huge gaps / mis-overlap. */
 export function hubFootprint(
-  data: { mediaType?: HubType; collapsed?: boolean },
+  data: { mediaType?: HubType; collapsed?: boolean; face?: string; faceOn?: boolean },
   memberCount: number
 ): { width: number; height: number } {
   if (data.mediaType === 'everything') return { width: 230, height: 86 };
+  if (hubFaced(data)) return { ...HUB_FACE_SIZE };
   if (hubUsesGrid(data, memberCount))
     return hubGridExpanded(data, memberCount) ? { ...HUB_EXPANDED_SIZE } : { ...HUB_MINI_SIZE };
   return hubSize(memberCount);

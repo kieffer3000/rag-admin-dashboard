@@ -11,8 +11,10 @@ import {
   hubCollapsed,
   hubUsesGrid,
   hubGridExpanded,
+  hubFaced,
   HUB_MINI_SIZE,
   HUB_EXPANDED_SIZE,
+  HUB_FACE_SIZE,
   CHIP_W,
   CHIP_H,
   HUB_HEADER_H,
@@ -29,7 +31,10 @@ import {
   ExternalLink,
   ArrowUpRight,
   Trash2,
-  Minus
+  Minus,
+  UserRound,
+  Package,
+  ImageUp
 } from 'lucide-react';
 import { useRag } from '@/lib/rag/store';
 import { useBoard } from '@/lib/rag/board/store';
@@ -43,12 +48,67 @@ import { useBoard } from '@/lib/rag/board/store';
  * name to rename. (Legacy single-type hubs still render; the "everything"
  * variant implicitly carries ALL indexed project sources.)
  */
+/** Downscale an uploaded portrait so face images stay light in the board doc
+ *  (a full-res photo as a data-URL is megabytes — the doc-bloat trap). */
+async function downscaleFace(dataUrl: string, max = 360): Promise<string> {
+  const img = new Image();
+  await new Promise<void>((res, rej) => {
+    img.onload = () => res();
+    img.onerror = () => rej(new Error('bad image'));
+    img.src = dataUrl;
+  });
+  const scale = Math.min(1, max / Math.max(img.width, img.height));
+  const c = document.createElement('canvas');
+  c.width = Math.round(img.width * scale);
+  c.height = Math.round(img.height * scale);
+  c.getContext('2d')!.drawImage(img, 0, 0, c.width, c.height);
+  // PNG keeps transparency — a transparent-cutout Einstein floats on the desk.
+  return c.toDataURL('image/png');
+}
+
+/** Preset portrait — a clean bust silhouette (male/female), shoulders up. */
+function PresetFace({ variant }: { variant: 'male' | 'female' }) {
+  return (
+    <svg viewBox="0 0 100 100" className="h-full w-full text-accent/70">
+      {variant === 'female' && (
+        // hair falls behind the shoulders
+        <path
+          d="M50 12c-15 0-24 11-24 25 0 12 2 20-4 30h56c-6-10-4-18-4-30 0-14-9-25-24-25z"
+          fill="currentColor"
+          opacity="0.35"
+        />
+      )}
+      <circle cx="50" cy="36" r="16" fill="currentColor" />
+      <path d="M20 92c2-20 14-28 30-28s28 8 30 28z" fill="currentColor" />
+    </svg>
+  );
+}
+
 function HubNodeInner({ id, data, selected }: NodeProps) {
   const d = data as HubData;
   const { projectMedia, media, deleteMedia } = useRag();
   const { board, updateBoardNodeData, removeBoardNode, toggleHubCollapse, undockMember, stashBox } =
     useBoard();
   const [editing, setEditing] = useState(false);
+  /** Face-picker menu (choose preset / upload) — open while picking. */
+  const [facePick, setFacePick] = useState(false);
+  const faceFileRef = useRef<HTMLInputElement>(null);
+  const faced = hubFaced(d);
+  const onFaceFile = async (f: File | null) => {
+    setFacePick(false);
+    if (!f) return;
+    try {
+      const raw = await new Promise<string>((res, rej) => {
+        const r = new FileReader();
+        r.onload = () => res(String(r.result));
+        r.onerror = () => rej(new Error('read failed'));
+        r.readAsDataURL(f);
+      });
+      updateBoardNodeData(id, { face: await downscaleFace(raw), faceOn: true });
+    } catch {
+      window.alert('Could not read that image — try a PNG or JPG.');
+    }
+  };
   // Grid virtualization: render ONLY the rows in view (a 3000-tile box would
   // otherwise mount 3000 <img> nodes at once and hang the tab).
   const [scrollTop, setScrollTop] = useState(0);
@@ -100,6 +160,8 @@ function HubNodeInner({ id, data, selected }: NodeProps) {
   const gridExpanded = hubGridExpanded(d, memberCount);
   const size = everything
     ? { width: 230, height: 86 }
+    : faced
+    ? { ...HUB_FACE_SIZE }
     : usesGrid
     ? gridExpanded
       ? { ...HUB_EXPANDED_SIZE }
@@ -172,7 +234,7 @@ function HubNodeInner({ id, data, selected }: NodeProps) {
       {/* the recessed WELL — a distinct cool-gray surface cut into the body,
           with the inset shadow ONLY here so the dish depth is unmistakable.
           Docked chip tiles (RF children) render on top of it. */}
-      {!everything && !usesGrid && (
+      {!everything && !usesGrid && !faced && (
         <div
           style={{ top: HUB_HEADER_H - 2 }}
           className={cn(
@@ -215,7 +277,7 @@ function HubNodeInner({ id, data, selected }: NodeProps) {
       {/* MINIMIZED: a scrollable thumbnail grid in the box's own DOM (the real
           chips are hidden on the canvas). A 100-item box becomes a tidy 3-wide
           preview you can scroll, instead of eating the screen. */}
-      {cluster && usesGrid && (
+      {cluster && usesGrid && !faced && (
         <div
           onScroll={(e) => setScrollTop((e.currentTarget as HTMLDivElement).scrollTop)}
           style={{ top: HUB_HEADER_H - 2, bottom: 6 }}
@@ -330,9 +392,120 @@ function HubNodeInner({ id, data, selected }: NodeProps) {
         </div>
       )}
 
+      {/* FACE VIEW — the box wears a portrait (an "Einstein box" wears
+          Einstein). Contents/wiring untouched; the plug still works; the
+          pill below flips back to the box anytime. */}
+      {cluster && faced && (
+        <div
+          style={{ top: HUB_HEADER_H - 2 }}
+          className="absolute inset-x-1.5 bottom-1.5 flex flex-col overflow-hidden rounded-[13px]"
+        >
+          <div className="relative min-h-0 flex-1">
+            {d.face === 'preset:male' || d.face === 'preset:female' ? (
+              <PresetFace variant={d.face === 'preset:female' ? 'female' : 'male'} />
+            ) : (
+              // object-contain, no backing surface — a transparent-cutout
+              // portrait floats straight on the desk.
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={d.face}
+                alt={d.name}
+                draggable={false}
+                className="h-full w-full select-none object-contain"
+              />
+            )}
+            <span className="absolute right-1 top-1 rounded-full bg-black/45 px-1.5 py-0.5 text-[10px] font-bold text-white">
+              {memberCount}
+            </span>
+          </div>
+          <button
+            title="Back to the box view"
+            onClick={(e) => {
+              e.stopPropagation();
+              updateBoardNodeData(id, { faceOn: false });
+            }}
+            className="nodrag mx-auto mb-0.5 flex shrink-0 items-center gap-1 rounded-full bg-black/[0.06] px-2 py-0.5 text-[10px] font-semibold text-muted-foreground transition-colors hover:bg-accent/15 hover:text-accent dark:bg-white/[0.08]"
+          >
+            <Package className="h-3 w-3" /> Box
+          </button>
+        </div>
+      )}
+
+      {/* hidden portrait file input (Face picker → Upload) */}
+      <input
+        ref={faceFileRef}
+        type="file"
+        accept="image/*"
+        className="hidden"
+        onChange={(e) => onFaceFile(e.target.files?.[0] ?? null)}
+      />
+      {/* face-picker menu — preset male/female or upload your own */}
+      {facePick && (
+        <div className="nodrag absolute -right-2 top-6 z-20 w-44 rounded-xl border border-black/[0.08] bg-card p-1 text-[12px] shadow-[0_8px_28px_-6px_rgb(0_0_0/0.3)]">
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              setFacePick(false);
+              updateBoardNodeData(id, { face: 'preset:male', faceOn: true });
+            }}
+            className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 hover:bg-accent/10"
+          >
+            <UserRound className="h-3.5 w-3.5 text-accent" /> Male portrait
+          </button>
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              setFacePick(false);
+              updateBoardNodeData(id, { face: 'preset:female', faceOn: true });
+            }}
+            className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 hover:bg-accent/10"
+          >
+            <UserRound className="h-3.5 w-3.5 text-accent" /> Female portrait
+          </button>
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              faceFileRef.current?.click();
+            }}
+            className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 hover:bg-accent/10"
+          >
+            <ImageUp className="h-3.5 w-3.5 text-accent" /> Upload image…
+          </button>
+          {d.face && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                setFacePick(false);
+                updateBoardNodeData(id, { faceOn: true });
+              }}
+              className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 hover:bg-accent/10"
+            >
+              <UserRound className="h-3.5 w-3.5 text-muted-foreground" /> Wear current face
+            </button>
+          )}
+        </div>
+      )}
+
       {/* top-right controls: MINIMIZE the box to the dock menu (saved, recallable)
           + remove it. Both appear on hover. */}
       <div className="nodrag absolute -right-2 -top-2 z-10 flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+        {cluster && (
+          <button
+            title={
+              faced
+                ? 'Change the face (or upload a new one)'
+                : 'Face view — represent this box as a portrait (Einstein for the Einstein box)'
+            }
+            onClick={(e) => {
+              e.stopPropagation();
+              if (!faced && d.face) updateBoardNodeData(id, { faceOn: true });
+              else setFacePick((s) => !s);
+            }}
+            className="flex h-5 w-5 items-center justify-center rounded-full bg-card text-muted-foreground/70 shadow-[0_1px_4px_rgb(0_0_0/0.14)] transition-colors hover:text-accent"
+          >
+            <UserRound className="h-3 w-3" />
+          </button>
+        )}
         {cluster && (
           <button
             title="Minimize box to the dock menu — it stays saved; bring it back from the 📦 menu"
@@ -414,7 +587,7 @@ function HubNodeInner({ id, data, selected }: NodeProps) {
         <span className="shrink-0 rounded-full bg-black/[0.05] px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground dark:bg-white/[0.07]">
           {everything ? `${indexedAll} sources` : memberCount}
         </span>
-        {cluster && memberCount > 0 && (
+        {cluster && memberCount > 0 && !faced && (
           <button
             onClick={(e) => {
               e.stopPropagation();
@@ -436,7 +609,7 @@ function HubNodeInner({ id, data, selected }: NodeProps) {
         <div className="px-3 text-[10.5px] leading-snug text-muted-foreground/70">
           Wires every indexed source in this project to the brain.
         </div>
-      ) : memberCount === 0 ? (
+      ) : memberCount === 0 && !faced ? (
         /* empty tray: a caption floats over the parking-space ghosts */
         <span
           style={{ top: HUB_HEADER_H + 26 }}

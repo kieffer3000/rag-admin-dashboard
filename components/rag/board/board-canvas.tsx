@@ -41,6 +41,7 @@ import {
   hubSlot,
   hubCols,
   hubUsesGrid,
+  hubFaced,
   hubFootprint,
   stackOf,
   CHIP_W,
@@ -624,6 +625,21 @@ function BoardCanvasInner() {
     (conn: Connection) => {
       const src = board.nodes.find((n) => n.id === conn.source);
       const tgt = board.nodes.find((n) => n.id === conn.target);
+      // STRING-LINK: piece → piece. Tie two pieces together with a string and
+      // they behave as ONE group (wiring either to a Bank wires both, like a
+      // welded stack) — the no-aim alternative to puzzle-snapping, and the
+      // workaround when overlapping pieces block the snap. Cut the string to
+      // separate (scissors / click the wire, same as any cable).
+      if (src?.type === 'chip' && tgt?.type === 'chip' && src.id !== tgt.id) {
+        setBoard((prev) => ({
+          ...prev,
+          edges: addEdge(
+            { ...conn, id: nextBoardId('e'), type: 'scope' },
+            prev.edges as Edge[]
+          )
+        }));
+        return;
+      }
       // Non-brain targets (shouldn't happen) just add as-is.
       if (!src || !tgt || tgt.type !== 'brain') {
         setBoard((prev) => ({
@@ -668,12 +684,20 @@ function BoardCanvasInner() {
     [board.nodes, board.edges, setBoard, nextBoardId, connectArtifactToBrain, scheduleTidy]
   );
 
-  /** Edges only flow INTO a brain, from chips / hubs / text nodes. */
+  /** Edges flow INTO a brain (from chips / hubs / text nodes) — or piece →
+   *  piece (the string-link that groups two loose pieces without snapping). */
   const isValidConnection: IsValidConnection = useCallback(
     (conn) => {
       const src = board.nodes.find((n) => n.id === conn.source);
       const tgt = board.nodes.find((n) => n.id === conn.target);
-      return !!src && !!tgt && tgt.type === 'brain' && SOURCE_TYPES.has(src.type!);
+      if (!src || !tgt) return false;
+      const chipLink =
+        src.type === 'chip' &&
+        tgt.type === 'chip' &&
+        src.id !== tgt.id &&
+        !src.parentId &&
+        !tgt.parentId; // docked pieces: the box is the plug
+      return chipLink || (tgt.type === 'brain' && SOURCE_TYPES.has(src.type!));
     },
     [board.nodes]
   );
@@ -1719,14 +1743,15 @@ function BoardCanvasInner() {
         memberCount.set(n.parentId, (memberCount.get(n.parentId) ?? 0) + 1);
     }
     // Hide a box's canvas chips whenever the box renders as the DOM grid (mini OR
-    // big-expanded) — the grid draws its own thumbnails, so the real chips would
-    // otherwise spill across the canvas.
+    // big-expanded) OR wears its FACE — the grid draws its own thumbnails and the
+    // face is a portrait card, so the real chips would otherwise spill across
+    // the canvas / overlay the portrait.
     const gridded = new Set(
       board.nodes
         .filter(
           (n) =>
             n.type === 'hub' &&
-            hubUsesGrid(n.data, memberCount.get(n.id) ?? 0)
+            (hubUsesGrid(n.data, memberCount.get(n.id) ?? 0) || hubFaced(n.data))
         )
         .map((n) => n.id)
     );

@@ -380,6 +380,17 @@ function ChipNodeInner({ id, data, selected, parentId }: NodeProps) {
           !parentId && inStack && 'group-hover:animate-pulse'
         )}
       />
+      {/* STRING-LINK landing point: drag another piece's string here to tie
+          the two into one group (no puzzle-aiming needed; cut the string to
+          separate). Subtle until hovered; gone while docked (box = the plug). */}
+      <Handle
+        type="target"
+        position={Position.Top}
+        className={cn(
+          '!h-4 !w-4 !border-2 !border-card !bg-accent/50 !opacity-0 transition-opacity group-hover:!opacity-100',
+          parentId && '!pointer-events-none'
+        )}
+      />
     </div>
   );
 }
