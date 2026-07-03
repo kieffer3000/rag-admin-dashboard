@@ -15,6 +15,8 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { HelpDot } from '@/components/rag/help-dot';
+import { RoomEmbedDialog } from './room-embed-dialog';
+import { Share2 } from 'lucide-react';
 import { useRag } from '@/lib/rag/store';
 import { useBoard } from '@/lib/rag/board/store';
 import { askBrain, opineBrain } from '@/lib/rag/board/ask';
@@ -157,6 +159,7 @@ export function BoardroomView() {
   const [question, setQuestion] = useState('');
   const [asking, setAsking] = useState(false);
   const [openSources, setOpenSources] = useState<string | null>(null);
+  const [embedOpen, setEmbedOpen] = useState(false);
   const [clock, setClock] = useState(0);
   const [doctrines, setDoctrines] = useState<Map<string, number>>(new Map());
   const restored = useRef<string | null>(null);
@@ -415,6 +418,13 @@ export function BoardroomView() {
           ))}
         </div>
         <button
+          onClick={() => setEmbedOpen(true)}
+          title="Embed this Boardroom in another app (iframe)"
+          className="flex h-8 items-center gap-1.5 rounded-lg px-2.5 text-[12.5px] font-semibold text-muted-foreground transition-colors hover:bg-accent/10 hover:text-accent"
+        >
+          <Share2 className="h-4 w-4" /> Embed
+        </button>
+        <button
           onClick={exportMinutes}
           disabled={!transcript.length}
           title="Export the minutes (.md)"
@@ -423,6 +433,7 @@ export function BoardroomView() {
           <Download className="h-4 w-4" />
         </button>
       </div>
+      <RoomEmbedDialog open={embedOpen} onOpenChange={setEmbedOpen} projectId={activeProjectId} />
 
       {/* ---- Seats ---- */}
       <div className="flex items-center gap-2.5 overflow-x-auto border-b border-border px-5 py-3">

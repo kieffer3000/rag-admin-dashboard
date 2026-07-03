@@ -1,6 +1,7 @@
 import { clerkMiddleware, createRouteMatcher, clerkClient } from '@clerk/nextjs/server';
 import { NextResponse } from 'next/server';
 import { allowedOriginsForSlug } from '@/lib/rag/embed-origins';
+import { allowedOriginsForRoomSlug } from '@/lib/rag/room-origins';
 
 const isPublicRoute = createRouteMatcher([
   '/sign-in(.*)',
@@ -40,8 +41,14 @@ export default clerkMiddleware(async (auth, req) => {
   // refuses to render the widget on any other site (the real "can't use it
   // outside that domain"). Unknown key / DB error → 'none' (fail closed).
   if (req.nextUrl.pathname.startsWith('/embed/')) {
-    const slug = decodeURIComponent(req.nextUrl.pathname.split('/')[2] ?? '');
-    const origins = await allowedOriginsForSlug(slug);
+    // Path is either /embed/<connSlug> (single Bank) or /embed/room/<roomSlug>
+    // (the Boardroom). Frame-lock to whichever record's allowed origins.
+    const parts = req.nextUrl.pathname.split('/'); // ['', 'embed', a, b?]
+    const isRoom = parts[2] === 'room';
+    const slug = decodeURIComponent((isRoom ? parts[3] : parts[2]) ?? '');
+    const origins = isRoom
+      ? await allowedOriginsForRoomSlug(slug)
+      : await allowedOriginsForSlug(slug);
     const ancestors = origins && origins.length > 0 ? origins.join(' ') : "'none'";
     const res = NextResponse.next();
     res.headers.set('Content-Security-Policy', `frame-ancestors ${ancestors}`);
