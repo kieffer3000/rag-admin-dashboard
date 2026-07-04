@@ -29,18 +29,29 @@ function sizeError(file: File): Error {
 }
 
 /** Presign + browser→CloudConvert upload. Returns the jobId, or null when the
- *  broker is unavailable (caller may fall back to the direct route). */
+ *  broker is unavailable (caller may fall back to the direct route).
+ *  RETRIES transient broker failures (a 164-file import can rate-limit the
+ *  converter's job-creation API; one 5xx must not doom a whole book). */
 async function uploadViaConverter(file: File, ocr?: boolean): Promise<string | null> {
   const ext = (file.name.match(/\.([a-z0-9]+)$/i)?.[1] ?? '').toLowerCase();
-  const jr = await fetch('/api/doc-job', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ ext, ocr: !!ocr, sizeBytes: file.size })
-  });
-  if (!jr.ok) {
+  let jr: Response | null = null;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      jr = await fetch('/api/doc-job', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ext, ocr: !!ocr, sizeBytes: file.size })
+      });
+      if (jr.ok || jr.status === 413 || jr.status === 401) break;
+    } catch {
+      jr = null;
+    }
+    await new Promise((r) => setTimeout(r, 1000 * 2 ** attempt + Math.random() * 500));
+  }
+  if (!jr || !jr.ok) {
     // 413 = the broker itself refused the declared size — a real error, not
     // an availability fallback.
-    if (jr.status === 413) {
+    if (jr?.status === 413) {
       const j = await jr.json().catch(() => ({}));
       throw new Error(j?.error ?? 'File is over the upload size limit.');
     }
@@ -105,10 +116,14 @@ export async function indexDocumentFile({
   }
 
   if (file.size > DIRECT_MAX) {
-    // Non-binary big file (e.g. a huge .txt) — the direct route would be
-    // rejected by the platform with an opaque 413; say it plainly instead.
+    // Big file whose converter hop came up empty. For BINARY docs that means
+    // the broker was busy/unavailable (NOT a size problem — the old message
+    // blamed 'the ~4 MB limit' and confused a 164-file import); for a huge
+    // non-binary file (e.g. .txt) the direct route genuinely can't carry it.
     throw new Error(
-      `File is ${(file.size / 1048576).toFixed(1)} MB — over the ~4 MB direct-upload limit.`
+      BINARY.test(file.name)
+        ? 'The large-file converter was busy or unavailable — press Retry in a moment.'
+        : `File is ${(file.size / 1048576).toFixed(1)} MB — over the ~4 MB direct-upload limit.`
     );
   }
   const fd = new FormData();

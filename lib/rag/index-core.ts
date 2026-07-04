@@ -25,7 +25,14 @@ import { embedTexts } from '@/lib/rag/embed';
 const CHUNK_CHARS = Number(process.env.RAG_CHUNK_CHARS ?? 500);
 const CHUNK_OVERLAP = Number(process.env.RAG_CHUNK_OVERLAP ?? 100);
 const UPSERT_BATCH = 100; // Pinecone upsert cap per request
-const UPSERT_MAX_RETRY = 4;
+// 8 tries, exp backoff capped at 15s + jitter (~45s budget). The old 4-try /
+// ~6s budget gave up under Pinecone's sustained-write 429s the moment a BATCH
+// of big books indexed together (164-doc import, 2026-07-04) — rate limits
+// need patience, not surrender.
+const UPSERT_MAX_RETRY = 8;
+// Small pause between consecutive batches of the SAME document — smooths the
+// write rate so parallel big books don't collectively slam the 429 wall.
+const INTER_BATCH_MS = 150;
 
 function pineconeHost(): string {
   const h = process.env.PINECONE_HOST;
@@ -66,7 +73,9 @@ async function upsertBatch(
     } catch (e: any) {
       lastErr = e?.message ?? 'upsert error';
     }
-    await new Promise((r) => setTimeout(r, 400 * 2 ** attempt));
+    await new Promise((r) =>
+      setTimeout(r, Math.min(400 * 2 ** attempt, 15_000) + Math.random() * 400)
+    );
   }
   throw new Error(`Pinecone upsert failed after ${UPSERT_MAX_RETRY} attempts: ${lastErr}`);
 }
@@ -163,6 +172,9 @@ export async function indexText(opts: {
     const batch = records.slice(i, i + UPSERT_BATCH);
     await upsertBatch(host, key, namespace, batch);
     upserted += batch.length;
+    // Pace consecutive batches — see INTER_BATCH_MS.
+    if (i + UPSERT_BATCH < records.length)
+      await new Promise((r) => setTimeout(r, INTER_BATCH_MS));
   }
 
   // Level 1 of the summary tree: one pre-made summary of the WHOLE source, kept
