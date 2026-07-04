@@ -484,7 +484,7 @@ function BoardCanvasInner() {
       // so including children mixes coordinate spaces — with a far-flung box
       // the median landed among small relative offsets, every real node got
       // "outlier"-excluded, and the view framed EMPTY SPACE (2026-07-04).
-      const all = getNodes().filter((n) => !n.hidden && !n.parentNode && !(n as any).parentId);
+      const all = getNodes().filter((n) => !n.hidden && !n.parentId);
       if (!all.length) return;
       // Exclude FAR OUTLIERS (a stray off-canvas box) from the framing — otherwise
       // one node at an extreme coordinate blows the bounds up and the zoom
