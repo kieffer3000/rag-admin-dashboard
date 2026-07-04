@@ -610,7 +610,22 @@ export function RagProvider({ children }: { children: ReactNode }) {
     }
     setMedia((prev) => {
       const have = new Set(prev.map((m) => m.id));
-      const add = items.filter((i) => !have.has(i.id));
+      // DEAD-JOB SWEEP (2026-07-04): a 'processing' status loaded FROM DISK is
+      // a corpse — upload jobs don't survive a reload, so anything persisted
+      // mid-flight (e.g. the 413-era failures) would spin "uploading" forever.
+      // Only items NOT already in memory get this treatment: an upload running
+      // in THIS session lives in `prev` and is never touched.
+      const add = items
+        .filter((i) => !have.has(i.id))
+        .map((i) =>
+          i.status === 'processing'
+            ? {
+                ...i,
+                status: 'failed' as const,
+                error: 'Upload was interrupted — upload it again.'
+              }
+            : i
+        );
       // AUTHORITATIVE hydration (media-id collision guard): historical id
       // collisions mean two projects can hold DIFFERENT sources under one id.
       // When a board hydrates authoritatively, ITS doc wins the identity of

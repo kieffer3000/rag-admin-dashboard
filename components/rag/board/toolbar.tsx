@@ -163,6 +163,8 @@ export function BoardToolbar(p: BoardToolbarProps) {
   const [boxTarget, setBoxTarget] = useState<string>('new');
   // How many links the last import skipped as already-in-this-project duplicates.
   const [dupSkipped, setDupSkipped] = useState(0);
+  // Form-side note when a FILE pick was entirely duplicates (no progress view).
+  const [fileDupNote, setFileDupNote] = useState<string | null>(null);
   // The actual skipped URLs, so the "Skipped" filter pill can list them.
   const [dupSkippedList, setDupSkippedList] = useState<string[]>([]);
   // Status filter for the import progress list: all | indexed | failed | pending | skipped.
@@ -265,6 +267,7 @@ export function BoardToolbar(p: BoardToolbarProps) {
     setBoxTarget('new');
     setDupSkipped(0);
     setDupSkippedList([]);
+    setFileDupNote(null);
     setImportFilter('all');
   }
 
@@ -284,10 +287,35 @@ export function BoardToolbar(p: BoardToolbarProps) {
     if (sourceType === 'image' || sourceType === 'document') {
       // Bulk, mixed file types: route each file to the right pipeline.
       if (!files.length) return;
-      const imgs = files.filter((f) => f.type.startsWith('image/'));
-      const docs = files.filter((f) => !f.type.startsWith('image/'));
       const nameFor = (f: File) =>
         files.length === 1 && name.trim() ? name.trim() : stripExt(f.name);
+      // DUPLICATE CHECK (like URL imports — files have no URL, so the
+      // stripped name is their identity): a non-failed project source with
+      // the same name is already here → skip it and list it under Skipped.
+      // Failed ones may be re-uploaded (that's the retry).
+      const existingNames = new Set(
+        projectMedia
+          .filter((m) => m.status !== 'failed')
+          .map((m) => m.name.trim().toLowerCase())
+      );
+      const skippedFiles: string[] = [];
+      const fresh = files.filter((f) => {
+        if (existingNames.has(nameFor(f).trim().toLowerCase())) {
+          skippedFiles.push(f.name);
+          return false;
+        }
+        return true;
+      });
+      const imgs = fresh.filter((f) => f.type.startsWith('image/'));
+      const docs = fresh.filter((f) => !f.type.startsWith('image/'));
+      if (!fresh.length) {
+        // EVERYTHING was a duplicate — stay open and say so on the form.
+        setFileDupNote(
+          `Skipped ${skippedFiles.length} file${skippedFiles.length === 1 ? '' : 's'} already in this project: ${skippedFiles.slice(0, 4).join(', ')}${skippedFiles.length > 4 ? '…' : ''}`
+        );
+        setFiles([]);
+        return;
+      }
       const imgIds = imgs.map((f) => p.onNewImage(nameFor(f), f));
       const docItems = docs.map((f) => ({ name: nameFor(f), file: f, ocr }));
       const docIds = docItems.length ? p.onNewDocuments(docItems) : [];
@@ -298,8 +326,8 @@ export function BoardToolbar(p: BoardToolbarProps) {
         setImporting(
           docIds.map((id, i) => ({ id, url: docItems[i]?.name ?? 'Document' }))
         );
-        setDupSkipped(0);
-        setDupSkippedList([]);
+        setDupSkipped(skippedFiles.length);
+        setDupSkippedList(skippedFiles);
         setImportFilter('all');
         setFiles([]);
         setName('');
@@ -814,9 +842,17 @@ export function BoardToolbar(p: BoardToolbarProps) {
                           ? 'image/png,image/jpeg,image/webp,image/gif'
                           : '.pdf,.docx,.doc,.epub,.rtf,.odt,.txt,.md,application/pdf,application/msword,application/epub+zip,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/rtf,application/vnd.oasis.opendocument.text,text/plain'
                       }
-                      onChange={(e) => setFiles(Array.from(e.target.files ?? []))}
+                      onChange={(e) => {
+                        setFiles(Array.from(e.target.files ?? []));
+                        setFileDupNote(null);
+                      }}
                       className="block w-full cursor-pointer rounded-lg border border-input bg-card text-[13px] file:mr-3 file:cursor-pointer file:border-0 file:bg-accent/10 file:px-3 file:py-2 file:text-accent hover:border-accent/40"
                     />
+                    {fileDupNote && (
+                      <p className="rounded-lg bg-amber-500/10 px-2.5 py-1 text-[11.5px] text-amber-700 dark:text-amber-400">
+                        {fileDupNote}
+                      </p>
+                    )}
                     {files.length === 1 ? (
                       <p
                         className={

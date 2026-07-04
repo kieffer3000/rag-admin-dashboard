@@ -65,9 +65,13 @@ export function UploadDialog({
   open: boolean;
   onOpenChange: (o: boolean) => void;
 }) {
-  const { addMedia, updateMedia } = useRag();
+  const { addMedia, updateMedia, media } = useRag();
   const [method, setMethod] = useState<Method>('file');
   const [name, setName] = useState('');
+  // Files skipped at pick time because a same-named source already exists in
+  // the Library (same idea as the YouTube/website URL dedup — files have no
+  // URL, so the stripped filename is their identity).
+  const [dupNames, setDupNames] = useState<string[]>([]);
   const [description, setDescription] = useState('');
   const [date, setDate] = useState(today());
   const [urls, setUrls] = useState('');
@@ -90,12 +94,30 @@ export function UploadDialog({
     setUrls('');
     setBody('');
     setFiles([]);
+    setDupNames([]);
     setMethod('file');
     setOcr(false);
   }
 
   function pickFiles(list: FileList | File[]) {
-    const incoming = Array.from(list);
+    let incoming = Array.from(list);
+    // DUPLICATE CHECK vs the Library (like URL imports): a non-failed source
+    // whose name matches the file's stripped name is already indexed — skip it
+    // and say so. Failed ones may be re-uploaded (that's the retry).
+    const existing = new Set(
+      media
+        .filter((m) => m.status !== 'failed')
+        .map((m) => m.name.trim().toLowerCase())
+    );
+    const dupes = incoming.filter((f) =>
+      existing.has(f.name.replace(/\.[^.]+$/, '').trim().toLowerCase())
+    );
+    if (dupes.length) {
+      setDupNames((prev) => [
+        ...new Set([...prev, ...dupes.map((f) => f.name)])
+      ]);
+      incoming = incoming.filter((f) => !dupes.includes(f));
+    }
     setFiles((prev) => {
       const seen = new Set(prev.map((f) => f.name + ':' + f.size));
       return [...prev, ...incoming.filter((f) => !seen.has(f.name + ':' + f.size))];
@@ -360,6 +382,13 @@ export function UploadDialog({
                   Documents up to 50 MB each · big photos are resized
                   automatically
                 </p>
+                {dupNames.length > 0 && (
+                  <p className="mt-1.5 rounded-lg bg-amber-500/10 px-2.5 py-1 text-[11px] text-amber-700 dark:text-amber-400">
+                    Skipped {dupNames.length} already in your Library:{' '}
+                    {dupNames.slice(0, 4).join(', ')}
+                    {dupNames.length > 4 ? '…' : ''}
+                  </p>
+                )}
               </div>
 
               {files.length > 0 && (
