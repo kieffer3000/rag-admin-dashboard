@@ -816,18 +816,39 @@ export function BoardToolbar(p: BoardToolbarProps) {
                 </DialogDescription>
               </DialogHeader>
               <div className="space-y-4">
-                {/* URL imports auto-title themselves — no Name field needed. */}
-                {!URL_TYPES.includes(sourceType) && (
-                  <div className="space-y-1.5">
-                    <Label>Name</Label>
-                    <Input
-                      value={name}
-                      onChange={(e) => setName(e.target.value)}
-                      placeholder="Source name"
-                      autoFocus
-                    />
-                  </div>
-                )}
+                {/* URL imports auto-title themselves — no Name field needed.
+                    MULTI-FILE picks ignore the Name (each file keeps its own
+                    filename) — so hide it and SAY so instead of silently
+                    dropping what the user typed. */}
+                {!URL_TYPES.includes(sourceType) &&
+                  (['image', 'document', 'audio'].includes(sourceType) &&
+                  files.length > 1 ? (
+                    <p className="rounded-lg bg-black/[0.03] px-3 py-2 text-[12px] text-muted-foreground dark:bg-white/[0.04]">
+                      Each of the {files.length} files will be named after its
+                      own filename.
+                    </p>
+                  ) : (
+                    <div className="space-y-1.5">
+                      <Label>
+                        Name
+                        {['image', 'document', 'audio'].includes(sourceType) && (
+                          <span className="ml-1 font-normal normal-case text-muted-foreground">
+                            (optional — defaults to the filename)
+                          </span>
+                        )}
+                      </Label>
+                      <Input
+                        value={name}
+                        onChange={(e) => setName(e.target.value)}
+                        placeholder={
+                          ['image', 'document', 'audio'].includes(sourceType)
+                            ? 'Defaults to the filename'
+                            : 'Source name'
+                        }
+                        autoFocus
+                      />
+                    </div>
+                  ))}
                 {sourceType === 'image' || sourceType === 'document' ? (
                   // Bulk upload, ANY supported type — images go to Blob + caption/
                   // pixel-embed; PDF/DOCX/EPUB/TXT/MD extract → chunk → index. Mixed
