@@ -68,9 +68,21 @@ async function upsertBatch(
         body: JSON.stringify({ namespace, vectors })
       });
       if (res.ok) return;
-      lastErr = `HTTP ${res.status}: ${(await res.text()).slice(0, 160)}`;
+      const bodyText = (await res.text()).slice(0, 400);
+      // TWO different 429s (docs.pinecone.io/reference/api/database-limits):
+      // per-second rate limits (retry helps) vs the MONTHLY write-unit quota
+      // ("You've reached your write unit limit for the current month" — 2M
+      // WU/month on Starter). Retrying the monthly one is pure waste and
+      // buries the real problem — surface it immediately and plainly.
+      if (res.status === 429 && /write unit limit|current month/i.test(bodyText)) {
+        throw new Error(
+          `Pinecone MONTHLY write quota reached — retries cannot help. Upgrade the Pinecone plan or wait for the monthly reset. (${bodyText.slice(0, 160)})`
+        );
+      }
+      lastErr = `HTTP ${res.status}: ${bodyText.slice(0, 300)}`;
       if (res.status !== 429 && res.status < 500) throw new Error(lastErr);
     } catch (e: any) {
+      if (/MONTHLY write quota/.test(e?.message ?? '')) throw e;
       lastErr = e?.message ?? 'upsert error';
     }
     await new Promise((r) =>

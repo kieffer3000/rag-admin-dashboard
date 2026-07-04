@@ -265,7 +265,7 @@ export function ArtifactDialog({
                 <p className="text-sm font-medium">Drop files or click to browse</p>
                 <p className="mt-1 text-[11px] text-muted-foreground">
                   PDF · DOCX · EPUB · TXT · MD · audio (mp3/wav/m4a) · multiple
-                  OK · max 50 MB each
+                  OK · max 100 MB each
                 </p>
               </div>
               {files.length > 0 && (

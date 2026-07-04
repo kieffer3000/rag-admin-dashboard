@@ -379,7 +379,7 @@ export function UploadDialog({
                   </span>
                 </p>
                 <p className="mt-1 text-[10.5px] text-muted-foreground/60">
-                  Documents up to 50 MB each · big photos are resized
+                  Documents up to 100 MB each · big photos are resized
                   automatically
                 </p>
                 {dupNames.length > 0 && (

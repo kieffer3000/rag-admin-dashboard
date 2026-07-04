@@ -878,15 +878,15 @@ export function BoardToolbar(p: BoardToolbarProps) {
                       <p
                         className={
                           sourceType === 'document' &&
-                          files[0].size > 50 * 1048576
+                          files[0].size > 100 * 1048576
                             ? 'text-[11.5px] font-medium text-red-600'
                             : 'text-[11.5px] text-muted-foreground/70'
                         }
                       >
                         {files[0].name} · {(files[0].size / 1048576).toFixed(1)} MB
                         {sourceType === 'document' &&
-                          files[0].size > 50 * 1048576 &&
-                          ' — over the 50 MB limit; split the file first'}
+                          files[0].size > 100 * 1048576 &&
+                          ' — over the 100 MB limit; split the file first'}
                       </p>
                     ) : files.length > 1 ? (
                       <p className="text-[11.5px] text-accent">
@@ -903,7 +903,7 @@ export function BoardToolbar(p: BoardToolbarProps) {
                     ) : (
                       <p className="text-[11.5px] text-muted-foreground/55">
                         Documents (PDF, DOCX, EPUB, TXT, MD) — select as many as
-                        you like, max 50 MB each. Each is extracted, chunked,
+                        you like, max 100 MB each. Each is extracted, chunked,
                         and indexed on its own.{' '}
                         {ocr
                           ? 'OCR is ON — scanned / image-only PDFs will be read too (slower, uses more credits).'

@@ -17,10 +17,10 @@ export async function POST(req: Request) {
   const ocr = body.ocr === true;
 
   // SIZE GATE: the presign hop bypasses the platform body cap, so this broker
-  // is where the line is drawn — refuse jobs declared over 50MB (conversion
+  // is where the line is drawn — refuse jobs declared over 100MB (conversion
   // minutes cost money; nobody indexes a 100GB "PDF"). The declared size is
   // client-honest only, so /api/index-doc also caps the EXTRACTED text.
-  const MAX_DECLARED = 50 * 1024 * 1024;
+  const MAX_DECLARED = 100 * 1024 * 1024;
   const sizeBytes = Number(body.sizeBytes ?? 0);
   if (Number.isFinite(sizeBytes) && sizeBytes > MAX_DECLARED) {
     return Response.json(

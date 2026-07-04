@@ -18,9 +18,9 @@ const BINARY = /\.(pdf|epub|docx|doc|rtf|odt)$/i;
 const DIRECT_MAX = 4 * 1024 * 1024;
 /** Absolute document ceiling (client + declared to /api/doc-job). The presign
  *  hop has no platform cap, so WE must draw the line — nobody needs a 100GB
- *  "PDF", and conversion minutes cost real money. 50MB ≈ several full
+ *  "PDF", and conversion minutes cost real money. 100MB ≈ several full
  *  textbooks with images. */
-export const MAX_DOC_BYTES = 50 * 1024 * 1024;
+export const MAX_DOC_BYTES = 100 * 1024 * 1024;
 
 function sizeError(file: File): Error {
   return new Error(
