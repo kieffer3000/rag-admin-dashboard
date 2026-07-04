@@ -171,12 +171,11 @@ function freePosition(
 // otherwise fire 50 requests at once — exhausting the browser's per-host
 // connection cap and hammering the Make webhook + Pinecone. Chips still appear
 // instantly (optimistic); their indexing just runs a few at a time.
-// 4 → 8 → 6 (2026-07-04): 8-wide tripped Gemini's embed rate limits (up to 32
-// parallel embed calls) and the then-impatient embed retry surrendered — a
-// mass "0 chunks · Failed" cascade mid-import. With the embed retries now
-// patient (lib/rag/embed.ts), 6 is the measured-safe middle: faster than the
-// free-tier-era 4, below the burst that triggered the cascade.
-const INDEX_CONCURRENCY = 6;
+// 4 → 8 → 6 → 12 (2026-07-04): 8-wide once tripped Gemini's embed limits with
+// IMPATIENT retries (mass "0 chunks" cascade); both hops now carry the patient
+// ~50s backoff budget, so throttling degrades to slower-not-failed. 12 matches
+// the dock pool per user request — if failures cluster, drop both together.
+const INDEX_CONCURRENCY = 12;
 const indexQueue: Array<() => Promise<unknown>> = [];
 let indexActive = 0;
 function pumpIndexQueue() {
@@ -2556,11 +2555,15 @@ function BoardCanvasInner() {
 
           // Concurrency-capped pool over the batch — via the shared
           // uploadDocument so a failed doc retries through the exact same path.
-          // 3 → 6 (2026-07-04): MEASURED CloudConvert starts jobs instantly and
-          // converts in parallel (4 concurrent, zero queue wait) — the 3-wide
-          // pool was the throughput limiter on a 143-PDF import, not CC.
+          // 3 → 6 → 12 (2026-07-04): MEASURED CloudConvert starts jobs
+          // instantly and converts in parallel (4 concurrent, zero queue wait)
+          // — the 3-wide pool was the throughput limiter on a 143-PDF import,
+          // not CC. 12 per user request; if CC's plan caps concurrent
+          // conversions below this, the excess QUEUES at CC and burns the
+          // ~260s poll budget — watch for extra "extraction timed out" rows
+          // on big books and drop back if they cluster.
           let next = 0;
-          const CONCURRENCY = 6;
+          const CONCURRENCY = 12;
           const runners = Array.from(
             { length: Math.min(CONCURRENCY, jobs.length) },
             async () => {
