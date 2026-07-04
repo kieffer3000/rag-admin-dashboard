@@ -3,6 +3,7 @@
 import { useState, useRef } from 'react';
 import { useRag } from '@/lib/rag/store';
 import { MediaType } from '@/lib/rag/types';
+import { indexDocumentFile } from '@/lib/rag/doc-upload';
 import {
   Dialog,
   DialogContent,
@@ -153,16 +154,26 @@ export function UploadDialog({
             { type, name: nm, description: description.trim(), date, content: '', source: file.name },
             { simulate: false }
           );
-          const endpoint = type === 'image' ? '/api/index-image' : '/api/index-doc';
           jobs.push({
             id,
             run: async () => {
+              if (type === 'document') {
+                // Shared big-file-safe path (presigned CloudConvert hop for
+                // binaries — no ~4.5MB body cap). The old raw multipart POST
+                // here meant any BOOK over ~4.5MB failed 100% of the time.
+                const res = await indexDocumentFile({ id, name: nm, file, ocr });
+                updateMedia(id, {
+                  status: 'indexed',
+                  chunks: res.chunks,
+                  source: res.source
+                });
+                return;
+              }
               const fd = new FormData();
               fd.append('file', file);
               fd.append('name', nm);
               fd.append('source_id', id);
-              if (type === 'document') fd.append('ocr', ocr ? 'true' : 'false');
-              const r = await fetch(endpoint, { method: 'POST', body: fd });
+              const r = await fetch('/api/index-image', { method: 'POST', body: fd });
               const j = await r.json().catch(() => ({}));
               if (!r.ok || !j.ok) throw new Error(j?.error ?? j?.note ?? 'index failed');
               updateMedia(id, { status: 'indexed', chunks: j.chunks, source: j.source_url });

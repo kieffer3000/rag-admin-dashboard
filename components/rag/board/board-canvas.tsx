@@ -34,6 +34,7 @@ import {
 } from 'lucide-react';
 import { ResearchOverlay } from '@/components/rag/board/research-overlay';
 import { NotesDrawer } from '@/components/rag/board/notes-drawer';
+import { indexDocumentFile } from '@/lib/rag/doc-upload';
 
 import { useRag } from '@/lib/rag/store';
 import { useBoard } from '@/lib/rag/board/store';
@@ -1386,9 +1387,9 @@ function BoardCanvasInner() {
     new Map()
   );
 
-  // Index ONE document: big/binary files go straight to CloudConvert (no 4.5MB
-  // cap) → extract text → index; tiny text files use the direct POST. Shared by
-  // the initial upload AND retry so both take the identical path.
+  // Index ONE document — the shared big-file-safe path (lib/rag/doc-upload:
+  // binary → presigned CloudConvert, no 4.5MB cap; tiny text → direct POST).
+  // Shared by the initial upload AND retry so both take the identical path.
   const uploadDocument = useCallback(
     async ({
       id,
@@ -1401,69 +1402,12 @@ function BoardCanvasInner() {
       file: File;
       ocr?: boolean;
     }) => {
-      const BINARY = /\.(pdf|epub|docx|doc|rtf|odt)$/i;
-      const ext = (file.name.match(/\.([a-z0-9]+)$/i)?.[1] ?? '').toLowerCase();
-      // Direct-path ceiling: Vercel's edge body cap is ~4.5MB — files under
-      // this can ALWAYS fall back to the same-origin multipart route when the
-      // browser→CloudConvert hop fails client-side (AV/VPN TLS inspection
-      // blocks third-party domains → "Failed to fetch" while the server never
-      // sees anything; MEASURED: file + CC chain healthy end-to-end).
-      const DIRECT_MAX = 4 * 1024 * 1024;
       try {
-        if (BINARY.test(file.name)) {
-          try {
-            const jr = await fetch('/api/doc-job', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ ext, ocr: !!ocr })
-            });
-            if (jr.ok) {
-              const { jobId, upload: form } = await jr.json();
-              const ccForm = new FormData();
-              for (const [k, v] of Object.entries(form?.parameters ?? {}))
-                ccForm.append(k, v as string);
-              ccForm.append('file', file);
-              const ur = await fetch(form.url, { method: 'POST', body: ccForm });
-              if (!ur.ok && ur.status !== 201)
-                throw new Error('Upload to the file converter failed.');
-              const ir = await fetch('/api/index-doc', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ source_id: id, name, cc_job_id: jobId })
-              });
-              const ij = await ir.json().catch(() => ({}));
-              if (!ir.ok || !ij.ok) throw new Error(ij?.error ?? ij?.note ?? 'index failed');
-              queueMediaPatch(id, {
-                status: 'indexed',
-                chunks: ij.chunks,
-                source: ij.source_url
-              });
-              return;
-            }
-            // doc-job unavailable → fall through to the direct path.
-          } catch (ccErr) {
-            // The CloudConvert hop failed (typically the browser→third-party
-            // upload dying client-side). Small PDF/DOCX/EPUB retry through the
-            // direct same-origin route instead of surfacing "Failed to fetch";
-            // big files can't fit the edge cap and legacy .doc/.rtf/.odt need
-            // CloudConvert to convert at all — those surface the real error.
-            if (file.size > DIRECT_MAX || !/\.(pdf|docx|epub)$/i.test(file.name))
-              throw ccErr;
-            console.warn('[doc-upload] CloudConvert hop failed, retrying via direct route:', ccErr);
-          }
-        }
-        const fd = new FormData();
-        fd.append('file', file);
-        fd.append('name', name);
-        fd.append('source_id', id);
-        if (ocr) fd.append('ocr', 'true');
-        const r = await fetch('/api/index-doc', { method: 'POST', body: fd });
-        const j = await r.json().catch(() => ({}));
-        if (!r.ok || !j.ok) throw new Error(j?.error ?? j?.note ?? 'index failed');
+        const res = await indexDocumentFile({ id, name, file, ocr });
         queueMediaPatch(id, {
           status: 'indexed',
-          chunks: j.chunks,
-          source: j.source_url
+          chunks: res.chunks,
+          source: res.source
         });
       } catch (e) {
         queueMediaPatch(id, {
