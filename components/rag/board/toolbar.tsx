@@ -93,6 +93,8 @@ export interface BoardToolbarProps {
   onCleanDesk: () => void;
   /** Drop every not-yet-placed source into one new cluster box. */
   onPlaceAllInBox: () => void;
+  /** Open the Notes drawer (Make-style side panel; replaces the Notes tab). */
+  onOpenNotes: () => void;
   /** Media ids already placed on the canvas. */
   placedIds: Set<string>;
 }
@@ -543,10 +545,10 @@ export function BoardToolbar(p: BoardToolbarProps) {
               notes remain on saved boards. Sound moved to the top bar next to
               the theme toggle. */}
           <RailButton
-            label="Annotation"
-            desc="A free-floating label to caption a region of the board. Purely visual."
-            icon={<StickyNote className="h-[19px] w-[19px]" />}
-            onClick={p.onAddAnnotation}
+            label="Notes"
+            desc="The project's notes, Make-style: general sticky notes plus notes attached to pieces (right-click any piece → Add note). Pin any note onto the canvas."
+            icon={<StickyNote className="h-[19px] w-[19px] text-amber-500" />}
+            onClick={p.onOpenNotes}
           />
           <RailButton
             label="Examples"

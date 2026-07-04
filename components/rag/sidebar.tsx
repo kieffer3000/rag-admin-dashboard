@@ -6,7 +6,6 @@ import { usePathname } from 'next/navigation';
 import {
   Library,
   Bot,
-  StickyNote,
   Activity,
   Users,
   KeyRound,
@@ -48,7 +47,8 @@ export const NAV = [
   { href: '/library', label: 'Library', icon: Library },
   { href: '/projects', label: 'Projects', icon: FolderOpen },
   { href: '/agents', label: 'Agents', icon: Bot },
-  { href: '/notes', label: 'Notes', icon: StickyNote },
+  // Notes tab retired 2026-07-04 — notes live in the Board's Notes drawer
+  // (dock 🗒 button / right-click a piece → Add note). Same store, same data.
   { href: '/health', label: 'Health', icon: Activity, adminOnly: true },
   { href: '/members', label: 'Team', icon: Users },
   { href: '/api-keys', label: 'API Keys', icon: KeyRound }

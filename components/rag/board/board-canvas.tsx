@@ -29,9 +29,11 @@ import {
   Pencil,
   Trash2,
   Maximize,
-  Landmark
+  Landmark,
+  StickyNote
 } from 'lucide-react';
 import { ResearchOverlay } from '@/components/rag/board/research-overlay';
+import { NotesDrawer } from '@/components/rag/board/notes-drawer';
 
 import { useRag } from '@/lib/rag/store';
 import { useBoard } from '@/lib/rag/board/store';
@@ -1717,6 +1719,26 @@ function BoardCanvasInner() {
     setCtxMenu({ x: e.clientX, y: e.clientY, nodeId: node.id });
   }, []);
 
+  // ---- NOTES drawer (Make-style, replaces the Notes tab) ----
+  const [notesOpen, setNotesOpen] = useState(false);
+  const [noteDraftFor, setNoteDraftFor] = useState<{
+    nodeId: string;
+    nodeName: string;
+  } | null>(null);
+  /** Human label for a node — for the "note on: X" chip. */
+  const nodeLabel = useCallback(
+    (n: BoardNode): string => {
+      const d = n.data as Record<string, unknown>;
+      if (typeof d?.name === 'string' && d.name) return d.name as string;
+      if (typeof d?.mediaId === 'string') {
+        const m = media.find((x) => x.id === d.mediaId);
+        if (m) return m.name;
+      }
+      return n.type ?? 'piece';
+    },
+    [media]
+  );
+
   const ctxNode = ctxMenu
     ? board.nodes.find((n) => n.id === ctxMenu.nodeId)
     : null;
@@ -2568,6 +2590,7 @@ function BoardCanvasInner() {
         }
         onAddArtifact={() => setArtifactDlgOpen(true)}
         onAddReference={() => setReferenceDlgOpen(true)}
+        onOpenNotes={() => setNotesOpen(true)}
         onAddAnnotation={() =>
           pushNode({
             id: nextBoardId('ann'),
@@ -2760,6 +2783,30 @@ function BoardCanvasInner() {
           </div>
         </div>
       )}
+      {/* Notes drawer — Make-style side panel over the canvas. */}
+      <NotesDrawer
+        open={notesOpen}
+        onClose={() => {
+          setNotesOpen(false);
+          setNoteDraftFor(null);
+        }}
+        draftFor={noteDraftFor}
+        onClearDraftFor={() => setNoteDraftFor(null)}
+        onPinToBoard={(text) =>
+          pushNode({
+            id: nextBoardId('ann'),
+            type: 'annotation',
+            position: centerPos(),
+            width: 240,
+            height: 150,
+            data: { text, color: 'amber' }
+          })
+        }
+        onFocusNode={(nodeId) => {
+          if (board.nodes.some((n) => n.id === nodeId))
+            fitView({ nodes: [{ id: nodeId }], duration: 450, padding: 0.35 });
+        }}
+      />
       {/* Build stamp — confirm you're on the latest code at a glance.
           TOP-right: the bottom-right corner belongs to the zoom Controls
           (the badge used to overlap them). */}
@@ -2873,6 +2920,19 @@ function BoardCanvasInner() {
                 <Pencil className="h-4 w-4 text-foreground/70" /> Edit agent
               </button>
             )}
+            <button
+              onClick={() => {
+                setNoteDraftFor({
+                  nodeId: ctxMenu.nodeId,
+                  nodeName: nodeLabel(ctxNode as BoardNode)
+                });
+                setNotesOpen(true);
+                setCtxMenu(null);
+              }}
+              className="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-left transition-colors hover:bg-accent/10"
+            >
+              <StickyNote className="h-4 w-4 text-amber-500" /> Add note
+            </button>
             <div className="my-1 h-px bg-[rgb(var(--hairline)/0.12)]" />
             <button
               onClick={() => {

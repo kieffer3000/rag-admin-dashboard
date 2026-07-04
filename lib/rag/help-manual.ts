@@ -32,7 +32,6 @@ answer can show where it came from.
   project only un-points it; the file stays in the Library.
 - **Agents** — reusable answering personas (name + icon/image + system
   prompt). Wire one into a DataBank to steer HOW it answers.
-- **Notes** — free-form notes per project.
 - **Team** — invite members; an organization shares one workspace.
 - **API Keys** — for developers connecting other apps.
 
@@ -132,6 +131,15 @@ Two embeds, both a single iframe paste — no code in the host app:
 
 Both are locked to the domains you allow. Experts must be published before
 they can join a room.
+
+# Notes
+
+Notes live on the Board in a side drawer (the 🗒 Notes button in the bottom
+dock). Two kinds: general sticky notes for the project, and notes attached to
+a specific piece — right-click any piece, box or DataBank and choose "Add
+note". A note's label chip jumps the canvas to its piece, and the 📌 pin
+button drops the note onto the canvas as a sticky. Deleting a note never
+touches the piece it was about.
 
 # Where do I just chat?
 

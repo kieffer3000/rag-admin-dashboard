@@ -91,7 +91,11 @@ interface RagState {
   addMessage: (m: ChatMessage) => void;
 
   // notes
-  addNote: (content: string, citations?: Citation[]) => void;
+  addNote: (
+    content: string,
+    citations?: Citation[],
+    attach?: { nodeId: string; nodeName: string }
+  ) => void;
   deleteNote: (id: string) => void;
 
   // agents
@@ -833,14 +837,19 @@ export function RagProvider({ children }: { children: ReactNode }) {
 
   // ---- notes ----
   const addNote = useCallback(
-    (content: string, citations?: Citation[]) => {
+    (
+      content: string,
+      citations?: Citation[],
+      attach?: { nodeId: string; nodeName: string }
+    ) => {
       setNotes((prev) => [
         {
           id: nextId('n'),
           projectId: activeProjectId,
           content,
           citations,
-          createdAt: now().slice(0, 10)
+          createdAt: now().slice(0, 10),
+          ...(attach ? { nodeId: attach.nodeId, nodeName: attach.nodeName } : {})
         },
         ...prev
       ]);

@@ -143,4 +143,9 @@ export interface Note {
   content: string;
   citations?: Citation[];
   createdAt: string;
+  /** When set, this note is attached to a board node (Make-style module note). */
+  nodeId?: string;
+  /** Display label of the attached node, denormalized so the note stays
+   *  readable even if the node is later deleted. */
+  nodeName?: string;
 }
