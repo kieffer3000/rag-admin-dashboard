@@ -23,6 +23,13 @@ import { Plus, Search, MessagesSquare, X, Library as LibraryIcon, Boxes, ArrowDo
 import Link from 'next/link';
 
 type Filter = 'all' | MediaType;
+type StatusFilter = 'all' | 'indexed' | 'processing' | 'failed';
+const STATUS_PILLS: { key: StatusFilter; label: string }[] = [
+  { key: 'all', label: 'Any status' },
+  { key: 'indexed', label: 'Indexed' },
+  { key: 'processing', label: 'Processing' },
+  { key: 'failed', label: 'Failed' }
+];
 type Sort = 'import-desc' | 'import-asc' | 'date-desc' | 'date-asc' | 'name-asc' | 'name-desc';
 const SORTS: { key: Sort; label: string }[] = [
   { key: 'import-desc', label: 'Import order (newest)' },
@@ -48,6 +55,9 @@ export function LibraryView() {
   const [typedCount, setTypedCount] = useState('');
   const router = useRouter();
   const [filter, setFilter] = useState<Filter>('all');
+  // Status filter (2026-07-04, born of the 143-failure import): "select all
+  // the failed ones" must be one click, not archaeology over a mixed list.
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
   const [query, setQuery] = useState('');
   const [sort, setSort] = useState<Sort>('import-desc');
   const [uploadOpen, setUploadOpen] = useState(false);
@@ -59,6 +69,7 @@ export function LibraryView() {
   const visible = useMemo(() => {
     const list = media.filter((m) => {
       if (filter !== 'all' && m.type !== filter) return false;
+      if (statusFilter !== 'all' && m.status !== statusFilter) return false;
       if (query && !`${m.name} ${m.description}`.toLowerCase().includes(query.toLowerCase()))
         return false;
       return true;
@@ -77,7 +88,7 @@ export function LibraryView() {
     else if (sort === 'name-asc') sorted.sort(byName);
     else sorted.sort((a, b) => byName(b, a));
     return sorted;
-  }, [media, filter, query, sort]);
+  }, [media, filter, statusFilter, query, sort]);
 
   // Shift-click selects the range from the last-clicked row.
   function onRowToggle(index: number, shiftKey: boolean) {
@@ -180,6 +191,44 @@ export function LibraryView() {
                   )}
                 >
                   {t.count}
+                </span>
+              </button>
+            );
+          })}
+          {/* Status filter — same pill language; counts respect the type tab.
+              "Failed" + Select all + Delete is the one-click cleanup path. */}
+          <div className="mx-1 my-1 w-px shrink-0 self-stretch bg-[rgb(var(--hairline)/0.12)]" />
+          {STATUS_PILLS.map((s) => {
+            const inType = media.filter(
+              (m) => filter === 'all' || m.type === filter
+            );
+            const count =
+              s.key === 'all'
+                ? inType.length
+                : inType.filter((m) => m.status === s.key).length;
+            if (s.key !== 'all' && count === 0 && statusFilter !== s.key) return null;
+            const active = statusFilter === s.key;
+            return (
+              <button
+                key={s.key}
+                onClick={() => setStatusFilter(s.key)}
+                className={cn(
+                  'flex items-center gap-1.5 whitespace-nowrap rounded-full px-3.5 py-1.5 text-[13px] font-medium transition-all',
+                  active
+                    ? s.key === 'failed'
+                      ? 'bg-red-500/[0.08] text-red-600 dark:bg-red-500/[0.14] dark:text-red-400'
+                      : 'bg-accent/[0.08] text-accent shadow-[0_1px_2px_rgba(0,0,0,0.03)] dark:bg-accent/[0.14] dark:shadow-none'
+                    : 'text-muted-foreground hover:text-foreground'
+                )}
+              >
+                {s.label}
+                <span
+                  className={cn(
+                    'rounded-full px-1.5 text-[11px] tabular-nums',
+                    active ? 'opacity-70' : 'text-muted-foreground/60'
+                  )}
+                >
+                  {count}
                 </span>
               </button>
             );
