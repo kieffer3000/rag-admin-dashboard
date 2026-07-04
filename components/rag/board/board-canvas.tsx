@@ -275,6 +275,38 @@ function BoardCanvasInner() {
     setPendingBox(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pendingBox, hydratedProject, activeProjectId]);
+
+  // GHOST-CHIP PRUNE (2026-07-04): deleting a source in the LIBRARY removes
+  // the media + vectors, but boards are separate documents — the box kept 326
+  // grey placeholder chips pointing at media that no longer exists. Remove
+  // such chips (and their wires) and retile their boxes.
+  // DATA-SAFETY GUARDS: runs only when THIS project's board has fully
+  // hydrated AND media is loaded — a torn/empty media load can never be
+  // mistaken for "everything was deleted" and wipe a healthy board.
+  useEffect(() => {
+    if (hydratedProject !== activeProjectId || !media.length) return;
+    const have = new Set(media.map((m) => m.id));
+    setBoard((prev) => {
+      const ghosts = prev.nodes.filter(
+        (n) =>
+          n.type === 'chip' &&
+          typeof n.data?.mediaId === 'string' &&
+          !have.has(n.data.mediaId as string)
+      );
+      if (!ghosts.length) return prev;
+      const ghostIds = new Set(ghosts.map((g) => g.id));
+      const hubs = new Set(
+        ghosts.map((g) => g.parentId).filter(Boolean) as string[]
+      );
+      let nodes = prev.nodes.filter((n) => !ghostIds.has(n.id));
+      const edges = prev.edges.filter(
+        (e) => !ghostIds.has(e.source) && !ghostIds.has(e.target)
+      );
+      for (const h of hubs) nodes = retile(nodes, h);
+      return { ...prev, nodes, edges };
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [media, hydratedProject, activeProjectId]);
   // Garbage bin (bottom-left): drag a source chip onto it to delete the source
   // and its Pinecone vectors. `binHot` highlights it while a chip hovers over.
   const binRef = useRef<HTMLButtonElement>(null);
