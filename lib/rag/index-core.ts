@@ -1,3 +1,4 @@
+import { after } from 'next/server';
 import { deleteSourceVectors } from '@/lib/rag/pinecone-delete';
 import { summarizeText, upsertSummary } from '@/lib/rag/summary-core';
 import { embedTexts } from '@/lib/rag/embed';
@@ -200,11 +201,27 @@ export async function indexText(opts: {
   // as a reserved `${sourceId}#summary` vector. Best-effort — a summary hiccup
   // never fails the indexing. The prior summary was already removed by the
   // delete-before-reindex above (same source prefix), so this stays idempotent.
+  //
+  // Runs AFTER the response (next/server after()): a book-sized source
+  // map-reduces through the Make utility webhook (~30+ calls), which can take
+  // longer than the entire embed+upsert. Awaiting it here held one of the
+  // client's 4 import slots per document — a 164-book import measured ~0.7
+  // doc/min. The vectors above are already landed; the summary trails in.
+  const summaryJob = async () => {
+    try {
+      const summary = await summarizeText(String(opts.text), name);
+      if (summary) await upsertSummary({ sourceId, name, summary, namespace });
+    } catch {
+      /* summary is best-effort */
+    }
+  };
+  const summaryPromise = summaryJob(); // starts now; never rejects (guarded)
   try {
-    const summary = await summarizeText(String(opts.text), name);
-    if (summary) await upsertSummary({ sourceId, name, summary, namespace });
+    after(summaryPromise);
   } catch {
-    /* summary is best-effort */
+    // Outside a request scope (shouldn't happen — all callers are routes):
+    // keep the old inline behavior rather than dropping the summary.
+    await summaryPromise;
   }
 
   return {
