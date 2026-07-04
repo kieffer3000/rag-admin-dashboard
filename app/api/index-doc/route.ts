@@ -178,11 +178,16 @@ export async function POST(req: Request) {
   // ── end JSON job mode ──────────────────────────────────────────────────────
 
   let form: FormData;
+  // Timing probe (2026-07-04): reading the multipart body measures the
+  // CLIENT'S upload — the missing wall-time suspect (server work per doc
+  // measured healthy while completions lag ~3x behind).
+  const tBody0 = Date.now();
   try {
     form = await req.formData();
   } catch {
     return Response.json({ error: 'Expected multipart/form-data' }, { status: 400 });
   }
+  const tBody = Date.now() - tBody0;
 
   const file = form.get('file');
   const name = String(form.get('name') ?? '').trim() || 'Document';
@@ -218,6 +223,9 @@ export async function POST(req: Request) {
   }
 
   const buf = Buffer.from(await file.arrayBuffer());
+  console.info(
+    `[doc-timing] ${sourceId} bodyRead=${tBody}ms bytes=${file.size} name=${lowerName.slice(0, 40)}`
+  );
 
   // 1) Store the original so the source can be opened later (optional, cheap).
   let sourceUrl: string | undefined;
