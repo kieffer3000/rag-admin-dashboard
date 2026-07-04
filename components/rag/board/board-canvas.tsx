@@ -531,14 +531,15 @@ function BoardCanvasInner() {
     if (hydratedProject !== activeProjectId) return; // wait for the real board
     if (focusedProject.current === activeProjectId) return;
     focusedProject.current = activeProjectId;
-    // On load, LINE EVERYTHING UP: each brain's wired boxes/sources snap into its
-    // own row-band (this also pulls any stray off-canvas box back into the
-    // layout), then frame the result. Falls back to a plain fit if there's
-    // nothing to tidy.
+    // On load, FRAME the board — and NOTHING else. This used to auto-run
+    // cleanDesk ("line everything up"), which meant every load silently
+    // REARRANGED the user's board; when the layout math misbehaved on a
+    // board's shape, the banks visibly loaded then "flew away" on every
+    // refresh (2026-07-04 incident). Loading must never move a node —
+    // Clean desk is a deliberate button, not a side effect.
     const t = setTimeout(() => {
       try {
-        if (cleanDeskRef.current) cleanDeskRef.current();
-        else fitToFill(600);
+        fitToFill(600);
       } catch (e) {
         console.error('focus-on-load', e);
       }
@@ -2100,6 +2101,18 @@ function BoardCanvasInner() {
     // tidy; the load-time position rescue will fix any that are already bad.
     for (const [id, p] of Array.from(target)) {
       if (!Number.isFinite(p.x) || !Number.isFinite(p.y)) target.delete(id);
+    }
+    // ABORT GATE: a tidy that wants to place ANYTHING beyond ±50k px is
+    // wrong, full stop — executing it scatters the board past where a user
+    // can find things. Refuse the whole tidy and say so in the console.
+    for (const [, p] of target) {
+      if (Math.abs(p.x) > 50_000 || Math.abs(p.y) > 50_000) {
+        console.warn(
+          '[clean-desk] aborted: computed a target beyond ±50k px — layout input is suspect',
+          { sample: p, targets: target.size }
+        );
+        return;
+      }
     }
     for (const n of nodes) {
       if (
