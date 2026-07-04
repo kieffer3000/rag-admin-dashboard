@@ -356,6 +356,10 @@ export function UploadDialog({
                     PNG · JPG
                   </span>
                 </p>
+                <p className="mt-1 text-[10.5px] text-muted-foreground/60">
+                  Documents up to 50 MB each · big photos are resized
+                  automatically
+                </p>
               </div>
 
               {files.length > 0 && (

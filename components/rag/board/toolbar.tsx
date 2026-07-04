@@ -818,8 +818,18 @@ export function BoardToolbar(p: BoardToolbarProps) {
                       className="block w-full cursor-pointer rounded-lg border border-input bg-card text-[13px] file:mr-3 file:cursor-pointer file:border-0 file:bg-accent/10 file:px-3 file:py-2 file:text-accent hover:border-accent/40"
                     />
                     {files.length === 1 ? (
-                      <p className="text-[11.5px] text-muted-foreground/70">
+                      <p
+                        className={
+                          sourceType === 'document' &&
+                          files[0].size > 50 * 1048576
+                            ? 'text-[11.5px] font-medium text-red-600'
+                            : 'text-[11.5px] text-muted-foreground/70'
+                        }
+                      >
                         {files[0].name} · {(files[0].size / 1048576).toFixed(1)} MB
+                        {sourceType === 'document' &&
+                          files[0].size > 50 * 1048576 &&
+                          ' — over the 50 MB limit; split the file first'}
                       </p>
                     ) : files.length > 1 ? (
                       <p className="text-[11.5px] text-accent">
@@ -830,13 +840,14 @@ export function BoardToolbar(p: BoardToolbarProps) {
                     ) : sourceType === 'image' ? (
                       <p className="text-[11.5px] text-muted-foreground/55">
                         Images (PNG/JPEG/WebP/GIF) — select as many as you like.
-                        Each is hosted, captioned, and indexed on its own.
+                        Each is hosted, captioned, and indexed on its own. Big
+                        photos are resized automatically.
                       </p>
                     ) : (
                       <p className="text-[11.5px] text-muted-foreground/55">
                         Documents (PDF, DOCX, EPUB, TXT, MD) — select as many as
-                        you like. Each is extracted, chunked, and indexed on its
-                        own.{' '}
+                        you like, max 50 MB each. Each is extracted, chunked,
+                        and indexed on its own.{' '}
                         {ocr
                           ? 'OCR is ON — scanned / image-only PDFs will be read too (slower, uses more credits).'
                           : 'For scanned / image-only PDFs, use the OCR tile instead.'}

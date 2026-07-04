@@ -264,7 +264,8 @@ export function ArtifactDialog({
                 <UploadCloud className="mb-2 h-7 w-7 text-muted-foreground" />
                 <p className="text-sm font-medium">Drop files or click to browse</p>
                 <p className="mt-1 text-[11px] text-muted-foreground">
-                  PDF · DOCX · EPUB · TXT · MD · audio (mp3/wav/m4a) · multiple OK
+                  PDF · DOCX · EPUB · TXT · MD · audio (mp3/wav/m4a) · multiple
+                  OK · max 50 MB each
                 </p>
               </div>
               {files.length > 0 && (
