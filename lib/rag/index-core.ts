@@ -69,20 +69,27 @@ async function upsertBatch(
       });
       if (res.ok) return;
       const bodyText = (await res.text()).slice(0, 400);
-      // TWO different 429s (docs.pinecone.io/reference/api/database-limits):
+      // THREE different 429s (docs.pinecone.io/reference/api/database-limits):
       // per-second rate limits (retry helps) vs the MONTHLY write-unit quota
       // ("You've reached your write unit limit for the current month" — 2M
-      // WU/month on Starter). Retrying the monthly one is pure waste and
+      // WU/month on Starter) vs the org STORAGE cap ("You've reached the max
+      // storage allowed for this organization (2 GB)" — hit 2026-07-04 at
+      // ~500k banked vectors). Retrying a quota/storage 429 is pure waste and
       // buries the real problem — surface it immediately and plainly.
       if (res.status === 429 && /write unit limit|current month/i.test(bodyText)) {
         throw new Error(
           `Pinecone MONTHLY write quota reached — retries cannot help. Upgrade the Pinecone plan or wait for the monthly reset. (${bodyText.slice(0, 160)})`
         );
       }
+      if (res.status === 429 && /max storage|storage allowed/i.test(bodyText)) {
+        throw new Error(
+          `Pinecone STORAGE is full (plan cap) — retries cannot help. Delete old sources to free space or upgrade the Pinecone plan. (${bodyText.slice(0, 160)})`
+        );
+      }
       lastErr = `HTTP ${res.status}: ${bodyText.slice(0, 300)}`;
       if (res.status !== 429 && res.status < 500) throw new Error(lastErr);
     } catch (e: any) {
-      if (/MONTHLY write quota/.test(e?.message ?? '')) throw e;
+      if (/MONTHLY write quota|STORAGE is full/.test(e?.message ?? '')) throw e;
       lastErr = e?.message ?? 'upsert error';
     }
     await new Promise((r) =>
