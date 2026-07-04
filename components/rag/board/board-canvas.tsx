@@ -2554,10 +2554,13 @@ function BoardCanvasInner() {
             return { id, name, file, ocr };
           });
 
-          // Concurrency-capped pool (3 at a time) over the batch — via the shared
+          // Concurrency-capped pool over the batch — via the shared
           // uploadDocument so a failed doc retries through the exact same path.
+          // 3 → 6 (2026-07-04): MEASURED CloudConvert starts jobs instantly and
+          // converts in parallel (4 concurrent, zero queue wait) — the 3-wide
+          // pool was the throughput limiter on a 143-PDF import, not CC.
           let next = 0;
-          const CONCURRENCY = 3;
+          const CONCURRENCY = 6;
           const runners = Array.from(
             { length: Math.min(CONCURRENCY, jobs.length) },
             async () => {
