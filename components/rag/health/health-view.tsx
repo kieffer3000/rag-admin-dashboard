@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useRag } from '@/lib/rag/store';
 import { MediaIcon, StatusBadge } from '@/components/rag/shared';
 import { Button } from '@/components/ui/button';
@@ -20,8 +20,40 @@ function fmtBytes(n: number) {
   return (n / 1e3).toFixed(0) + ' KB';
 }
 
+interface UsageRow {
+  namespace: string;
+  user: string;
+  vectors: number;
+  estBytes: number;
+}
+interface Usage {
+  vectors: number;
+  estBytes: number;
+  totalVectors: number;
+  totalEstBytes: number;
+  breakdown?: UsageRow[];
+}
+
 export function HealthView() {
   const { media, projects, reindexMedia, deleteMedia } = useRag();
+
+  // REAL metered usage from Pinecone (/api/usage) — the client-side chunk
+  // estimate below stays as the instant placeholder until this resolves.
+  // Metering exists because the org hit its storage cap invisibly (2026-07-04):
+  // what a user has banked must be visible before it can be limited or billed.
+  const [usage, setUsage] = useState<Usage | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    fetch('/api/usage')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j) => {
+        if (!cancelled && j && typeof j.vectors === 'number') setUsage(j);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const stats = useMemo(() => {
     const totalChunks = media.reduce((a, m) => a + m.chunks, 0);
@@ -36,8 +68,8 @@ export function HealthView() {
   const CARDS = [
     {
       label: 'Vectors',
-      value: stats.totalChunks.toLocaleString(),
-      sub: '768-dim · cosine',
+      value: (usage ? usage.vectors : stats.totalChunks).toLocaleString(),
+      sub: usage ? 'measured · 768-dim · cosine' : '768-dim · cosine',
       icon: Database
     },
     {
@@ -48,8 +80,8 @@ export function HealthView() {
     },
     {
       label: 'Storage',
-      value: fmtBytes(stats.storage),
-      sub: 'of 2 GB free tier',
+      value: fmtBytes(usage ? usage.estBytes : stats.storage),
+      sub: usage ? 'estimated from live vector count' : 'estimated',
       icon: HardDrive
     },
     {
@@ -83,6 +115,39 @@ export function HealthView() {
               );
             })}
           </div>
+
+          {usage?.breakdown && (
+            <div className="card-glass mt-5 rounded-[18px] p-4">
+              <div className="text-[12px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+                Storage by user (admin) · index total {usage.totalVectors.toLocaleString()} vectors
+                · ~{fmtBytes(usage.totalEstBytes)}
+              </div>
+              <div className="mt-3 space-y-1.5">
+                {usage.breakdown.map((r) => (
+                  <div
+                    key={r.namespace}
+                    className="flex items-center gap-3 text-[13px]"
+                  >
+                    <div className="min-w-0 flex-1 truncate">{r.user}</div>
+                    <div className="w-28 text-right tabular-nums">
+                      {r.vectors.toLocaleString()} vec
+                    </div>
+                    <div className="w-24 text-right tabular-nums text-muted-foreground">
+                      ~{fmtBytes(r.estBytes)}
+                    </div>
+                    <div className="h-1.5 w-40 overflow-hidden rounded-full bg-muted">
+                      <div
+                        className="h-full rounded-full bg-primary"
+                        style={{
+                          width: `${Math.max(1, Math.round((r.vectors / Math.max(1, usage.totalVectors)) * 100))}%`
+                        }}
+                      />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           {stats.failed > 0 && (
             <div className="mt-4 flex items-center gap-2 rounded-[14px] bg-amber-50 px-4 py-2.5 text-[13px] text-amber-700 dark:bg-amber-500/10 dark:text-amber-400">

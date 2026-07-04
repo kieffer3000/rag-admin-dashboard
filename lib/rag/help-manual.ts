@@ -156,6 +156,13 @@ are saved per DataBank. There is no separate Chat tab.
 
 Organizations share the workspace. Some tabs (like Health) are admin-only.
 
+# Storage usage
+
+The Health tab shows your real indexed usage — how many vectors your
+sources occupy and an estimated storage size. Storage is not unlimited: if
+an import fails with a "storage is full" message, delete sources you no
+longer need (their vectors are removed too) and retry, or ask the admin.
+
 # Tips & troubleshooting
 
 - If an answer says grounding is weak, wire in more/better sources — the
