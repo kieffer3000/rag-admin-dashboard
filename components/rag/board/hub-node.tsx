@@ -1,6 +1,7 @@
 'use client';
 
 import { memo, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Handle, Position, type NodeProps } from '@xyflow/react';
 import { cn } from '@/lib/utils';
 import { MEDIA_TYPES } from '@/lib/rag/media-config';
@@ -98,11 +99,17 @@ function HubNodeInner({ id, data, selected }: NodeProps) {
     useBoard();
   const [editing, setEditing] = useState(false);
   /** Face-picker menu (choose preset / upload) — open while picking. */
-  const [facePick, setFacePick] = useState(false);
+  // Face-picker anchor (screen coords, captured when the button is clicked).
+  // The menu is PORTALED to document.body: docked chips are CHILD React Flow
+  // nodes and children always paint above their parent hub, so any z-index
+  // inside this node's DOM loses to them.
+  const [facePick, setFacePick] = useState<{ x: number; y: number } | null>(
+    null
+  );
   const faceFileRef = useRef<HTMLInputElement>(null);
   const faced = hubFaced(d);
   const onFaceFile = async (f: File | null) => {
-    setFacePick(false);
+    setFacePick(null);
     if (!f) return;
     try {
       const raw = await new Promise<string>((res, rej) => {
@@ -446,56 +453,78 @@ function HubNodeInner({ id, data, selected }: NodeProps) {
         className="hidden"
         onChange={(e) => onFaceFile(e.target.files?.[0] ?? null)}
       />
-      {/* face-picker menu — preset male/female or upload your own */}
-      {facePick && (
-        <div className="nodrag absolute -right-2 top-6 z-20 w-52 rounded-xl border border-black/[0.08] bg-card p-1 text-[12px] shadow-[0_8px_28px_-6px_rgb(0_0_0/0.3)]">
-          <div className="flex items-center justify-between px-2 pb-1 pt-0.5 text-[10.5px] font-semibold uppercase tracking-wide text-muted-foreground/60">
-            Represent as a face
-            <HelpDot text={HELP_FACE} side="left" />
-          </div>
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              setFacePick(false);
-              updateBoardNodeData(id, { face: 'preset:male', faceOn: true });
-            }}
-            className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 hover:bg-accent/10"
-          >
-            <UserRound className="h-3.5 w-3.5 text-accent" /> Male portrait
-          </button>
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              setFacePick(false);
-              updateBoardNodeData(id, { face: 'preset:female', faceOn: true });
-            }}
-            className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 hover:bg-accent/10"
-          >
-            <UserRound className="h-3.5 w-3.5 text-accent" /> Female portrait
-          </button>
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              faceFileRef.current?.click();
-            }}
-            className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 hover:bg-accent/10"
-          >
-            <ImageUp className="h-3.5 w-3.5 text-accent" /> Upload image…
-          </button>
-          {d.face && (
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                setFacePick(false);
-                updateBoardNodeData(id, { faceOn: true });
+      {/* face-picker menu — preset male/female or upload your own.
+          Portaled to <body> at fixed screen coords: docked chips are child
+          RF nodes that always paint over this hub, so an in-node dropdown
+          gets buried under the box's own contents (measured 2026-07-03). */}
+      {facePick &&
+        createPortal(
+          <>
+            <div
+              className="fixed inset-0 z-[999]"
+              onClick={() => setFacePick(null)}
+            />
+            <div
+              style={{
+                top: facePick.y,
+                left: Math.max(8, facePick.x - 208),
               }}
-              className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 hover:bg-accent/10"
+              onClick={(e) => e.stopPropagation()}
+              className="fixed z-[1000] w-52 rounded-xl border border-black/[0.08] bg-card p-1 text-[12px] shadow-[0_8px_28px_-6px_rgb(0_0_0/0.3)]"
             >
-              <UserRound className="h-3.5 w-3.5 text-muted-foreground" /> Wear current face
-            </button>
-          )}
-        </div>
-      )}
+              <div className="flex items-center justify-between px-2 pb-1 pt-0.5 text-[10.5px] font-semibold uppercase tracking-wide text-muted-foreground/60">
+                Represent as a face
+                <HelpDot text={HELP_FACE} side="left" />
+              </div>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setFacePick(null);
+                  updateBoardNodeData(id, { face: 'preset:male', faceOn: true });
+                }}
+                className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 hover:bg-accent/10"
+              >
+                <UserRound className="h-3.5 w-3.5 text-accent" /> Male portrait
+              </button>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setFacePick(null);
+                  updateBoardNodeData(id, {
+                    face: 'preset:female',
+                    faceOn: true,
+                  });
+                }}
+                className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 hover:bg-accent/10"
+              >
+                <UserRound className="h-3.5 w-3.5 text-accent" /> Female portrait
+              </button>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  faceFileRef.current?.click();
+                }}
+                className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 hover:bg-accent/10"
+              >
+                <ImageUp className="h-3.5 w-3.5 text-accent" /> Upload image…
+              </button>
+              {d.face && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setFacePick(null);
+                    updateBoardNodeData(id, { faceOn: true });
+                  }}
+                  className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 hover:bg-accent/10"
+                >
+                  <UserRound className="h-3.5 w-3.5 text-muted-foreground" />{' '}
+                  Wear current face
+                </button>
+              )}
+            </div>
+          </>,
+          document.body
+        )}
 
       {/* top-right controls: MINIMIZE the box to the dock menu (saved, recallable)
           + remove it. Both appear on hover. */}
@@ -509,8 +538,17 @@ function HubNodeInner({ id, data, selected }: NodeProps) {
             }
             onClick={(e) => {
               e.stopPropagation();
-              if (!faced && d.face) updateBoardNodeData(id, { faceOn: true });
-              else setFacePick((s) => !s);
+              if (!faced && d.face) {
+                updateBoardNodeData(id, { faceOn: true });
+                return;
+              }
+              if (facePick) {
+                setFacePick(null);
+                return;
+              }
+              // anchor the portaled menu to this button's screen position
+              const r = e.currentTarget.getBoundingClientRect();
+              setFacePick({ x: r.right, y: r.bottom + 6 });
             }}
             className="flex h-5 w-5 items-center justify-center rounded-full bg-card text-muted-foreground/70 shadow-[0_1px_4px_rgb(0_0_0/0.14)] transition-colors hover:text-accent"
           >
