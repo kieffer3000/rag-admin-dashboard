@@ -8,7 +8,12 @@
 const MODEL = process.env.RAG_EMBED_MODEL ?? 'gemini-embedding-2';
 const DIMS = Number(process.env.RAG_EMBED_DIMS ?? 768);
 const BATCH = 100; // Gemini batchEmbedContents cap
-const MAX_RETRY = 4;
+// 4 → 8 (2026-07-04): under a concurrent bulk import, Gemini rate-limits and
+// the old ~6s total backoff SURRENDERED — one embed batch failing fails the
+// whole document with "0 chunks" (by design: no silent loss). Same patience
+// rule as the Pinecone upserts (4a09eac): a batch-load retry budget is
+// measured in tens of seconds; 429 means "pace me", not "stop".
+const MAX_RETRY = 8;
 
 function apiKey(): string {
   const k = process.env.GEMINI_API_KEY;
@@ -59,7 +64,8 @@ async function embedBatch(texts: string[]): Promise<number[][]> {
       if (!/HTTP (429|5\d\d)/.test(lastErr) && !/fetch|network|timeout/i.test(lastErr))
         throw e;
     }
-    await sleep(400 * 2 ** attempt); // 400, 800, 1600, 3200ms
+    // Exp backoff capped at 15s + jitter (~50s total budget across 8 tries).
+    await sleep(Math.min(400 * 2 ** attempt, 15_000) + Math.random() * 400);
   }
   throw new Error(`embedBatch failed after ${MAX_RETRY} attempts: ${lastErr}`);
 }

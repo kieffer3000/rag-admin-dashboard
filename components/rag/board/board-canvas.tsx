@@ -171,10 +171,12 @@ function freePosition(
 // otherwise fire 50 requests at once — exhausting the browser's per-host
 // connection cap and hammering the Make webhook + Pinecone. Chips still appear
 // instantly (optimistic); their indexing just runs a few at a time.
-// 4 → 8 (2026-07-04): the 4-cap dated from the free-tier Pinecone stampede;
-// with the paid plan, patient upsert retries, and the summary moved after the
-// response, the measured bottleneck was simply slot count (~3 docs/min at 4).
-const INDEX_CONCURRENCY = 8;
+// 4 → 8 → 6 (2026-07-04): 8-wide tripped Gemini's embed rate limits (up to 32
+// parallel embed calls) and the then-impatient embed retry surrendered — a
+// mass "0 chunks · Failed" cascade mid-import. With the embed retries now
+// patient (lib/rag/embed.ts), 6 is the measured-safe middle: faster than the
+// free-tier-era 4, below the burst that triggered the cascade.
+const INDEX_CONCURRENCY = 6;
 const indexQueue: Array<() => Promise<unknown>> = [];
 let indexActive = 0;
 function pumpIndexQueue() {
