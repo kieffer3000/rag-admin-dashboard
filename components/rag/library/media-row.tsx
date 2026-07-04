@@ -16,8 +16,6 @@ import {
 import { cn } from '@/lib/utils';
 import {
   MoreHorizontal,
-  Copy,
-  Check,
   Trash2,
   Pencil,
   ExternalLink
@@ -37,7 +35,6 @@ export function MediaRow({
   const [name, setName] = useState(item.name);
   const [desc, setDesc] = useState(item.description);
   const [date, setDate] = useState(item.date);
-  const [copied, setCopied] = useState(false);
   const isAdmin = useIsAdmin();
 
   const checked = selectedIds.has(item.id);
@@ -47,13 +44,10 @@ export function MediaRow({
     setEditing(false);
   }
 
-  async function copyContent() {
-    try {
-      await navigator.clipboard.writeText(item.content);
-    } catch {}
-    setCopied(true);
-    setTimeout(() => setCopied(false), 1600);
-  }
+  // NOTE (2026-07-04): the old "Copy content" action is GONE — item.content
+  // is intentionally stripped on save to keep state docs light, so after any
+  // reload it copied an empty string while flashing a success check. Never
+  // ship a button whose success state can lie.
 
   return (
     <div
@@ -157,18 +151,6 @@ export function MediaRow({
         <div className="flex items-center gap-2">
           <StatusBadge status={item.status} />
 
-          <button
-            onClick={copyContent}
-            className="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground opacity-0 transition-all hover:bg-[rgb(var(--hairline)/0.06)] hover:text-foreground group-hover:opacity-100"
-            title="Copy content"
-          >
-            {copied ? (
-              <Check className="h-4 w-4 text-emerald-600" />
-            ) : (
-              <Copy className="h-4 w-4" />
-            )}
-          </button>
-
           {isAdmin && (
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -179,9 +161,6 @@ export function MediaRow({
             <DropdownMenuContent align="end" className="w-44">
               <DropdownMenuItem onClick={() => setEditing(true)} className="gap-2">
                 <Pencil className="h-3.5 w-3.5" /> Edit details
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={copyContent} className="gap-2">
-                <Copy className="h-3.5 w-3.5" /> Copy content
               </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem
