@@ -10,8 +10,16 @@ import { MediaRow } from './media-row';
 import { UploadDialog } from './upload-dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription
+} from '@/components/ui/dialog';
 import { cn } from '@/lib/utils';
-import { Plus, Search, MessagesSquare, X, Library as LibraryIcon, Boxes, ArrowDownUp } from 'lucide-react';
+import { Plus, Search, MessagesSquare, X, Library as LibraryIcon, Boxes, ArrowDownUp, Trash2 } from 'lucide-react';
 import Link from 'next/link';
 
 type Filter = 'all' | MediaType;
@@ -32,8 +40,12 @@ function importKey(id: string): number {
 }
 
 export function LibraryView() {
-  const { media, selectedIds, toggleSelect, selectAll, clearSelection, activeProject, addSourcesToProject, setPendingBox } =
+  const { media, selectedIds, toggleSelect, selectAll, clearSelection, activeProject, addSourcesToProject, setPendingBox, deleteMedia } =
     useRag();
+  // Bulk delete — the ONE destructive act in the Library, so it gets the
+  // typed-count guard (same discipline as delete-project's typed name).
+  const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
+  const [typedCount, setTypedCount] = useState('');
   const router = useRouter();
   const [filter, setFilter] = useState<Filter>('all');
   const [query, setQuery] = useState('');
@@ -243,6 +255,19 @@ export function LibraryView() {
                 <MessagesSquare className="h-4 w-4" /> Chat with selection
               </Button>
             </Link>
+            {isAdmin && (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="gap-1.5 rounded-xl text-red-600 hover:bg-red-500/10 hover:text-red-600"
+                onClick={() => {
+                  setTypedCount('');
+                  setBulkDeleteOpen(true);
+                }}
+              >
+                <Trash2 className="h-4 w-4" /> Delete
+              </Button>
+            )}
             <button
               onClick={clearSelection}
               className="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground hover:bg-[rgb(var(--hairline)/0.06)]"
@@ -252,6 +277,67 @@ export function LibraryView() {
           </div>
         </div>
       )}
+
+      {/* Bulk delete — typed-count guard; this PERMANENTLY removes sources
+          and their vectors, unlike removing from a project (pointer-only). */}
+      <Dialog
+        open={bulkDeleteOpen}
+        onOpenChange={(o) => {
+          if (!o) {
+            setBulkDeleteOpen(false);
+            setTypedCount('');
+          }
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>
+              Delete {selectedIds.size} source{selectedIds.size === 1 ? '' : 's'}?
+            </DialogTitle>
+            <DialogDescription>
+              This is the permanent one — unlike removing a file from a
+              project, deleting from the Library erases the source and its
+              index entries from EVERY project. It cannot be undone from the
+              app.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-1.5">
+            <Label>
+              Type <span className="font-semibold">{selectedIds.size}</span> to
+              confirm
+            </Label>
+            <Input
+              value={typedCount}
+              onChange={(e) => setTypedCount(e.target.value)}
+              placeholder={String(selectedIds.size)}
+              autoFocus
+            />
+          </div>
+          <div className="flex justify-end gap-2 pt-1">
+            <Button
+              variant="ghost"
+              onClick={() => {
+                setBulkDeleteOpen(false);
+                setTypedCount('');
+              }}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              disabled={typedCount.trim() !== String(selectedIds.size)}
+              onClick={() => {
+                for (const id of Array.from(selectedIds)) deleteMedia(id);
+                clearSelection();
+                setBulkDeleteOpen(false);
+                setTypedCount('');
+              }}
+            >
+              <Trash2 className="mr-1.5 h-4 w-4" /> Delete {selectedIds.size}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       <UploadDialog open={uploadOpen} onOpenChange={setUploadOpen} />
       </div>
