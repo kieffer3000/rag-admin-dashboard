@@ -276,20 +276,20 @@ function BoardCanvasInner() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pendingBox, hydratedProject, activeProjectId]);
 
-  // POSITION RESCUE (2026-07-04): a node persisted with a non-finite
-  // position (the Clean-desk NaN incident — banks "disappeared") renders
-  // NOWHERE and can never be dragged back. Once this project's board is
+  // POSITION RESCUE (2026-07-04): a node persisted with a non-finite OR
+  // absurdly distant position (the Clean-desk incident — banks "disappeared")
+  // is unfindable and can never be dragged back. Once this project's board is
   // hydrated, pull any such node onto a visible staggered grid near the
-  // origin so it's findable again. Never touches finite positions.
+  // origin. |coord| > 50k counts as lost too — the flings could produce
+  // huge-but-finite coordinates the NaN-only rescue missed.
   useEffect(() => {
     if (hydratedProject !== activeProjectId) return;
+    const lost = (v: unknown) =>
+      !Number.isFinite(v as number) || Math.abs(v as number) > 50_000;
     setBoard((prev) => {
       let rescued = 0;
       const nodes = prev.nodes.map((n) => {
-        if (
-          !n.parentId &&
-          (!Number.isFinite(n.position?.x) || !Number.isFinite(n.position?.y))
-        ) {
+        if (!n.parentId && (lost(n.position?.x) || lost(n.position?.y))) {
           const i = rescued++;
           return {
             ...n,
@@ -298,6 +298,8 @@ function BoardCanvasInner() {
         }
         return n;
       });
+      if (rescued)
+        console.warn(`[position-rescue] pulled ${rescued} lost node(s) back to the origin grid`);
       return rescued ? { ...prev, nodes } : prev;
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -478,7 +480,11 @@ function BoardCanvasInner() {
       const el = wrapRef.current;
       if (!el) return;
       const rect = el.getBoundingClientRect();
-      const all = getNodes().filter((n) => !n.hidden); // skip collapsed members
+      // TOP-LEVEL nodes only: a docked chip's position is RELATIVE to its box,
+      // so including children mixes coordinate spaces — with a far-flung box
+      // the median landed among small relative offsets, every real node got
+      // "outlier"-excluded, and the view framed EMPTY SPACE (2026-07-04).
+      const all = getNodes().filter((n) => !n.hidden && !n.parentNode && !(n as any).parentId);
       if (!all.length) return;
       // Exclude FAR OUTLIERS (a stray off-canvas box) from the framing — otherwise
       // one node at an extreme coordinate blows the bounds up and the zoom
