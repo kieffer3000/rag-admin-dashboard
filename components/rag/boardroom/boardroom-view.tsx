@@ -131,7 +131,7 @@ function SeatAvatar({ name, active }: { name: string; active: boolean }) {
 }
 
 export function BoardroomView() {
-  const { activeProjectId } = useRag();
+  const { activeProjectId, openViewer } = useRag();
   const { board, resolveBrainScope, hydratedProject } = useBoard();
   const hydrated = hydratedProject === activeProjectId;
 
@@ -594,7 +594,19 @@ export function BoardroomView() {
                         ) : (
                           <>
                             <div
-                              className="prose prose-sm max-w-none text-[13.5px] leading-relaxed [&_mark]:bg-accent/20 [&_sup]:text-accent"
+                              // NOTE: no [&_sup] color override here — it out-
+                              // specified .fn-ref's white text and painted the
+                              // footnote number accent-on-accent (invisible).
+                              // Click/hover delegation mirrors the Bank chat:
+                              // .fn-ref data-fn="N" → citations[N-1] → viewer.
+                              className="prose prose-sm max-w-none text-[13.5px] leading-relaxed [&_mark]:bg-accent/20"
+                              onClick={(e) => {
+                                const ref = (e.target as HTMLElement).closest('.fn-ref');
+                                if (!ref) return;
+                                const n = parseInt(ref.getAttribute('data-fn') ?? '', 10);
+                                const c = r.citations?.[n - 1];
+                                if (c) openViewer(c, r.answer ?? undefined);
+                              }}
                               dangerouslySetInnerHTML={{ __html: r.answer ?? '' }}
                             />
                             {r.noMatch && (
