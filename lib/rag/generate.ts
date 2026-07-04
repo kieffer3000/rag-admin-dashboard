@@ -39,6 +39,11 @@ export interface GenerateOpts {
   /** Pipeline step, forwarded to Make so the scenario can route each step to a
    *  different model ('conductor' = fast/JSON, 'synthesis' = strong/long). */
   step?: 'conductor' | 'synthesis';
+  /** Skip the relay and call the model directly. REQUIRED for callers that
+   *  are not Opine: the relay wraps every prompt in Opine's ARTIFACT/
+   *  INSTRUCTION template, which swallows a custom system prompt whole (the
+   *  help bot answered "your fields are empty" because of this). */
+  direct?: boolean;
 }
 
 // When set, Opine's LLM calls go through YOUR Make scenario instead of the
@@ -96,8 +101,12 @@ async function generateViaMake(prompt: string, opts: GenerateOpts): Promise<stri
 export async function generateText(prompt: string, opts: GenerateOpts = {}): Promise<string> {
   // Prefer the user's Make scenario (central model control) when configured;
   // fall back to the in-code Gemini call below if it yields nothing.
-  const viaMake = await generateViaMake(prompt, opts);
-  if (viaMake) return viaMake;
+  // opts.direct bypasses the relay — it is Opine-shaped and mangles any
+  // other caller's prompt (see GenerateOpts.direct).
+  if (!opts.direct) {
+    const viaMake = await generateViaMake(prompt, opts);
+    if (viaMake) return viaMake;
+  }
 
   const model = opts.model ?? MODEL;
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey()}`;

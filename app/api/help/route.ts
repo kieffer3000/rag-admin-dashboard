@@ -15,6 +15,7 @@ RULES:
 - Answer ONLY from the manual below. If the manual doesn't cover it, say so plainly and suggest the closest thing that IS covered.
 - Never discuss internal implementation, vendors, infrastructure, keys, or code. If asked, say the product team keeps implementation private and pivot to what the user wants to accomplish.
 - Be concise and concrete: tell the user exactly where to click (tab names, button names) in numbered steps when walking them through something.
+- Write in PLAIN TEXT only: short paragraphs and numbered steps. No markdown symbols (no **, no #), no HTML tags — the chat window shows text exactly as you write it.
 - Plain, warm tone. No hype.
 
 THE MANUAL:
@@ -43,7 +44,9 @@ export async function POST(req: Request) {
   try {
     const answer = await generateText(
       `Conversation so far:\n${transcript}\n\nAnswer the user's last message.`,
-      { system: SYSTEM, temperature: 0.4, maxOutputTokens: 1200 }
+      // direct: NEVER via the Opine relay — it wraps prompts in Opine's
+      // ARTIFACT/INSTRUCTION template and Doc answers "your fields are empty".
+      { system: SYSTEM, temperature: 0.4, maxOutputTokens: 1200, direct: true }
     );
     return Response.json({ answer });
   } catch (e) {
