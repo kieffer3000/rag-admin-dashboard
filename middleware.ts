@@ -11,6 +11,8 @@ const isPublicRoute = createRouteMatcher([
   // Server-to-server (Make ingest → Nova captioner). Clerk-exempt; the route
   // enforces its own CAPTION_WEBHOOK_SECRET shared-secret header instead.
   '/api/caption-image',
+  // TEMP ghost-banks diagnostics (read-only; same shared-secret header).
+  '/api/admin/diag-board',
   // Public published-Bank surfaces: the key-authed Q&A API (auth = per-Bank API
   // key, enforced in the route) and the embeddable chat widget that calls it.
   '/api/v1(.*)',
