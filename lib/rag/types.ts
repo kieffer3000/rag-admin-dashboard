@@ -58,6 +58,8 @@ export interface Agent {
   name: string;
   /** Optional emoji/icon shown on the agent card and node (defaults to 🤖). */
   icon?: string;
+  /** Optional uploaded image (small data URL) — wins over `icon` when set. */
+  avatar?: string;
   /** The persona's system prompt — steers HOW a wired brain answers. */
   systemPrompt: string;
   /** True for the built-in starter agents. */

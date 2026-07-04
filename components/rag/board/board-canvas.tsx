@@ -2553,7 +2553,7 @@ function BoardCanvasInner() {
             position: centerPos(),
             width: 500,
             height: 600,
-            data: { name: `Answers Bank ${brainCount + 1}` }
+            data: { name: `DataBank ${brainCount + 1}` }
           });
         }}
         onAddText={() =>
@@ -2760,8 +2760,10 @@ function BoardCanvasInner() {
           </div>
         </div>
       )}
-      {/* Build stamp — confirm you're on the latest code at a glance. */}
-      <div className="pointer-events-none absolute bottom-1.5 right-2 z-50 rounded bg-black/55 px-2 py-0.5 font-mono text-[10px] text-amber-300/90">
+      {/* Build stamp — confirm you're on the latest code at a glance.
+          TOP-right: the bottom-right corner belongs to the zoom Controls
+          (the badge used to overlap them). */}
+      <div className="pointer-events-none absolute right-2 top-1.5 z-50 rounded bg-black/55 px-2 py-0.5 font-mono text-[10px] text-amber-300/90">
         build {process.env.NEXT_PUBLIC_BUILD ?? 'dev'}
       </div>
       <BoardChest

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
@@ -15,19 +15,12 @@ import {
   Plus,
   Check,
   FolderOpen,
-  Workflow,
-  Landmark,
-  PanelLeftClose,
-  PanelLeftOpen
+  Workflow
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { RoundTableIcon } from '@/components/rag/round-table-icon';
 import { useRag } from '@/lib/rag/store';
 import { useIsAdmin } from '@/lib/rag/use-role';
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger
-} from '@/components/ui/tooltip';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -49,7 +42,7 @@ import { Label } from '@/components/ui/label';
 
 export const NAV = [
   { href: '/board', label: 'Board', icon: Workflow },
-  { href: '/boardroom', label: 'Boardroom', icon: Landmark },
+  { href: '/boardroom', label: 'Boardroom', icon: RoundTableIcon },
   { href: '/', label: 'Chat', icon: MessagesSquare },
   { href: '/library', label: 'Library', icon: Library },
   { href: '/projects', label: 'Projects', icon: FolderOpen },
@@ -211,122 +204,57 @@ export function ProjectSwitcher({ compact = false }: { compact?: boolean }) {
 export function Sidebar() {
   const pathname = usePathname();
   const isAdmin = useIsAdmin();
-  const [collapsed, setCollapsed] = useState(false);
 
-  // Persist the collapsed state across navigations/reloads.
-  useEffect(() => {
-    setCollapsed(localStorage.getItem('atlas-sidebar-collapsed') === '1');
-  }, []);
-  function toggle() {
-    setCollapsed((c) => {
-      const next = !c;
-      localStorage.setItem('atlas-sidebar-collapsed', next ? '1' : '0');
-      return next;
-    });
-  }
-
+  // Make-style rail (2026-07-03): always compact, large icon + word beneath,
+  // and a CONTRASTING brand-olive gradient so it reads as chrome, not canvas.
+  // The old collapse toggle + "Vector store" info panel are gone.
   return (
-    <aside
-      className={cn(
-        'hidden shrink-0 flex-col bg-transparent py-4 transition-[width] duration-200 lg:flex',
-        collapsed ? 'w-[72px] items-center px-2' : 'w-[228px] px-3'
-      )}
-    >
-      <div
-        className={cn(
-          'mb-5 flex items-center',
-          collapsed ? 'flex-col gap-2' : 'justify-between px-2'
-        )}
-      >
-        <Link href="/" className="flex items-center gap-2.5">
-          <div className="relative flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-[12px] bg-[#efe9da] shadow-[0_4px_16px_hsl(var(--accent)/0.4)]">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src="/answersdoc-logo.png" alt="answersDoc" className="h-full w-full object-contain p-0.5" draggable={false} />
-          </div>
-          {!collapsed && (
-            <div className="leading-tight">
-              <div className="text-[15px] font-semibold tracking-tight">answersDoc</div>
-              <div className="text-[11px] text-muted-foreground/70">Knowledge Base</div>
-            </div>
-          )}
-        </Link>
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <button
-              onClick={toggle}
-              className="flex h-7 w-7 items-center justify-center rounded-[9px] text-muted-foreground transition-colors hover:bg-[rgb(var(--hairline)/0.06)] hover:text-foreground"
-            >
-              {collapsed ? (
-                <PanelLeftOpen className="h-[17px] w-[17px]" />
-              ) : (
-                <PanelLeftClose className="h-[17px] w-[17px]" />
-              )}
-            </button>
-          </TooltipTrigger>
-          <TooltipContent side="right" className="text-[11.5px]">
-            {collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-          </TooltipContent>
-        </Tooltip>
+    <aside className="hidden w-[96px] shrink-0 flex-col items-center gap-1 overflow-y-auto bg-gradient-to-b from-[hsl(68_39%_24%)] via-[hsl(72_36%_18%)] to-[hsl(78_34%_12%)] py-4 lg:flex">
+      <Link href="/" className="mb-2 flex flex-col items-center gap-1.5">
+        <div className="relative flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-[14px] bg-[#efe9da] shadow-[0_4px_18px_rgb(0_0_0/0.35)]">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src="/answersdoc-logo.png"
+            alt="answersDoc"
+            className="h-full w-full object-contain p-0.5"
+            draggable={false}
+          />
+        </div>
+      </Link>
+
+      <div className="mb-2 flex justify-center">
+        <ProjectSwitcher compact />
       </div>
 
-      <div className={cn('mb-4', collapsed && 'flex justify-center')}>
-        <ProjectSwitcher compact={collapsed} />
-      </div>
-
-      <nav className={cn('flex flex-col gap-1', collapsed && 'w-full items-center')}>
+      <nav className="flex w-full flex-col items-center gap-1 px-2">
         {NAV.filter((i) => isAdmin || !i.adminOnly).map((item) => {
           const active =
             item.href === '/' ? pathname === '/' : pathname.startsWith(item.href);
           const Icon = item.icon;
-          const link = (
+          return (
             <Link
               key={item.href}
               href={item.href}
               className={cn(
-                'group flex items-center rounded-[14px] text-sm font-medium transition-all duration-150',
-                collapsed ? 'h-10 w-10 justify-center' : 'gap-3 px-3 py-2.5',
+                'group flex w-full flex-col items-center gap-1 rounded-[14px] px-1 py-2 transition-all duration-150',
                 active
-                  ? 'bg-accent/[0.08] font-semibold text-accent dark:bg-accent/[0.14]'
-                  : 'text-muted-foreground hover:bg-[rgb(var(--hairline)/0.05)] hover:text-foreground'
+                  ? 'bg-white/[0.16] text-white shadow-[inset_0_1px_0_rgb(255_255_255/0.12)]'
+                  : 'text-[#e6e4cf]/70 hover:bg-white/[0.08] hover:text-[#f4f2e3]'
               )}
             >
               <Icon
                 className={cn(
-                  'h-[18px] w-[18px] shrink-0 transition-colors',
-                  active ? 'text-accent' : 'text-muted-foreground group-hover:text-foreground'
+                  'h-[22px] w-[22px] shrink-0 transition-colors',
+                  active ? 'text-white' : 'text-[#e6e4cf]/70 group-hover:text-[#f4f2e3]'
                 )}
               />
-              {!collapsed && item.label}
-            </Link>
-          );
-          return collapsed ? (
-            <Tooltip key={item.href}>
-              <TooltipTrigger asChild>{link}</TooltipTrigger>
-              <TooltipContent side="right" className="text-[11.5px]">
+              <span className="text-[10px] font-semibold leading-none tracking-wide">
                 {item.label}
-              </TooltipContent>
-            </Tooltip>
-          ) : (
-            link
+              </span>
+            </Link>
           );
         })}
       </nav>
-
-      {!collapsed && (
-        <div className="panel mt-auto rounded-[20px] p-3.5">
-          <div className="flex items-center gap-2 text-[13px] font-medium">
-            <span className="relative flex h-2 w-2">
-              {/* steady dot — the old animate-ping ring read as a constant flicker
-                  once the board went quiet. A soft glow keeps the "live" feel. */}
-              <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500 shadow-[0_0_0_3px_rgb(16_185_129/0.15)]" />
-            </span>
-            Vector store
-          </div>
-          <p className="mt-1.5 text-[11px] leading-relaxed text-muted-foreground/70">
-            Gemini Embedding · Pinecone
-          </p>
-        </div>
-      )}
     </aside>
   );
 }

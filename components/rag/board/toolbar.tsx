@@ -7,10 +7,8 @@ import { MEDIA_TYPES } from '@/lib/rag/media-config';
 import { MediaType } from '@/lib/rag/types';
 import { MediaIcon } from '@/components/rag/shared';
 import { WavRecorder, transcribeAudio } from '@/lib/rag/board/dictation';
-import { soundEnabled, setSoundEnabled } from '@/lib/rag/board/sound';
 import {
-  Brain,
-  Type,
+  Landmark,
   StickyNote,
   FolderPlus,
   Sparkles,
@@ -18,12 +16,9 @@ import {
   Mic,
   Square,
   Loader2,
-  GitFork,
   ChevronDown,
   ChevronUp,
   Wand2,
-  Volume2,
-  VolumeX,
   Check,
   AlertCircle,
   RotateCcw,
@@ -137,9 +132,6 @@ export function BoardToolbar(p: BoardToolbarProps) {
   // cheap instead of O(rows × media).
   const mediaById = useMemo(() => new Map(media.map((m) => [m.id, m])), [media]);
   const [collapsed, setCollapsed] = useState(false);
-  // Sound starts unknown on the server; sync from localStorage after mount.
-  const [sound, setSound] = useState(true);
-  useEffect(() => setSound(soundEnabled()), []);
   const [sourceType, setSourceType] = useState<MediaType | null>(null);
   // The unified upload picker — a 2-step wizard: first WHAT it is (long-term RAG
   // / working artifact / supporting reference), then (for RAG) which file type.
@@ -462,7 +454,7 @@ export function BoardToolbar(p: BoardToolbarProps) {
             label="New Answers Bank"
             desc="Add an Answers Bank (chat) node. Wire sources or boxes into it and ask — it answers only from what's connected, with citations."
             accent
-            icon={<Brain className="h-[19px] w-[19px]" />}
+            icon={<Landmark className="h-[19px] w-[19px]" />}
             onClick={p.onAddBrain}
           />
           <RailButton
@@ -544,30 +536,17 @@ export function BoardToolbar(p: BoardToolbarProps) {
             onClick={p.onAddEverything}
           />
           <RailDivider />
-          <RailButton
-            label="Mind map"
-            desc="Sketch a quick tree of ideas. Enter adds a sibling, Tab adds a child. For thinking, not retrieval."
-            icon={<GitFork className="h-[19px] w-[19px]" />}
-            onClick={p.onAddMindmap}
-          />
-          <RailButton
-            label="Context note"
-            desc="A scratch instruction wired into an Answers Bank as prompt context — steers the answer but is never indexed."
-            icon={<Type className="h-[19px] w-[19px]" />}
-            onClick={p.onAddText}
-          />
+          {/* DOCK DIET (2026-07-03): Mind map, Context note and Draft buttons
+              removed (redundant — the dock was outgrowing the screen and
+              overlapping the source-status pill). Their features still exist:
+              the Upload dialog covers Draft/Artifact, and mind maps / context
+              notes remain on saved boards. Sound moved to the top bar next to
+              the theme toggle. */}
           <RailButton
             label="Annotation"
             desc="A free-floating label to caption a region of the board. Purely visual."
             icon={<StickyNote className="h-[19px] w-[19px]" />}
             onClick={p.onAddAnnotation}
-          />
-          <RailDivider />
-          <RailButton
-            label="Draft"
-            desc="Your working doc (article, webpage, draft). Wire it to an Answers Bank WITH a Library → it opines on it. Carried whole, never indexed."
-            icon={<FileText className="h-[19px] w-[19px]" />}
-            onClick={p.onAddArtifact}
           />
           <RailButton
             label="Examples"
@@ -581,25 +560,6 @@ export function BoardToolbar(p: BoardToolbarProps) {
             desc="Untangle: snaps every piece to its plug around each Answers Bank — Library left, Examples top, Draft right, Persona bottom — so no wires cross."
             icon={<Wand2 className="h-[19px] w-[19px]" />}
             onClick={p.onCleanDesk}
-          />
-          <RailButton
-            label={sound ? 'Sounds on' : 'Sounds off'}
-            desc={
-              sound
-                ? 'Snap clacks, the thinking hum, and the answer chime are playing. Click to mute.'
-                : 'Board sounds are muted. Click to bring back the snap, hum, and chime.'
-            }
-            icon={
-              sound ? (
-                <Volume2 className="h-[19px] w-[19px]" />
-              ) : (
-                <VolumeX className="h-[19px] w-[19px] opacity-60" />
-              )
-            }
-            onClick={() => {
-              setSoundEnabled(!sound);
-              setSound(!sound);
-            }}
           />
         </div>
       )}

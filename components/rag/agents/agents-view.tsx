@@ -23,8 +23,7 @@ import {
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu';
 import { Plus, MoreHorizontal, Pencil, Trash2, Workflow, Copy } from 'lucide-react';
-
-const EMOJIS = ['🤖', '🎓', '💡', '🧠', '⚖️', '🔍', '✨', '📊', '🎯', '🧑‍💻'];
+import { IconPicker } from '@/components/rag/icon-picker';
 
 export function AgentsView() {
   const { agents, addAgent, updateAgent, deleteAgent } = useRag();
@@ -34,12 +33,14 @@ export function AgentsView() {
   const [name, setName] = useState('');
   const [systemPrompt, setSystemPrompt] = useState('');
   const [icon, setIcon] = useState('🤖');
+  const [avatar, setAvatar] = useState('');
 
   function startNew() {
     setEditing(null);
     setName('');
     setSystemPrompt('');
     setIcon('🤖');
+    setAvatar('');
     setOpen(true);
   }
 
@@ -48,6 +49,7 @@ export function AgentsView() {
     setName(a.name);
     setSystemPrompt(a.systemPrompt);
     setIcon(a.icon ?? '🤖');
+    setAvatar(a.avatar ?? '');
     setOpen(true);
   }
 
@@ -57,10 +59,16 @@ export function AgentsView() {
       updateAgent(editing.id, {
         name: name.trim(),
         systemPrompt: systemPrompt.trim(),
-        icon
+        icon,
+        avatar
       });
     } else {
-      addAgent({ name: name.trim(), systemPrompt: systemPrompt.trim(), icon });
+      addAgent({
+        name: name.trim(),
+        systemPrompt: systemPrompt.trim(),
+        icon,
+        avatar
+      });
     }
     setOpen(false);
   }
@@ -95,8 +103,17 @@ export function AgentsView() {
               className="card-glass hover-glow group flex flex-col rounded-[18px] p-4"
             >
               <div className="flex items-start justify-between">
-                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-secondary text-xl">
-                  {a.icon ?? '🤖'}
+                <div className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-xl bg-secondary text-xl">
+                  {a.avatar ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={a.avatar}
+                      alt=""
+                      className="h-full w-full object-cover"
+                    />
+                  ) : (
+                    a.icon ?? '🤖'
+                  )}
                 </div>
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
@@ -170,24 +187,15 @@ export function AgentsView() {
             <div className="flex gap-3">
               <div className="space-y-1.5">
                 <Label>Icon</Label>
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <button className="flex h-10 w-12 items-center justify-center rounded-xl border border-input bg-card text-xl">
-                      {icon}
-                    </button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent className="grid grid-cols-5 gap-1 p-2">
-                    {EMOJIS.map((e) => (
-                      <button
-                        key={e}
-                        onClick={() => setIcon(e)}
-                        className="flex h-8 w-8 items-center justify-center rounded-lg text-lg hover:bg-[rgb(var(--hairline)/0.06)]"
-                      >
-                        {e}
-                      </button>
-                    ))}
-                  </DropdownMenuContent>
-                </DropdownMenu>
+                <IconPicker
+                  icon={icon}
+                  avatar={avatar}
+                  onIcon={(e) => {
+                    setIcon(e || '🤖');
+                    setAvatar('');
+                  }}
+                  onAvatar={setAvatar}
+                />
               </div>
               <div className="flex-1 space-y-1.5">
                 <Label>Name</Label>

@@ -415,20 +415,25 @@ function HubNodeInner({ id, data, selected }: NodeProps) {
           className="absolute inset-x-1.5 bottom-1.5 flex flex-col overflow-hidden rounded-[13px]"
         >
           <div className="relative min-h-0 flex-1">
-            {d.face === 'preset:male' || d.face === 'preset:female' ? (
-              <PresetFace variant={d.face === 'preset:female' ? 'female' : 'male'} />
-            ) : (
-              // object-contain, no backing surface — a transparent-cutout
-              // portrait floats straight on the desk.
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                src={d.face}
-                alt={d.name}
-                draggable={false}
-                className="h-full w-full select-none object-contain"
-              />
-            )}
-            <span className="absolute right-1 top-1 rounded-full bg-black/45 px-1.5 py-0.5 text-[10px] font-bold text-white">
+            {/* UNIFORM frame (2026-07-03): every portrait renders in the same
+                fixed, rounded frame via object-cover — no more each-image-its-
+                own-size (contain let wide uploads shrink and tall ones fill). */}
+            <div className="absolute inset-1 overflow-hidden rounded-[10px] bg-black/[0.04] dark:bg-white/[0.05]">
+              {d.face === 'preset:male' || d.face === 'preset:female' ? (
+                <PresetFace
+                  variant={d.face === 'preset:female' ? 'female' : 'male'}
+                />
+              ) : (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={d.face}
+                  alt={d.name}
+                  draggable={false}
+                  className="h-full w-full select-none object-cover"
+                />
+              )}
+            </div>
+            <span className="absolute right-2 top-2 rounded-full bg-black/45 px-1.5 py-0.5 text-[10px] font-bold text-white">
               {memberCount}
             </span>
           </div>

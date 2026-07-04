@@ -240,8 +240,10 @@ export function hubGridExpanded(
   return hubUsesGrid(data, memberCount) && !hubCollapsed(data, memberCount);
 }
 
-/** FACE VIEW footprint — a portrait card (header + image + name strip). */
-export const HUB_FACE_SIZE = { width: 172, height: 236 } as const;
+/** FACE VIEW footprint — a portrait card (header + image + name strip).
+ *  ~30% of a DataBank node (500×600) so faced boxes read as compact tokens
+ *  next to the banks (user request 2026-07-03). */
+export const HUB_FACE_SIZE = { width: 150, height: 190 } as const;
 
 /** Is this hub wearing its face? (cluster boxes only) */
 export function hubFaced(data: {

@@ -2,6 +2,8 @@ import { Analytics } from '@vercel/analytics/react';
 import { Sidebar } from '@/components/rag/sidebar';
 import { MobileNav } from '@/components/rag/mobile-nav';
 import { ThemeToggle } from '@/components/rag/theme-toggle';
+import { SoundToggle } from '@/components/rag/sound-toggle';
+import { HelpBot } from '@/components/rag/help-bot';
 import { SourceViewer } from '@/components/rag/source-viewer';
 import { User } from './user';
 import Providers from './providers';
@@ -26,6 +28,8 @@ export default function DashboardLayout({
           <header className="sticky top-0 z-30 flex h-14 shrink-0 items-center gap-3 bg-transparent px-4">
             <MobileNav />
             <div className="flex-1" />
+            <HelpBot />
+            <SoundToggle />
             <ThemeToggle />
             <User />
           </header>

@@ -612,12 +612,18 @@ export function BoardProvider({ children }: { children: ReactNode }) {
     setSaveStatus('saving');
   }, [buildDoc, activeProjectId]);
 
-  // ---- AUTOSAVE: every 60s, NOT on every move (so dragging stays smooth). The
-  // synchronous per-change localStorage write of the whole board was the lag. ----
+  // ---- AUTOSAVE: every 3 MINUTES, NOT on every move (so dragging stays
+  // smooth). 60s → 180s (2026-07-03, user request): each tick costs a
+  // saving→saved indicator cycle + worker/IDB/network churn that correlates
+  // with the flicker reports, so fewer ticks = calmer board. SAFE because the
+  // save design is local-first: chat still persists ~2.5s after it settles,
+  // and the pagehide/visibility flush below writes the CURRENT doc the moment
+  // the tab hides/closes — the only widened window is a hard browser crash
+  // mid-session, and the 💾 Save button in the dock covers the anxious. ----
   useEffect(() => {
     const iv = setInterval(() => {
       if (dirty.current) persistNow();
-    }, 60000);
+    }, 180000);
     return () => clearInterval(iv);
   }, [persistNow]);
 

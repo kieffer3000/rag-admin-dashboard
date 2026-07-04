@@ -15,7 +15,7 @@ import {
   Check,
   Loader2,
   CloudOff,
-  Brain,
+  Landmark,
   Bot,
   Package,
   Plus
@@ -293,7 +293,7 @@ export function BoardChest({
                     title="Bring this Answers Bank back to the canvas (chats + wiring restored)"
                     className="group flex cursor-pointer items-center gap-2.5 rounded-[10px] px-2 py-1.5 transition-colors hover:bg-[rgb(var(--hairline)/0.05)]"
                   >
-                    <Brain className="h-4 w-4 shrink-0 text-indigo-500" />
+                    <Landmark className="h-4 w-4 shrink-0 text-indigo-500" />
                     <span className="min-w-0 flex-1">
                       <span className="block truncate text-[12.5px] font-medium">
                         {String(s.node.data?.name ?? 'Answers Bank')}
@@ -519,7 +519,7 @@ export function BoardChest({
               open === 'brains' ? 'ring-2 ring-accent' : 'hover:brightness-95'
             )}
           >
-            <Brain className="h-[18px] w-[18px] text-indigo-500" strokeWidth={2.25} />
+            <Landmark className="h-[18px] w-[18px] text-indigo-500" strokeWidth={2.25} />
             <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-foreground px-1 text-[9px] font-bold text-background">
               {stashedBrains.length}
             </span>

@@ -8,7 +8,7 @@ import {
   DialogDescription
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { Brain, Trash2 } from 'lucide-react';
+import { Landmark, Trash2 } from 'lucide-react';
 import { useBoard } from '@/lib/rag/board/store';
 
 /**
@@ -50,7 +50,7 @@ export function ArtifactBrainPicker() {
               onClick={() => pick(b.id)}
               className="flex items-center gap-2 rounded-lg border border-border px-3 py-2 text-left text-[13px] font-medium transition-colors hover:border-indigo-500/50 hover:bg-indigo-500/[0.06]"
             >
-              <Brain className="h-4 w-4 text-indigo-500" />
+              <Landmark className="h-4 w-4 text-indigo-500" />
               {(b.data?.name as string) || 'Answers Bank'}
             </button>
           ))}

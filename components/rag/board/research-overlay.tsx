@@ -22,7 +22,7 @@ import {
   ArrowUp,
   Loader2,
   Minimize2,
-  Brain,
+  Landmark,
   Zap,
   Search,
   Telescope,
@@ -475,7 +475,7 @@ export function ResearchOverlay({
       {/* minimal top bar */}
       <header className="flex h-14 shrink-0 items-center gap-2 px-5">
         <div className="flex min-w-0 items-center gap-2 text-[14px] font-semibold">
-          <Brain className="h-4 w-4 shrink-0 text-accent" />
+          <Landmark className="h-4 w-4 shrink-0 text-accent" />
           {renaming ? (
             <input
               autoFocus
@@ -605,7 +605,7 @@ export function ResearchOverlay({
           {messages.length === 0 ? (
             <div className="flex flex-col items-center justify-center pt-24 text-center">
               <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-accent/10">
-                <Brain className="h-6 w-6 text-accent" />
+                <Landmark className="h-6 w-6 text-accent" />
               </div>
               <h2 className="text-[20px] font-semibold tracking-tight">
                 Research with {name}
