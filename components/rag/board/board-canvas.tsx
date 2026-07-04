@@ -218,7 +218,17 @@ function BoardCanvasInner() {
   // Library ("Send to box"). Creates the hub + a chip per source (pulling any
   // existing chip for that source in first), then clears the request.
   useEffect(() => {
-    if (!pendingBox || !pendingBox.sourceIds.length || !hydratedProject) return;
+    // GUARD: the box must land on the board it was aimed at. `hydratedProject`
+    // truthy isn't enough — right after a project switch it still points at
+    // the PREVIOUS project while the new board loads, and materializing then
+    // would write into (and mark "touched") a not-yet-hydrated board, blocking
+    // its real DB load. Wait until hydration catches up to the active project.
+    if (
+      !pendingBox ||
+      !pendingBox.sourceIds.length ||
+      hydratedProject !== activeProjectId
+    )
+      return;
     const { name, sourceIds } = pendingBox;
     const idSet = new Set(sourceIds);
     setBoard((prev) => {
@@ -260,7 +270,7 @@ function BoardCanvasInner() {
     });
     setPendingBox(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pendingBox, hydratedProject]);
+  }, [pendingBox, hydratedProject, activeProjectId]);
   // Garbage bin (bottom-left): drag a source chip onto it to delete the source
   // and its Pinecone vectors. `binHot` highlights it while a chip hovers over.
   const binRef = useRef<HTMLButtonElement>(null);

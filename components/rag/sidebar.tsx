@@ -52,6 +52,7 @@ export const NAV = [
   { href: '/boardroom', label: 'Boardroom', icon: Landmark },
   { href: '/', label: 'Chat', icon: MessagesSquare },
   { href: '/library', label: 'Library', icon: Library },
+  { href: '/projects', label: 'Projects', icon: FolderOpen },
   { href: '/agents', label: 'Agents', icon: Bot },
   { href: '/notes', label: 'Notes', icon: StickyNote },
   { href: '/health', label: 'Health', icon: Activity, adminOnly: true },
@@ -131,6 +132,11 @@ export function ProjectSwitcher({ compact = false }: { compact?: boolean }) {
           <DropdownMenuSeparator />
           <DropdownMenuItem onClick={() => setCreateOpen(true)} className="gap-2 text-accent">
             <Plus className="h-3.5 w-3.5" /> New project
+          </DropdownMenuItem>
+          <DropdownMenuItem asChild className="gap-2">
+            <Link href="/projects">
+              <FolderOpen className="h-3.5 w-3.5" /> View all projects…
+            </Link>
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
