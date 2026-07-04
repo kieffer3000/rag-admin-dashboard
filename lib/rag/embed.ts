@@ -64,6 +64,7 @@ async function embedBatch(texts: string[]): Promise<number[][]> {
       if (!/HTTP (429|5\d\d)/.test(lastErr) && !/fetch|network|timeout/i.test(lastErr))
         throw e;
     }
+    console.warn(`[embed-retry] attempt ${attempt + 1}/${MAX_RETRY}: ${lastErr}`);
     // Exp backoff capped at 15s + jitter (~50s total budget across 8 tries).
     await sleep(Math.min(400 * 2 ** attempt, 15_000) + Math.random() * 400);
   }

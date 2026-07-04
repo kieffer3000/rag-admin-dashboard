@@ -93,6 +93,7 @@ async function upsertBatch(
       if (/MONTHLY write quota|STORAGE is full/.test(e?.message ?? '')) throw e;
       lastErr = e?.message ?? 'upsert error';
     }
+    console.warn(`[upsert-retry] attempt ${attempt + 1}/${UPSERT_MAX_RETRY}: ${lastErr}`);
     await new Promise((r) =>
       setTimeout(r, Math.min(400 * 2 ** attempt, 15_000) + Math.random() * 400)
     );
@@ -163,11 +164,16 @@ export async function indexText(opts: {
   const host = pineconeHost();
   const key = pineconeKey();
 
+  // Timing probe (2026-07-04, bulk-import slowness): one line per document in
+  // the runtime logs saying where the seconds went. Cheap; keep it.
+  const t0 = Date.now();
   const deletedPrior = await deleteSourceVectors(sourceId, namespace);
+  const tDel = Date.now();
 
   // Embed every chunk in code (throws if any chunk fails to embed → no silent
   // loss). Vectors come back aligned to `chunks` order.
   const values = await embedTexts(chunks);
+  const tEmbed = Date.now();
 
   const records: PineVector[] = chunks.map((text, i) => ({
     id: `${sourceId}#${i}`,
@@ -196,6 +202,9 @@ export async function indexText(opts: {
     if (i + UPSERT_BATCH < records.length)
       await new Promise((r) => setTimeout(r, INTER_BATCH_MS));
   }
+  console.info(
+    `[index-timing] ${sourceId} chunks=${chunks.length} deletePrior=${tDel - t0}ms embed=${tEmbed - tDel}ms upsert=${Date.now() - tEmbed}ms`
+  );
 
   // Level 1 of the summary tree: one pre-made summary of the WHOLE source, kept
   // as a reserved `${sourceId}#summary` vector. Best-effort — a summary hiccup
