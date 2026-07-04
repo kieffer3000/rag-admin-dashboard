@@ -4,7 +4,6 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
-  MessagesSquare,
   Library,
   Bot,
   StickyNote,
@@ -41,9 +40,11 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 
 export const NAV = [
+  // NOTE: the old Chat tab is retired (2026-07-04) — conversations live in
+  // the DataBanks; '/' already redirected to /board anyway. ChatView code
+  // stays in the tree, unrouted, in case it's ever wanted back.
   { href: '/board', label: 'Board', icon: Workflow },
   { href: '/boardroom', label: 'Boardroom', icon: RoundTableIcon },
-  { href: '/', label: 'Chat', icon: MessagesSquare },
   { href: '/library', label: 'Library', icon: Library },
   { href: '/projects', label: 'Projects', icon: FolderOpen },
   { href: '/agents', label: 'Agents', icon: Bot },

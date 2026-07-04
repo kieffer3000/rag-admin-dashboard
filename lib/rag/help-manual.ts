@@ -23,7 +23,6 @@ answer can show where it came from.
   knowledge: pieces, boxes, and DataBanks wired together.
 - **Boardroom** — a meeting room where one question goes to ALL your experts
   at once.
-- **Chat** — a straightforward chat over the active project's indexed sources.
 - **Library** — every source in your account: search, filter by type, select
   many at once, add them to the current project, or send a selection to a box
   on the Board.
@@ -134,10 +133,11 @@ Two embeds, both a single iframe paste — no code in the host app:
 Both are locked to the domains you allow. Experts must be published before
 they can join a room.
 
-# Chat tab
+# Where do I just chat?
 
-The simple path: pick a project, ask, get answers grounded in that project's
-indexed sources, with citations. Conversations are saved per project.
+Every DataBank on the Board IS a chat — wire in sources (or use the
+Everything hub to wire in the whole project at once) and ask. Conversations
+are saved per DataBank. There is no separate Chat tab.
 
 # Team & roles
 
