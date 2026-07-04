@@ -276,6 +276,33 @@ function BoardCanvasInner() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pendingBox, hydratedProject, activeProjectId]);
 
+  // POSITION RESCUE (2026-07-04): a node persisted with a non-finite
+  // position (the Clean-desk NaN incident — banks "disappeared") renders
+  // NOWHERE and can never be dragged back. Once this project's board is
+  // hydrated, pull any such node onto a visible staggered grid near the
+  // origin so it's findable again. Never touches finite positions.
+  useEffect(() => {
+    if (hydratedProject !== activeProjectId) return;
+    setBoard((prev) => {
+      let rescued = 0;
+      const nodes = prev.nodes.map((n) => {
+        if (
+          !n.parentId &&
+          (!Number.isFinite(n.position?.x) || !Number.isFinite(n.position?.y))
+        ) {
+          const i = rescued++;
+          return {
+            ...n,
+            position: { x: 120 + (i % 3) * 560, y: 120 + Math.floor(i / 3) * 660 }
+          };
+        }
+        return n;
+      });
+      return rescued ? { ...prev, nodes } : prev;
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hydratedProject, activeProjectId]);
+
   // GHOST-CHIP PRUNE (2026-07-04): deleting a source in the LIBRARY removes
   // the media + vectors, but boards are separate documents — the box kept 326
   // grey placeholder chips pointing at media that no longer exists. Remove
@@ -1940,8 +1967,23 @@ function BoardCanvasInner() {
         else if (n.type === 'reference') kind = 'top';
         else if (n.type === 'artifact') kind = 'right';
         else if (n.type === 'prompt' || n.type === 'agent') kind = 'bottom';
-        let w = (n.width as number) ?? (n.type === 'brain' ? 500 : 240);
-        let h = (n.height as number) ?? (n.type === 'brain' ? 600 : 150);
+        // Number.isFinite guard: a NaN/0 measured width poisons the whole
+        // column math (midX/brainCenterX → NaN → every BANK lands at a
+        // non-position and "disappears"). Fall back to the type default.
+        const rawW = Number(n.width);
+        const rawH = Number(n.height);
+        let w =
+          Number.isFinite(rawW) && rawW > 0
+            ? rawW
+            : n.type === 'brain'
+              ? 500
+              : 240;
+        let h =
+          Number.isFinite(rawH) && rawH > 0
+            ? rawH
+            : n.type === 'brain'
+              ? 600
+              : 150;
         if (n.type === 'hub') {
           // Collapse-aware: a minimized box reserves its real mini footprint.
           const sz = hubFootprint(
@@ -2052,6 +2094,25 @@ function BoardCanvasInner() {
     const yR = placeStack(orphanRight, rightX, rightColW, y);
     placeStack(orphanRest, leftX, leftColW, Math.max(yL, yR, y));
 
+    // SANITY GATE: never move a node to (or from) a non-finite coordinate —
+    // a single NaN start/target would otherwise stick through every frame
+    // (NaN + anything = NaN) and get PERSISTED. Drop such nodes from the
+    // tidy; the load-time position rescue will fix any that are already bad.
+    for (const [id, p] of Array.from(target)) {
+      if (!Number.isFinite(p.x) || !Number.isFinite(p.y)) target.delete(id);
+    }
+    for (const n of nodes) {
+      if (
+        target.has(n.id) &&
+        (!Number.isFinite(n.position?.x) || !Number.isFinite(n.position?.y))
+      ) {
+        // Bad CURRENT position — jump straight to target on frame 1 instead
+        // of interpolating from NaN.
+        const tg = target.get(n.id)!;
+        n.position = { ...tg };
+      }
+    }
+
     // Animate from current → target with an ease, then re-frame.
     tidying.current = true;
     const start = new Map<string, { x: number; y: number }>();
@@ -2063,18 +2124,23 @@ function BoardCanvasInner() {
       frame++;
       const t = frame / TOTAL;
       const e = 1 - Math.pow(1 - t, 3); // easeOutCubic
+      const last = frame >= TOTAL;
       setBoard((prev) => ({
         ...prev,
         nodes: prev.nodes.map((n) => {
           const s = start.get(n.id);
           const tg = target.get(n.id);
           if (!s || !tg) return n;
+          // FINAL frame lands EXACTLY on target — interpolation could carry
+          // FP drift (or a poisoned start) into the persisted position.
           return {
             ...n,
-            position: {
-              x: s.x + (tg.x - s.x) * e,
-              y: s.y + (tg.y - s.y) * e
-            }
+            position: last
+              ? { ...tg }
+              : {
+                  x: s.x + (tg.x - s.x) * e,
+                  y: s.y + (tg.y - s.y) * e
+                }
           };
         })
       }));
