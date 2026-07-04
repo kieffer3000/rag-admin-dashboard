@@ -13,6 +13,7 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { cn } from '@/lib/utils';
+import { extractFileText } from '@/lib/rag/doc-upload';
 import { UploadCloud, Globe, Type, FileText, X, Loader2, AlertCircle } from 'lucide-react';
 
 export interface NewArtifact {
@@ -134,17 +135,17 @@ export function ArtifactDialog({
               return;
             }
           } else {
-            const fd = new FormData();
-            fd.append('file', f);
-            if (ocr) fd.append('ocr', 'true');
-            const res = await fetch('/api/extract-file', { method: 'POST', body: fd });
-            const j = await res.json();
-            if (!j.ok) {
-              setErr(`${f.name}: ${j.note || 'could not read this file.'}`);
+            // Shared big-file-safe path: big binaries ride the presigned
+            // converter hop (no ~4.5MB body cap); small files POST direct.
+            try {
+              fileText = await extractFileText({ file: f, ocr });
+            } catch (ex) {
+              setErr(
+                `${f.name}: ${ex instanceof Error ? ex.message : 'could not read this file.'}`
+              );
               setBusy(false);
               return;
             }
-            fileText = j.text ?? '';
           }
           parts.push(files.length > 1 ? `--- FILE: ${f.name} ---\n\n${fileText}` : fileText);
         }

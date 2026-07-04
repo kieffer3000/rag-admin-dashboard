@@ -4,6 +4,7 @@ import { useState, useRef } from 'react';
 import { useRag } from '@/lib/rag/store';
 import { MediaType } from '@/lib/rag/types';
 import { indexDocumentFile } from '@/lib/rag/doc-upload';
+import { prepareImageForIndex } from '@/lib/rag/image-upload';
 import {
   Dialog,
   DialogContent,
@@ -169,8 +170,10 @@ export function UploadDialog({
                 });
                 return;
               }
+              // Downscale big photos under the platform body cap first.
+              const safe = await prepareImageForIndex(file);
               const fd = new FormData();
-              fd.append('file', file);
+              fd.append('file', safe);
               fd.append('name', nm);
               fd.append('source_id', id);
               const r = await fetch('/api/index-image', { method: 'POST', body: fd });

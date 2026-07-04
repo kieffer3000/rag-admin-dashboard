@@ -124,6 +124,18 @@ export async function POST(req: Request) {
         note: 'No extractable text — possibly a scanned/image PDF. Re-upload with OCR on.'
       });
     }
+    // CEILING BACKSTOP: the presign hop's 50MB gate trusts a client-declared
+    // size, so cap what we'll actually INDEX by the extracted text itself.
+    // 12M chars ≈ several thousand book pages — beyond that it's not a
+    // document, it's a dataset dump.
+    const MAX_TEXT_CHARS = 12_000_000;
+    if (text.length > MAX_TEXT_CHARS) {
+      return Response.json({
+        ok: false,
+        indexed: false,
+        note: `Extracted text is ${(text.length / 1_000_000).toFixed(1)}M characters — over the indexing limit. Split the document and upload the parts.`
+      });
+    }
     // Store the extracted text as the openable source (the raw file stayed on
     // CloudConvert; the text is what we cite from anyway).
     let sourceUrl: string | undefined;

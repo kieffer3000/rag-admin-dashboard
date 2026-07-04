@@ -16,6 +16,46 @@
 const BINARY = /\.(pdf|epub|docx|doc|rtf|odt)$/i;
 /** Retry-through-direct-route ceiling — Vercel's request-body cap is ~4.5MB. */
 const DIRECT_MAX = 4 * 1024 * 1024;
+/** Absolute document ceiling (client + declared to /api/doc-job). The presign
+ *  hop has no platform cap, so WE must draw the line — nobody needs a 100GB
+ *  "PDF", and conversion minutes cost real money. 50MB ≈ several full
+ *  textbooks with images. */
+export const MAX_DOC_BYTES = 50 * 1024 * 1024;
+
+function sizeError(file: File): Error {
+  return new Error(
+    `File is ${(file.size / 1048576).toFixed(0)} MB — the maximum for a document is ${MAX_DOC_BYTES / 1048576} MB. Split it and upload the parts.`
+  );
+}
+
+/** Presign + browser→CloudConvert upload. Returns the jobId, or null when the
+ *  broker is unavailable (caller may fall back to the direct route). */
+async function uploadViaConverter(file: File, ocr?: boolean): Promise<string | null> {
+  const ext = (file.name.match(/\.([a-z0-9]+)$/i)?.[1] ?? '').toLowerCase();
+  const jr = await fetch('/api/doc-job', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ ext, ocr: !!ocr, sizeBytes: file.size })
+  });
+  if (!jr.ok) {
+    // 413 = the broker itself refused the declared size — a real error, not
+    // an availability fallback.
+    if (jr.status === 413) {
+      const j = await jr.json().catch(() => ({}));
+      throw new Error(j?.error ?? 'File is over the upload size limit.');
+    }
+    return null;
+  }
+  const { jobId, upload: form } = await jr.json();
+  const ccForm = new FormData();
+  for (const [k, v] of Object.entries(form?.parameters ?? {}))
+    ccForm.append(k, v as string);
+  ccForm.append('file', file);
+  const ur = await fetch(form.url, { method: 'POST', body: ccForm });
+  if (!ur.ok && ur.status !== 201)
+    throw new Error('Upload to the file converter failed.');
+  return jobId as string;
+}
 
 export interface DocIndexResult {
   chunks?: number;
@@ -34,24 +74,12 @@ export async function indexDocumentFile({
   file: File;
   ocr?: boolean;
 }): Promise<DocIndexResult> {
-  const ext = (file.name.match(/\.([a-z0-9]+)$/i)?.[1] ?? '').toLowerCase();
+  if (file.size > MAX_DOC_BYTES) throw sizeError(file);
 
   if (BINARY.test(file.name)) {
     try {
-      const jr = await fetch('/api/doc-job', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ext, ocr: !!ocr })
-      });
-      if (jr.ok) {
-        const { jobId, upload: form } = await jr.json();
-        const ccForm = new FormData();
-        for (const [k, v] of Object.entries(form?.parameters ?? {}))
-          ccForm.append(k, v as string);
-        ccForm.append('file', file);
-        const ur = await fetch(form.url, { method: 'POST', body: ccForm });
-        if (!ur.ok && ur.status !== 201)
-          throw new Error('Upload to the file converter failed.');
+      const jobId = await uploadViaConverter(file, ocr);
+      if (jobId) {
         const ir = await fetch('/api/index-doc', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -92,4 +120,46 @@ export async function indexDocumentFile({
   const j = await r.json().catch(() => ({}));
   if (!r.ok || !j.ok) throw new Error(j?.error ?? j?.note ?? 'index failed');
   return { chunks: j.chunks, source: j.source_url };
+}
+
+/** Extract a file's TEXT without indexing (Drafts/artifacts). Same big-file
+ *  rules as indexDocumentFile: big binaries ride the converter hop; small
+ *  files use the direct multipart route. Throws with a human message. */
+export async function extractFileText({
+  file,
+  ocr
+}: {
+  file: File;
+  ocr?: boolean;
+}): Promise<string> {
+  if (file.size > MAX_DOC_BYTES) throw sizeError(file);
+
+  if (BINARY.test(file.name) && file.size > DIRECT_MAX) {
+    const jobId = await uploadViaConverter(file, ocr);
+    if (!jobId)
+      throw new Error(
+        'This file is over the ~4 MB direct-upload limit and the large-file converter is unavailable.'
+      );
+    const r = await fetch('/api/extract-file', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ cc_job_id: jobId })
+    });
+    const j = await r.json().catch(() => ({}));
+    if (!j.ok || !j.text)
+      throw new Error(j?.note ?? j?.error ?? 'could not read this file.');
+    return j.text as string;
+  }
+
+  if (file.size > DIRECT_MAX)
+    throw new Error(
+      `File is ${(file.size / 1048576).toFixed(1)} MB — over the ~4 MB direct-upload limit.`
+    );
+  const fd = new FormData();
+  fd.append('file', file);
+  if (ocr) fd.append('ocr', 'true');
+  const r = await fetch('/api/extract-file', { method: 'POST', body: fd });
+  const j = await r.json().catch(() => ({}));
+  if (!j.ok) throw new Error(j?.note ?? 'could not read this file.');
+  return (j.text ?? '') as string;
 }

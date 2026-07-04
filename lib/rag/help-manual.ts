@@ -58,6 +58,11 @@ per-link status: indexed / pending / failed / skipped-duplicate. Failed items
 can be retried; duplicates are detected automatically so the same video or
 page never imports twice.
 
+Size limits: documents up to 50 MB (a full textbook fits comfortably; a
+529-page book is fine). Large photos are automatically resized on upload.
+Use OCR only for SCANNED PDFs — a PDF with real text doesn't need it, and
+OCR of very long books (hundreds of pages) can time out; split those first.
+
 # The Board (the canvas)
 
 The Board is a desk where knowledge is physical:

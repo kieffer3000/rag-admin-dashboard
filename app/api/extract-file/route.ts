@@ -1,5 +1,6 @@
 import { auth } from '@clerk/nextjs/server';
 import { extractDocumentText } from '@/lib/rag/doc-extract';
+import { pollDocTextUrl } from '@/lib/rag/cloudconvert';
 
 // Extract-only file reader for the Opine ARTIFACT (right plug). Pulls the text
 // from an uploaded PDF/DOCX/EPUB/TXT/MD and returns it — WITHOUT indexing it into
@@ -13,6 +14,46 @@ const MAX_BYTES = 25 * 1024 * 1024; // 25 MB
 export async function POST(req: Request) {
   const { userId } = await auth();
   if (!userId) return Response.json({ error: 'Unauthorized' }, { status: 401 });
+
+  // ── JSON job mode ────────────────────────────────────────────────────────
+  // Big binaries went browser→CloudConvert (presign via /api/doc-job — no
+  // ~4.5MB body cap); we poll the job and return the extracted text WITHOUT
+  // indexing. Mirrors /api/index-doc's JSON mode, minus the pipeline.
+  const contentType = req.headers.get('content-type') ?? '';
+  if (contentType.includes('application/json')) {
+    const body = await req.json().catch(() => null);
+    const ccJobId = String(body?.cc_job_id ?? '').trim();
+    if (!ccJobId) {
+      return Response.json({ ok: false, note: 'cc_job_id is required.' }, { status: 400 });
+    }
+    const txtUrl = await pollDocTextUrl(ccJobId);
+    if (!txtUrl) {
+      return Response.json(
+        { ok: false, note: 'Text extraction failed or timed out.' },
+        { status: 200 }
+      );
+    }
+    try {
+      const tr = await fetch(txtUrl);
+      if (!tr.ok) throw new Error(`fetch text ${tr.status}`);
+      const text = (await tr.text()).trim();
+      if (text.length < 20) {
+        return Response.json({
+          ok: false,
+          note: 'No extractable text — possibly a scanned/image PDF. Retry with OCR on.'
+        });
+      }
+      return Response.json({ ok: true, text });
+    } catch (e: unknown) {
+      return Response.json(
+        {
+          ok: false,
+          note: `Could not read the extracted text: ${e instanceof Error ? e.message : 'error'}`
+        },
+        { status: 200 }
+      );
+    }
+  }
 
   let form: FormData;
   try {

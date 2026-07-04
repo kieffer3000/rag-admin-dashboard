@@ -35,6 +35,7 @@ import {
 import { ResearchOverlay } from '@/components/rag/board/research-overlay';
 import { NotesDrawer } from '@/components/rag/board/notes-drawer';
 import { indexDocumentFile } from '@/lib/rag/doc-upload';
+import { prepareImageForIndex } from '@/lib/rag/image-upload';
 
 import { useRag } from '@/lib/rag/store';
 import { useBoard } from '@/lib/rag/board/store';
@@ -2376,12 +2377,17 @@ function BoardCanvasInner() {
             position: centerPos(),
             data: { mediaId: id }
           });
-          const fd = new FormData();
-          fd.append('file', file);
-          fd.append('name', name);
-          fd.append('source_id', id);
           enqueueIndex(() =>
-            fetch('/api/index-image', { method: 'POST', body: fd })
+            // Downscale big photos under the platform body cap first — a raw
+            // camera photo POSTed as-is 413s before the route runs.
+            prepareImageForIndex(file)
+              .then((safe) => {
+                const fd = new FormData();
+                fd.append('file', safe);
+                fd.append('name', name);
+                fd.append('source_id', id);
+                return fetch('/api/index-image', { method: 'POST', body: fd });
+              })
               .then(async (r) => {
                 const j = await r.json().catch(() => ({}));
                 if (!r.ok || !j.ok) throw new Error(j?.error ?? 'upload failed');
