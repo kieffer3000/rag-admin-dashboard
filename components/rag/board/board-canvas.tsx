@@ -171,7 +171,10 @@ function freePosition(
 // otherwise fire 50 requests at once — exhausting the browser's per-host
 // connection cap and hammering the Make webhook + Pinecone. Chips still appear
 // instantly (optimistic); their indexing just runs a few at a time.
-const INDEX_CONCURRENCY = 4;
+// 4 → 8 (2026-07-04): the 4-cap dated from the free-tier Pinecone stampede;
+// with the paid plan, patient upsert retries, and the summary moved after the
+// response, the measured bottleneck was simply slot count (~3 docs/min at 4).
+const INDEX_CONCURRENCY = 8;
 const indexQueue: Array<() => Promise<unknown>> = [];
 let indexActive = 0;
 function pumpIndexQueue() {
