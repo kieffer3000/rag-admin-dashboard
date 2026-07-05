@@ -360,12 +360,14 @@ export async function createDocExtractJob(
   if (!key) return null;
   const e = (ext || '').toLowerCase().replace(/^\./, '');
   // BIG-PDF bypass (2026-07-04): the optimize→rtf→txt chain builds the whole
-  // document in memory — a 94MB scanned book got the converter OOM-KILLED
-  // (signal 9) on every attempt, an unretryable failure loop. Direct pdf→txt
-  // streams page-by-page and copes with huge files; if the giant is a pure
+  // document in memory — image-heavy books get the converter OOM-KILLED
+  // (signal 9) on every attempt, an unretryable failure loop. MEASURED kills
+  // at 7.9, 8.4, 16.5, 21.9 and 94MB (structure, not size, is the trigger —
+  // but size is the only signal we have before converting). Direct pdf→txt
+  // streams page-by-page and copes with any of them; if the file is a pure
   // scan (no text layer) extraction returns ~nothing and the route already
   // says plainly to re-upload with OCR — honest, instead of a silent kill.
-  const HUGE_PDF_BYTES = 25 * 1024 * 1024;
+  const HUGE_PDF_BYTES = 7 * 1024 * 1024;
   const hugePdf = e === 'pdf' && !opts.ocr && (opts.sizeBytes ?? 0) > HUGE_PDF_BYTES;
   try {
     let tasks: Record<string, unknown>;
