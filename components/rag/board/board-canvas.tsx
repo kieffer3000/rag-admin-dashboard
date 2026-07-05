@@ -709,12 +709,77 @@ function BoardCanvasInner() {
     (conn: Connection) => {
       const src = board.nodes.find((n) => n.id === conn.source);
       const tgt = board.nodes.find((n) => n.id === conn.target);
-      // STRING-LINK: piece → piece. Tie two pieces together with a string and
-      // they behave as ONE group (wiring either to a Bank wires both, like a
-      // welded stack) — the no-aim alternative to puzzle-snapping, and the
-      // workaround when overlapping pieces block the snap. Cut the string to
-      // separate (scissors / click the wire, same as any cable).
+      // PIECE → PIECE: same-type pieces PHYSICALLY CLAMP — the string is just
+      // the gesture; on connect the source piece (and its welded mates) flies
+      // over and clicks into the target's stack, exactly like dropping it
+      // there (clack + settle). Different-type pieces can't interlock (stacks
+      // are same-type by design), so they keep the STRING-LINK: a wire that
+      // groups them in place (wiring either to a Bank wires both). Cut the
+      // string to separate (scissors / click the wire, same as any cable).
       if (src?.type === 'chip' && tgt?.type === 'chip' && src.id !== tgt.id) {
+        const typeOf = (n: BoardNode) =>
+          media.find((m) => m.id === n.data.mediaId)?.type;
+        const sameType =
+          !src.parentId && !tgt.parentId && !!typeOf(src) && typeOf(src) === typeOf(tgt);
+        if (sameType) {
+          const unit = stackOf(src, board.nodes, typeOf);
+          const unitIds = new Set(unit.map((n) => n.id));
+          // Already welded into the same stack → nothing to do (and no string:
+          // a wire between clamped pieces would be redundant).
+          if (!unitIds.has(tgt.id)) {
+            const tgtStack = stackOf(tgt, board.nodes, typeOf);
+            const sorted = [...unit].sort((a, b) => a.position.y - b.position.y);
+            const topPiece = sorted[0];
+            const unitH = (sorted.length - 1) * STACK_PITCH;
+            const ys = tgtStack.map((n) => n.position.y);
+            // Land the unit's TOP member just below the target stack's bottom;
+            // if something already sits there, clamp above the top instead.
+            const candidates = [
+              { x: tgt.position.x, y: Math.max(...ys) + STACK_PITCH },
+              { x: tgt.position.x, y: Math.min(...ys) - STACK_PITCH - unitH }
+            ];
+            const others = board.nodes.filter(
+              (n) => n.type === 'chip' && !n.parentId && !unitIds.has(n.id)
+            );
+            const landing = candidates.find(
+              (c) =>
+                !sorted.some((_, i) =>
+                  others.some(
+                    (o) =>
+                      Math.abs(o.position.x - c.x) < 6 &&
+                      Math.abs(o.position.y - (c.y + i * STACK_PITCH)) < 6
+                  )
+                )
+            );
+            if (landing) {
+              const dx = landing.x - topPiece.position.x;
+              const dy = landing.y - topPiece.position.y;
+              playSnap(); // wooden clack — the clamp is audible
+              setBoard((prev) => ({
+                ...prev,
+                nodes: prev.nodes.map((n) =>
+                  unitIds.has(n.id) && !n.parentId
+                    ? {
+                        ...n,
+                        position: {
+                          x: n.position.x + dx,
+                          y: n.position.y + dy
+                        },
+                        data: {
+                          ...n.data,
+                          settle: ((n.data.settle as number) ?? 0) + 1
+                        }
+                      }
+                    : n
+                )
+              }));
+              return;
+            }
+            // No clear slot around the stack → fall through to the string.
+          } else {
+            return;
+          }
+        }
         setBoard((prev) => ({
           ...prev,
           edges: addEdge(
@@ -765,7 +830,7 @@ function BoardCanvasInner() {
       }));
       scheduleTidy();
     },
-    [board.nodes, board.edges, setBoard, nextBoardId, connectArtifactToBrain, scheduleTidy]
+    [board.nodes, board.edges, setBoard, nextBoardId, connectArtifactToBrain, scheduleTidy, media]
   );
 
   /** Edges flow INTO a brain (from chips / hubs / text nodes) — or piece →

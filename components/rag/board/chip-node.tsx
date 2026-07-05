@@ -399,17 +399,22 @@ function ChipNodeInner({ id, data, selected, parentId }: NodeProps) {
         )}
       />
       {/* WHOLE-PIECE DROP TARGET: instead of aiming at a 16px dot, the entire
-          piece accepts the string. It only mounts WHILE a connection is being
-          dragged (so it never blocks normal clicks/drags), covers the full body,
-          and lights the piece up (`connectionindicator` = droppable, `connectingto`
-          = pointer is over it → clamp). `isConnectableStart={false}` keeps it a
-          landing pad only — dragging still STARTS from the visible dot. */}
-      {canDrop && (
+          piece accepts the string. ALWAYS mounted (React Flow measures handle
+          bounds at node mount — a handle that appears mid-drag is invisible to
+          the connection logic), but inert until a string from another piece is
+          in flight: pointer-events off + z 0 while idle so it never blocks
+          normal clicks/drags, then hit-testable + topmost during the drag —
+          React Flow finalizes the drop via elementFromPoint, so the cover must
+          be the element under the cursor. `rf-cover-live` lights the whole
+          piece (faint rim = droppable, hover/connectingto = clamp).
+          `isConnectableStart={false}` keeps it a landing pad only — dragging
+          still STARTS from the visible dot. */}
+      {!docked && (
         <Handle
           type="target"
           position={Position.Top}
           isConnectableStart={false}
-          className="rf-chip-cover"
+          className={cn('rf-chip-cover', canDrop && 'rf-cover-live')}
           style={{
             left: 0,
             top: 0,
@@ -417,7 +422,8 @@ function ChipNodeInner({ id, data, selected, parentId }: NodeProps) {
             height: bodyH,
             transform: 'none',
             borderRadius: 14,
-            zIndex: 5
+            zIndex: canDrop ? 30 : 0,
+            pointerEvents: canDrop ? 'auto' : 'none'
           }}
         />
       )}
