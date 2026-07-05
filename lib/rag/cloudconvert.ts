@@ -354,14 +354,28 @@ export async function pollAudioOutputUrls(jobId: string): Promise<string[]> {
  *  to (no size cap). null when CloudConvert isn't configured. */
 export async function createDocExtractJob(
   ext: string,
-  opts: { ocr?: boolean } = {}
+  opts: { ocr?: boolean; sizeBytes?: number } = {}
 ): Promise<{ jobId: string; form: { url: string; parameters: Record<string, string> } } | null> {
   const key = process.env.CLOUDCONVERT_API_KEY;
   if (!key) return null;
   const e = (ext || '').toLowerCase().replace(/^\./, '');
+  // BIG-PDF bypass (2026-07-04): the optimize→rtf→txt chain builds the whole
+  // document in memory — a 94MB scanned book got the converter OOM-KILLED
+  // (signal 9) on every attempt, an unretryable failure loop. Direct pdf→txt
+  // streams page-by-page and copes with huge files; if the giant is a pure
+  // scan (no text layer) extraction returns ~nothing and the route already
+  // says plainly to re-upload with OCR — honest, instead of a silent kill.
+  const HUGE_PDF_BYTES = 25 * 1024 * 1024;
+  const hugePdf = e === 'pdf' && !opts.ocr && (opts.sizeBytes ?? 0) > HUGE_PDF_BYTES;
   try {
     let tasks: Record<string, unknown>;
-    if (e === 'pdf') {
+    if (hugePdf) {
+      tasks = {
+        'import-1': { operation: 'import/upload' },
+        'txt-1': { operation: 'convert', input: 'import-1', output_format: 'txt' },
+        'export-1': { operation: 'export/url', input: 'txt-1' }
+      };
+    } else if (e === 'pdf') {
       const optimize = { operation: 'optimize', input: 'import-1', engine: '3heights', profile: 'max' };
       tasks = opts.ocr
         ? {

@@ -31,7 +31,7 @@ export async function POST(req: Request) {
     );
   }
 
-  const job = await createDocExtractJob(ext, { ocr });
+  const job = await createDocExtractJob(ext, { ocr, sizeBytes });
   if (!job) {
     return Response.json(
       { error: 'Large-document upload is unavailable (CloudConvert not configured).' },
