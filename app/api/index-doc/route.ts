@@ -99,7 +99,9 @@ export async function POST(req: Request) {
         { status: 400 }
       );
     }
+    const tPoll0 = Date.now();
     const poll = await pollDocText(ccJobId);
+    const pollMs = Date.now() - tPoll0;
     if (poll.state === 'converting') {
       // The conversion OUTLIVED this request's poll window (big books run
       // 5-10+ min) — it is still running and will finish. Tell the client to
@@ -110,6 +112,20 @@ export async function POST(req: Request) {
         converting: true,
         cc_job_id: ccJobId,
         error: 'Still converting — large document; retrying automatically.'
+      });
+    }
+    // BUDGET RACE (2026-07-05): a conversion that finishes LATE in this
+    // window leaves too little of the 300s cap to index a big book — the
+    // request 504s mid-index ("index failed" on a conversion the ledger
+    // shows succeeded). Decline to index in a dying window; the client
+    // re-attaches, the next poll returns in ~2s, and indexing gets a full
+    // fresh budget.
+    if (poll.state === 'finished' && pollMs > 150_000) {
+      return Response.json({
+        ok: false,
+        converting: true,
+        cc_job_id: ccJobId,
+        error: 'Converted — indexing on the next pass with a fresh time budget.'
       });
     }
     const txtUrl = poll.url;
