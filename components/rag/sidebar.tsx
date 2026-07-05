@@ -16,6 +16,7 @@ import {
   Workflow
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { BUILD_VERSION } from '@/lib/version';
 import { RoundTableIcon } from '@/components/rag/round-table-icon';
 import { useRag } from '@/lib/rag/store';
 import { useIsAdmin } from '@/lib/rag/use-role';
@@ -256,6 +257,13 @@ export function Sidebar() {
           );
         })}
       </nav>
+
+      {/* Build number — pinned to the rail's bottom. Bump rules in lib/version.ts. */}
+      <div className="mt-auto pt-3">
+        <span className="block text-center text-[9.5px] font-semibold tracking-wide text-[#e6e4cf]/45">
+          Build {BUILD_VERSION}
+        </span>
+      </div>
     </aside>
   );
 }

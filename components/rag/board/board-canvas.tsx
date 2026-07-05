@@ -70,6 +70,7 @@ import { ArtifactNode } from './artifact-node';
 import { ReferenceNode } from './reference-node';
 import { ArtifactDialog } from './artifact-dialog';
 import { AgentEditDialog } from './agent-edit-dialog';
+import { RenderProbe } from './render-probe';
 import { ArtifactBrainPicker } from './artifact-brain-picker';
 import { BrandSplash } from './brand-splash';
 import { ScopeEdge } from './scope-edge';
@@ -221,6 +222,13 @@ function BoardCanvasInner() {
   const { board, setBoard, setBoardSilent, nextBoardId, busyBrains, saveNow, removeBoardNode, connectArtifactToBrain, setBrainPicker, setAgentEditor, pendingDelete, setPendingDelete, hydratedProject, researchBrainId, setResearchBrainId, resolveBrainScope } =
     useBoard();
   const { media, projectMedia, addMedia, updateMedia, queueMediaPatch, deleteMedia, activeProjectId, activeProject, pendingBox, setPendingBox } = useRag();
+
+  // FLICKER PROBE (?probe=1): count every render of this canvas — the whole
+  // board re-renders through context on each store update, which is the prime
+  // jitter suspect. See render-probe.tsx. Costs two ref writes when off.
+  const probeCounter = useRef(0);
+  const probeStats = useRef('');
+  probeCounter.current++;
 
   // Library → Board handoff: build a box from a selection sent over from the
   // Library ("Send to box"). Creates the hub + a chip per source (pulling any
@@ -1917,6 +1925,8 @@ function BoardCanvasInner() {
     });
   }, [board.nodes]);
 
+  probeStats.current = `${liveNodes.length}n ${liveEdges.length}e ${media.length}m`;
+
   const placedIds = useMemo(
     () =>
       new Set(
@@ -2935,6 +2945,7 @@ function BoardCanvasInner() {
       />
       <ArtifactBrainPicker />
       <AgentEditDialog />
+      <RenderProbe counter={probeCounter} stats={probeStats} />
       {/* Delete confirmation — any node delete (robot button or right-click) asks
           first. */}
       {pendingDelete && (
