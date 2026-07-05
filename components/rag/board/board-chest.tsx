@@ -27,18 +27,12 @@ import {
   DialogTitle,
   DialogDescription
 } from '@/components/ui/dialog';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuTrigger
-} from '@/components/ui/dropdown-menu';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
+import { IconPicker } from '@/components/rag/icon-picker';
 import type { RefObject } from 'react';
-
-const AGENT_EMOJIS = ['🤖', '🎓', '💡', '🧠', '⚖️', '🔍', '✨', '📊', '🎯', '🧑‍💻'];
 
 /** Drag payload the canvas reads in its onDrop handler. */
 export const CHEST_MIME = 'application/answersdoc-chest';
@@ -65,7 +59,13 @@ export function BoardChest({
   /** Pan/zoom the canvas to an on-canvas box (hub) by id. */
   onFocusBox?: (hubId: string) => void;
   onPlaceMedia: (mediaId: string) => void;
-  onPlaceAgent: (agent: { agentId: string; name: string; icon?: string; text: string }) => void;
+  onPlaceAgent: (agent: {
+    agentId: string;
+    name: string;
+    icon?: string;
+    avatar?: string;
+    text: string;
+  }) => void;
   onRecallMedia: (mediaId: string) => void;
   onSave: () => void;
   binRef: RefObject<HTMLButtonElement | null>;
@@ -94,15 +94,23 @@ export function BoardChest({
   const [naName, setNaName] = useState('');
   const [naPrompt, setNaPrompt] = useState('');
   const [naIcon, setNaIcon] = useState('🤖');
+  const [naAvatar, setNaAvatar] = useState('');
   function openNewAgent() {
     setNaName('');
     setNaPrompt('');
     setNaIcon('🤖');
+    setNaAvatar('');
     setNewAgentOpen(true);
   }
   function saveNewAgent() {
     if (!naName.trim() || !naPrompt.trim()) return;
-    addAgent({ name: naName.trim(), systemPrompt: naPrompt.trim(), icon: naIcon });
+    addAgent({
+      name: naName.trim(),
+      systemPrompt: naPrompt.trim(),
+      // avatar and icon are exclusive — an uploaded image wins.
+      icon: naAvatar ? '' : naIcon,
+      avatar: naAvatar || undefined
+    });
     setNewAgentOpen(false);
   }
   // A drag-and-drop ends with a trailing `click` on the source in some browsers.
@@ -237,6 +245,7 @@ export function BoardChest({
                             agentId: a.id,
                             name: a.name,
                             icon: a.icon,
+                            avatar: a.avatar,
                             text: a.systemPrompt
                           })
                         );
@@ -254,13 +263,21 @@ export function BoardChest({
                           agentId: a.id,
                           name: a.name,
                           icon: a.icon,
+                          avatar: a.avatar,
                           text: a.systemPrompt
                         });
                         setOpen(null); // close the panel so the new piece shows
                       }}
                       className="group flex cursor-grab items-center gap-2.5 rounded-[10px] px-2 py-1.5 transition-colors hover:bg-[rgb(var(--hairline)/0.05)] active:cursor-grabbing"
                     >
-                      {a.icon ? (
+                      {a.avatar ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={a.avatar}
+                          alt=""
+                          className="h-5 w-5 shrink-0 rounded-md object-cover"
+                        />
+                      ) : a.icon ? (
                         <span className="shrink-0 text-[16px] leading-none">{a.icon}</span>
                       ) : (
                         <Bot className="h-4 w-4 shrink-0 text-emerald-500" />
@@ -593,24 +610,15 @@ export function BoardChest({
             <div className="flex gap-3">
               <div className="space-y-1.5">
                 <Label>Icon</Label>
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <button className="flex h-10 w-12 items-center justify-center rounded-xl border border-input bg-card text-xl">
-                      {naIcon}
-                    </button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent className="grid grid-cols-5 gap-1 p-2">
-                    {AGENT_EMOJIS.map((e) => (
-                      <button
-                        key={e}
-                        onClick={() => setNaIcon(e)}
-                        className="flex h-8 w-8 items-center justify-center rounded-lg text-lg hover:bg-[rgb(var(--hairline)/0.06)]"
-                      >
-                        {e}
-                      </button>
-                    ))}
-                  </DropdownMenuContent>
-                </DropdownMenu>
+                <IconPicker
+                  icon={naIcon}
+                  avatar={naAvatar}
+                  onIcon={(e) => {
+                    setNaIcon(e || '🤖');
+                    setNaAvatar('');
+                  }}
+                  onAvatar={setNaAvatar}
+                />
               </div>
               <div className="flex-1 space-y-1.5">
                 <Label>Name</Label>

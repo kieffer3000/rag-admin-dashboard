@@ -1366,6 +1366,7 @@ function BoardCanvasInner() {
         agentId?: string;
         name?: string;
         icon?: string;
+        avatar?: string;
       };
       try {
         payload = JSON.parse(raw);
@@ -1411,6 +1412,7 @@ function BoardCanvasInner() {
             agentId: payload.agentId ?? '',
             name: payload.name ?? 'Agent',
             icon: payload.icon ?? '',
+            avatar: payload.avatar ?? '',
             text: payload.text ?? ''
           }
         });
@@ -2922,6 +2924,7 @@ function BoardCanvasInner() {
               agentId: agent.agentId,
               name: agent.name,
               icon: agent.icon ?? '',
+              avatar: agent.avatar ?? '',
               text: agent.text
             }
           })
