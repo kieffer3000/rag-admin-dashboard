@@ -17,6 +17,7 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { cn } from '@/lib/utils';
+import { uploadEta } from '@/lib/rag/upload-eta';
 import {
   UploadCloud,
   Youtube,
@@ -391,6 +392,12 @@ export function UploadDialog({
                 )}
               </div>
 
+              {files.length > 0 && (
+                <p className="text-[11.5px] font-medium text-accent">
+                  {uploadEta(files)} to index{files.length > 1 ? ' all' : ''} —
+                  keep this tab open; refreshing cancels the ones still waiting.
+                </p>
+              )}
               {files.length > 0 && (
                 <div className="flex flex-wrap gap-1.5">
                   {files.map((f, i) => (

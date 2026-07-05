@@ -7,6 +7,7 @@ import { MEDIA_TYPES } from '@/lib/rag/media-config';
 import { MediaType } from '@/lib/rag/types';
 import { MediaIcon } from '@/components/rag/shared';
 import { WavRecorder, transcribeAudio } from '@/lib/rag/board/dictation';
+import { uploadEta } from '@/lib/rag/upload-eta';
 import {
   Landmark,
   StickyNote,
@@ -618,7 +619,11 @@ export function BoardToolbar(p: BoardToolbarProps) {
                 </DialogTitle>
                 <DialogDescription>
                   The pieces are already on your board — this stays open so you
-                  can watch them finish and never lose one.
+                  can watch them finish and never lose one.{' '}
+                  <span className="font-medium text-amber-600">
+                    Don&apos;t refresh or close this tab while files are
+                    importing — the ones still waiting would be cancelled.
+                  </span>
                   {dupSkipped > 0 && (
                     <span className="mt-1 block font-medium text-amber-600">
                       Skipped {dupSkipped} duplicate
@@ -887,12 +892,17 @@ export function BoardToolbar(p: BoardToolbarProps) {
                         {sourceType === 'document' &&
                           files[0].size > 100 * 1048576 &&
                           ' — over the 100 MB limit; split the file first'}
+                        {sourceType === 'document' &&
+                          files[0].size <= 100 * 1048576 &&
+                          ` · ${uploadEta(files)} to index — keep this tab open until it finishes.`}
                       </p>
                     ) : files.length > 1 ? (
                       <p className="text-[11.5px] text-accent">
                         {files.length} files ·{' '}
                         {(files.reduce((s, f) => s + f.size, 0) / 1048576).toFixed(1)} MB
                         total — each becomes its own indexed source.
+                        {sourceType === 'document' &&
+                          ` ${uploadEta(files)} to index all — keep this tab open; refreshing cancels the ones still waiting.`}
                       </p>
                     ) : sourceType === 'image' ? (
                       <p className="text-[11.5px] text-muted-foreground/55">

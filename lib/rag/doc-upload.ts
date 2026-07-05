@@ -73,8 +73,42 @@ export interface DocIndexResult {
   source?: string;
 }
 
+// ---- Refresh guard -------------------------------------------------------
+// A queued import batch lives on in-memory File handles: a refresh/close
+// kills every file still waiting, with no retry (there is no server copy
+// yet). While ANY document upload is in flight, arm beforeunload so the
+// browser challenges navigation — deterministic code, not a hint the user
+// can miss. (The dialogs also say it in words; this is the enforcement.)
+let inFlightUploads = 0;
+const warnUnload = (e: BeforeUnloadEvent) => {
+  e.preventDefault();
+  e.returnValue = '';
+};
+function uploadStarted() {
+  if (typeof window === 'undefined') return;
+  if (++inFlightUploads === 1) window.addEventListener('beforeunload', warnUnload);
+}
+function uploadEnded() {
+  if (typeof window === 'undefined') return;
+  if (--inFlightUploads === 0) window.removeEventListener('beforeunload', warnUnload);
+}
+
 /** Index one document file end-to-end. Throws with a human message on failure. */
-export async function indexDocumentFile({
+export async function indexDocumentFile(job: {
+  id: string;
+  name: string;
+  file: File;
+  ocr?: boolean;
+}): Promise<DocIndexResult> {
+  uploadStarted();
+  try {
+    return await indexDocumentFileInner(job);
+  } finally {
+    uploadEnded();
+  }
+}
+
+async function indexDocumentFileInner({
   id,
   name,
   file,
