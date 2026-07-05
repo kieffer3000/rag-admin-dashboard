@@ -99,7 +99,7 @@ interface RagState {
   deleteNote: (id: string) => void;
 
   // agents
-  addAgent: (a: Omit<Agent, 'id'>) => void;
+  addAgent: (a: Omit<Agent, 'id'>) => string;
   updateAgent: (id: string, patch: Partial<Agent>) => void;
   deleteAgent: (id: string) => void;
 
@@ -878,7 +878,9 @@ export function RagProvider({ children }: { children: ReactNode }) {
 
   // ---- agents ----
   const addAgent = useCallback((a: Omit<Agent, 'id'>) => {
-    setAgents((prev) => [{ ...a, id: nextId('a') }, ...prev]);
+    const id = nextId('a');
+    setAgents((prev) => [{ ...a, id }, ...prev]);
+    return id;
   }, []);
 
   const updateAgent = useCallback((id: string, patch: Partial<Agent>) => {

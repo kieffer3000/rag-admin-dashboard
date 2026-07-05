@@ -104,14 +104,17 @@ export function BoardChest({
   }
   function saveNewAgent() {
     if (!naName.trim() || !naPrompt.trim()) return;
-    addAgent({
-      name: naName.trim(),
-      systemPrompt: naPrompt.trim(),
-      // avatar and icon are exclusive — an uploaded image wins.
-      icon: naAvatar ? '' : naIcon,
-      avatar: naAvatar || undefined
-    });
+    const name = naName.trim();
+    const systemPrompt = naPrompt.trim();
+    // avatar and icon are exclusive — an uploaded image wins.
+    const icon = naAvatar ? '' : naIcon;
+    const avatar = naAvatar || undefined;
+    const agentId = addAgent({ name, systemPrompt, icon, avatar });
+    // Drop the brand-new persona straight onto the board — creating it here
+    // meant you wanted it on the canvas, not hidden back in the menu.
+    onPlaceAgent({ agentId, name, icon, avatar, text: systemPrompt });
     setNewAgentOpen(false);
+    setOpen(null); // close the Agents panel so the new piece is visible
   }
   // A drag-and-drop ends with a trailing `click` on the source in some browsers.
   // This guards the click-to-place handler so a dragged agent isn't ALSO placed

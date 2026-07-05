@@ -506,6 +506,26 @@ input[type='search']::-webkit-search-cancel-button {
   transition: stroke 0.3s ease, stroke-width 0.3s ease;
 }
 
+/* WHOLE-PIECE connect target — the full-body invisible handle on a loose chip.
+   It only exists while a string is being dragged. Base state = a faint dashed
+   "you can drop here" rim on every valid target; when the pointer is actually
+   over it, the piece clamps with a solid accent ring + soft fill. Connecting
+   FROM anywhere on the piece, no dot-aiming. */
+.rf-chip-cover.react-flow__handle {
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+  transition: box-shadow 0.12s ease, background 0.12s ease;
+}
+.rf-chip-cover.react-flow__handle.connectionindicator {
+  box-shadow: inset 0 0 0 2px hsl(var(--accent) / 0.4);
+  background: hsl(var(--accent) / 0.04);
+}
+.rf-chip-cover.react-flow__handle.connectingto {
+  box-shadow: inset 0 0 0 3px hsl(var(--accent)), 0 0 14px hsl(var(--accent) / 0.35);
+  background: hsl(var(--accent) / 0.1);
+}
+
 /* Gentle answer-arrival reveal for the chat message container */
 @keyframes message-arrival {
   from { opacity: 0; transform: translateY(4px); }

@@ -1,7 +1,13 @@
 'use client';
 
 import { memo, useEffect, useRef } from 'react';
-import { Handle, Position, useStore, type NodeProps } from '@xyflow/react';
+import {
+  Handle,
+  Position,
+  useStore,
+  useConnection,
+  type NodeProps
+} from '@xyflow/react';
 import { cn } from '@/lib/utils';
 import { useRag } from '@/lib/rag/store';
 import { useBoard } from '@/lib/rag/board/store';
@@ -98,6 +104,17 @@ function ChipNodeInner({ id, data, selected, parentId }: NodeProps) {
   // notch/tab ever dangles inside it. Only FREE chips wear the puzzle shape.
   const docked = !!parentId;
   const inStack = !docked && (above || below);
+
+  // Live connection state: while a string is being dragged FROM another loose
+  // piece, this whole piece becomes a drop target (connect from anywhere, not
+  // just a dot) and lights up. Docked pieces don't participate — the box is the
+  // plug. The origin piece can't target itself.
+  const connection = useConnection();
+  const canDrop =
+    connection.inProgress &&
+    !docked &&
+    connection.fromNode?.id !== id &&
+    connection.fromNode?.type === 'chip';
   const isTop = inStack && !above;
   const isBottom = inStack && !below;
   const meta = MEDIA_TYPES[item.type];
@@ -369,6 +386,7 @@ function ChipNodeInner({ id, data, selected, parentId }: NodeProps) {
       <Handle
         type="source"
         position={Position.Right}
+        title="Drag from here onto another piece to tie them together (they wire as one). Cut the string to separate."
         className={cn(
           '!h-4 !w-4 !border-2 !border-card !bg-accent/70',
           // Docked in a box: the BOX is the plug — one wire per family, so a
@@ -380,20 +398,29 @@ function ChipNodeInner({ id, data, selected, parentId }: NodeProps) {
           !parentId && inStack && 'group-hover:animate-pulse'
         )}
       />
-      {/* STRING-LINK landing point: drag another piece's string here to tie
-          the two into one group (no puzzle-aiming needed; cut the string to
-          separate). Subtle until hovered; gone while docked (box = the plug).
-          A native tooltip explains it on hover — a per-chip "?" would litter a
-          canvas of thousands of pieces, so the affordance IS the explanation. */}
-      <Handle
-        type="target"
-        position={Position.Top}
-        title="Tie a string here — drag from another piece's dot onto this one to group them (they'll wire together). Cut the string to separate."
-        className={cn(
-          '!h-4 !w-4 !border-2 !border-card !bg-accent/50 !opacity-0 transition-opacity group-hover:!opacity-100',
-          parentId && '!pointer-events-none'
-        )}
-      />
+      {/* WHOLE-PIECE DROP TARGET: instead of aiming at a 16px dot, the entire
+          piece accepts the string. It only mounts WHILE a connection is being
+          dragged (so it never blocks normal clicks/drags), covers the full body,
+          and lights the piece up (`connectionindicator` = droppable, `connectingto`
+          = pointer is over it → clamp). `isConnectableStart={false}` keeps it a
+          landing pad only — dragging still STARTS from the visible dot. */}
+      {canDrop && (
+        <Handle
+          type="target"
+          position={Position.Top}
+          isConnectableStart={false}
+          className="rf-chip-cover"
+          style={{
+            left: 0,
+            top: 0,
+            width: '100%',
+            height: bodyH,
+            transform: 'none',
+            borderRadius: 14,
+            zIndex: 5
+          }}
+        />
+      )}
     </div>
   );
 }
