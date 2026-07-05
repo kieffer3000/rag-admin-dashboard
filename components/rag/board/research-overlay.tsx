@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { cn } from '@/lib/utils';
+import { normalizeModelId } from '@/lib/rag/models';
 import { useBoard } from '@/lib/rag/board/store';
 import {
   useBrainMessages,
@@ -74,7 +75,7 @@ export function ResearchOverlay({
   const node = board.nodes.find((n) => n.id === brainId);
   const data = (node?.data ?? {}) as Record<string, unknown>;
   const name = (data.name as string) || 'Research';
-  const modelId = (data.modelId as string) || 'gemini-2.5-flash';
+  const modelId = normalizeModelId((data.modelId as string) || 'octopussy-12');
   const answerMode: 'cited' | 'hybrid' =
     data.answerMode === 'hybrid' ? 'hybrid' : 'cited';
   const summary = (data.summary as string) ?? '';

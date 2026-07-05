@@ -1,3 +1,4 @@
+import { resolveRealModelId } from '@/lib/rag/model-map.server';
 import { STACK_PRIVACY_GUARDRAIL } from '@/lib/rag/stack-privacy';
 import { auth } from '@clerk/nextjs/server';
 import { longFetch } from '@/lib/rag/long-fetch';
@@ -347,7 +348,7 @@ export async function POST(req: Request) {
 
   const mode: 'cited' | 'hybrid' =
     body.answer_mode === 'hybrid' ? 'hybrid' : 'cited';
-  const model = body.model ?? 'gemini-2.5-flash';
+  const model = resolveRealModelId(body.model);
   const userQuestion: string = body.question;
   const fast = body.speed === 'fast';
   const research = body.speed === 'research';

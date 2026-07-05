@@ -1,3 +1,4 @@
+import { resolveRealModelId } from '@/lib/rag/model-map.server';
 import { STACK_PRIVACY_GUARDRAIL } from '@/lib/rag/stack-privacy';
 import { authorizeConnection, rateLimited, openCors } from '@/lib/rag/public-api';
 import { doctrineFor, injectDoctrine } from '@/lib/rag/doctrines';
@@ -201,7 +202,7 @@ export async function POST(req: Request) {
           url: aUrl || undefined,
           content: aContent || undefined,
           title: aTitle,
-          model: conn.model || undefined,
+          model: conn.model ? resolveRealModelId(conn.model) : undefined,
           source_ids: conn.source_ids,
           filter_json: filterJson,
           namespace: conn.namespace,

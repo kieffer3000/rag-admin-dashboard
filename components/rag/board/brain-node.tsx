@@ -33,7 +33,7 @@ import {
   splitGraphicBlocks,
   sanitizeHtml
 } from '@/components/rag/board/markdown';
-import { LLM_MODELS, PROVIDER_META } from '@/lib/rag/models';
+import { LLM_MODELS, PROVIDER_META, normalizeModelId } from '@/lib/rag/models';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -96,7 +96,7 @@ const BRAIN_COLORS: Record<string, { from: string; to: string; chip: string }> =
 };
 
 /** v1 generation runs on Gemini in Make — the Board defaults to it. */
-const BOARD_DEFAULT_MODEL = 'gemini-2.5-flash';
+const BOARD_DEFAULT_MODEL = 'octopussy-12';
 
 /** Poppy-style Tools menu — each sends a grounded prompt over the wired sources. */
 const BRAIN_TOOLS: { label: string; icon: any; prompt: string }[] = [
@@ -319,7 +319,7 @@ function BrainNodeInner({ id, data, selected }: NodeProps) {
     updateBoardNodeData(id, { textScale: next });
   }
 
-  const modelId = (d.modelId as string) ?? BOARD_DEFAULT_MODEL;
+  const modelId = normalizeModelId((d.modelId as string) ?? BOARD_DEFAULT_MODEL);
   const model = LLM_MODELS.find((m) => m.id === modelId) ?? LLM_MODELS[3];
 
   /**

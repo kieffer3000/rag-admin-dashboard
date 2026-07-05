@@ -1,3 +1,4 @@
+import { resolveRealModelId } from '@/lib/rag/model-map.server';
 import 'server-only';
 
 import { longFetch } from '@/lib/rag/long-fetch';
@@ -95,7 +96,7 @@ export async function relayPublicQuery(input: RelayInput): Promise<PublicAnswer>
       namespace: input.namespace,
       injected_context: '',
       openrouter_key: '',
-      model: input.model ?? '',
+      model: input.model ? resolveRealModelId(input.model) : '',
       speed: input.speed ?? 'detailed'
     })
   });

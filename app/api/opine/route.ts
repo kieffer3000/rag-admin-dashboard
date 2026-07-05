@@ -1,3 +1,4 @@
+import { resolveRealModelId } from '@/lib/rag/model-map.server';
 import { auth } from '@clerk/nextjs/server';
 import { longFetch } from '@/lib/rag/long-fetch';
 import { doctrineFor, injectDoctrine } from '@/lib/rag/doctrines';
@@ -94,7 +95,7 @@ export async function POST(req: Request) {
           url: aUrl || undefined,
           content: aContent || undefined,
           title: typeof a.title === 'string' ? a.title : undefined,
-          model: typeof body.model === 'string' ? body.model : undefined,
+          model: typeof body.model === 'string' && body.model ? resolveRealModelId(body.model) : undefined,
           source_ids: sourceIds,
           // Pre-built Pinecone filter so Make retrieves only from the WIRED
           // sources (not the whole namespace). Absent when no corpus is wired →

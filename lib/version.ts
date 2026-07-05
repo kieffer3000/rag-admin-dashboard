@@ -6,5 +6,6 @@
  *   +1.0 — major reconstructions
  * Baseline: 3.5 declared 2026-07-05.
  * 3.6 — 2026-07-05: stack privacy (engine aliases, guardrail on every answer path), top-right stamp removed, manual refreshed.
+ * 3.7 — 2026-07-05: villain decoy codenames over the wire; real ids resolve server-side only (model-map.server.ts).
  */
-export const BUILD_VERSION = '3.6';
+export const BUILD_VERSION = '3.7';

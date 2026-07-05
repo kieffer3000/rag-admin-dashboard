@@ -3,7 +3,7 @@
 import { useRef, useState } from 'react';
 import { useRag } from '@/lib/rag/store';
 import { cn } from '@/lib/utils';
-import { LLM_MODELS, PROVIDER_META, LlmProvider } from '@/lib/rag/models';
+import { LLM_MODELS, PROVIDER_META, LlmProvider, normalizeModelId } from '@/lib/rag/models';
 import { ChatAttachment, AttachmentMode } from '@/lib/rag/types';
 import {
   ArrowUp,
@@ -36,7 +36,8 @@ const PILL_BTN =
 
 export function Composer({ onSend, busy }: ComposerProps) {
   const { contextItems, modelId, setModel } = useRag();
-  const activeModel = LLM_MODELS.find((m) => m.id === modelId) ?? LLM_MODELS[0];
+  const activeModel =
+    LLM_MODELS.find((m) => m.id === normalizeModelId(modelId)) ?? LLM_MODELS[0];
   const [text, setText] = useState('');
   const [attachment, setAttachment] = useState<ChatAttachment | undefined>();
   const fileRef = useRef<HTMLInputElement>(null);
