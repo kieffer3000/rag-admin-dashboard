@@ -1885,10 +1885,36 @@ function BoardCanvasInner() {
         )
         .map((n) => n.id)
     );
-    if (!gridded.size) return board.nodes;
-    return board.nodes.map((n) =>
-      n.parentId && gridded.has(n.parentId) ? { ...n, hidden: true } : n
-    );
+    // SEAM Z-ORDER: the un-snap ✂ lives in the seam as a child of the LOWER
+    // piece — if the upper piece paints later it covers the scissors (a child's
+    // z-index can't escape its node's stacking context). Give free chips that
+    // share a column a zIndex that grows DOWN the stack, so the lower piece
+    // (and its seam button) always paints on top. The notches are clipped
+    // transparent, so the weld visual is unchanged; values stay tiny (1..k),
+    // far below React Flow's selection elevation.
+    const columns = new Map<number, BoardNode[]>();
+    for (const n of board.nodes) {
+      if (n.type !== 'chip' || n.parentId) continue;
+      const key = Math.round(n.position.x);
+      const col = columns.get(key);
+      if (col) col.push(n);
+      else columns.set(key, [n]);
+    }
+    const zOf = new Map<string, number>();
+    for (const col of columns.values()) {
+      if (col.length < 2) continue;
+      [...col]
+        .sort((a, b) => a.position.y - b.position.y)
+        .forEach((n, i) => zOf.set(n.id, i + 1));
+    }
+    if (!gridded.size && !zOf.size) return board.nodes;
+    return board.nodes.map((n) => {
+      let out = n;
+      if (n.parentId && gridded.has(n.parentId)) out = { ...out, hidden: true };
+      const z = zOf.get(n.id);
+      if (z !== undefined && out.zIndex !== z) out = { ...out, zIndex: z };
+      return out;
+    });
   }, [board.nodes]);
 
   const placedIds = useMemo(
