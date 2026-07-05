@@ -125,15 +125,28 @@ async function indexDocumentFileInner({
     try {
       const jobId = await uploadViaConverter(file, ocr);
       if (jobId) {
-        const ir = await fetch('/api/index-doc', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ source_id: id, name, cc_job_id: jobId })
-        });
-        const ij = await ir.json().catch(() => ({}));
-        if (!ir.ok || !ij.ok)
-          throw new Error(ij?.error ?? ij?.note ?? 'index failed');
-        return { chunks: ij.chunks, source: ij.source_url };
+        // RESUME LOOP (2026-07-04): a big book's conversion outlives one
+        // request's ~260s poll window. The server then answers converting:true
+        // and we RE-ATTACH to the SAME CloudConvert job — the next request
+        // usually finds the finished text instantly. Re-minting a new job on
+        // retry was the "Text extraction failed or timed out, every retry"
+        // loop: each attempt re-billed the conversion and re-timed-out.
+        // 5 windows ≈ 20+ min — covers the 10-minute encyclopedias.
+        for (let attempt = 0; ; attempt++) {
+          const ir = await fetch('/api/index-doc', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ source_id: id, name, cc_job_id: jobId })
+          });
+          const ij = await ir.json().catch(() => ({}));
+          if (ij?.converting && attempt < 4) {
+            await new Promise((r) => setTimeout(r, 10_000));
+            continue;
+          }
+          if (!ir.ok || !ij.ok)
+            throw new Error(ij?.error ?? ij?.note ?? 'index failed');
+          return { chunks: ij.chunks, source: ij.source_url };
+        }
       }
       // doc-job unavailable (no converter configured) → fall through.
     } catch (ccErr) {

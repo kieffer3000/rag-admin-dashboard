@@ -425,25 +425,41 @@ export async function createDocExtractJob(
 export async function pollDocTextUrl(jobId: string): Promise<string> {
   const key = process.env.CLOUDCONVERT_API_KEY;
   if (!key) return '';
+  return (await pollDocText(jobId)).url;
+}
+
+/** State-aware poll: distinguishes a conversion that FAILED from one that
+ *  simply OUTLIVED this request's poll window ('converting'). Big books
+ *  convert for 5-10+ minutes — longer than one function invocation — so the
+ *  caller can report converting:true and the client re-attaches to the SAME
+ *  job instead of re-minting (which re-bills the conversion and re-times-out,
+ *  the "fails continually" loop of 2026-07-04). */
+export async function pollDocText(
+  jobId: string
+): Promise<{ url: string; state: 'finished' | 'error' | 'converting' }> {
+  const key = process.env.CLOUDCONVERT_API_KEY;
+  if (!key) return { url: '', state: 'error' };
   const auth = { Authorization: `Bearer ${key}` };
   const max = Number(process.env.CLOUDCONVERT_DOC_MAX_POLLS ?? 130); // ~260s, under maxDuration
+  let last: 'converting' | 'error' = 'converting';
   for (let i = 0; i < max; i++) {
     await sleep(POLL_MS);
     try {
       const pr = await fetch(`${API}/v2/jobs/${jobId}`, { headers: auth });
       if (!pr.ok) continue;
       const data = (await pr.json()).data;
-      if (data.status === 'error') return '';
+      if (data.status === 'error') return { url: '', state: 'error' };
       if (data.status === 'finished') {
-        return (
+        const url =
           ((data.tasks ?? []) as any[]).find(
             (t) => t.operation === 'export/url' && t.status === 'finished'
-          )?.result?.files?.[0]?.url ?? ''
-        );
+          )?.result?.files?.[0]?.url ?? '';
+        return { url, state: url ? 'finished' : 'error' };
       }
+      last = 'converting';
     } catch {
       /* keep polling */
     }
   }
-  return '';
+  return { url: '', state: last };
 }

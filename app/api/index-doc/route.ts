@@ -2,7 +2,7 @@ import { auth } from '@clerk/nextjs/server';
 import { put } from '@vercel/blob';
 import { indexText } from '@/lib/rag/index-core';
 import { nsForUser } from '@/lib/rag/namespace';
-import { extractPdfViaCloudConvert, pollDocTextUrl } from '@/lib/rag/cloudconvert';
+import { extractPdfViaCloudConvert, pollDocText } from '@/lib/rag/cloudconvert';
 
 // Document ingestion (PDF / DOCX / TXT). Text extraction is deterministic
 // parsing (NOT an LLM), done in-route, then handed to the SAME text pipeline
@@ -99,7 +99,20 @@ export async function POST(req: Request) {
         { status: 400 }
       );
     }
-    const txtUrl = await pollDocTextUrl(ccJobId);
+    const poll = await pollDocText(ccJobId);
+    if (poll.state === 'converting') {
+      // The conversion OUTLIVED this request's poll window (big books run
+      // 5-10+ min) — it is still running and will finish. Tell the client to
+      // re-attach to the SAME job; a fresh request finds the text instantly
+      // once done. Never a new job: re-minting re-bills and re-times-out.
+      return Response.json({
+        ok: false,
+        converting: true,
+        cc_job_id: ccJobId,
+        error: 'Still converting — large document; retrying automatically.'
+      });
+    }
+    const txtUrl = poll.url;
     if (!txtUrl) {
       return Response.json(
         { ok: false, error: 'Text extraction failed or timed out.' },
