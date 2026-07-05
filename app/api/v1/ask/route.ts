@@ -1,3 +1,4 @@
+import { STACK_PRIVACY_GUARDRAIL } from '@/lib/rag/stack-privacy';
 import { authorizeConnection, rateLimited, openCors } from '@/lib/rag/public-api';
 import { doctrineFor } from '@/lib/rag/doctrines';
 import { relayPublicQuery } from '@/lib/rag/query-relay';
@@ -115,7 +116,7 @@ export async function POST(req: Request) {
       model: conn.model,
       speed: speed ?? 'detailed',
       conversation,
-      guides: doctrine ? [doctrine] : []
+      guides: [STACK_PRIVACY_GUARDRAIL, ...(doctrine ? [doctrine] : [])]
     });
 
     // Citations are intentionally NOT exposed via the public API — only the

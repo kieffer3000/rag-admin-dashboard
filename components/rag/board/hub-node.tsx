@@ -383,7 +383,7 @@ function HubNodeInner({ id, data, selected }: NodeProps) {
                         if (isSource && mediaId) {
                           if (
                             window.confirm(
-                              `Delete "${m?.name ?? mediaId}" permanently? This removes it from your knowledge base and Pinecone. This cannot be undone.`
+                              `Delete "${m?.name ?? mediaId}" permanently? This removes it from your knowledge base and its search index. This cannot be undone.`
                             )
                           ) {
                             deleteMedia(mediaId);

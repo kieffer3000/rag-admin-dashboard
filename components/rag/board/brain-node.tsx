@@ -1455,7 +1455,7 @@ function BrainNodeInner({ id, data, selected }: NodeProps) {
                     </span>
                     <span className="block text-[10.5px] text-muted-foreground">
                       {m.blurb}
-                      {m.provider !== 'gemini' && ' · routes to Gemini for now'}
+                      {m.provider !== 'gemini' && ' · routes to the S-Series for now'}
                     </span>
                   </span>
                   <Check

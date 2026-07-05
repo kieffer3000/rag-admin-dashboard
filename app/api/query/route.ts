@@ -1,3 +1,4 @@
+import { STACK_PRIVACY_GUARDRAIL } from '@/lib/rag/stack-privacy';
 import { auth } from '@clerk/nextjs/server';
 import { longFetch } from '@/lib/rag/long-fetch';
 import { runUtilityLLM } from '@/lib/rag/utility-llm';
@@ -103,7 +104,7 @@ function buildPrompt(
   guides: string[],
   contextTexts: string[]
 ): string {
-  const parts = [`Instruction: ${modeDirective(mode)}`];
+  const parts = [`Instruction: ${modeDirective(mode)}`, STACK_PRIVACY_GUARDRAIL];
   if (guides.length)
     parts.push(
       'Additional instructions (follow all of these):\n' +

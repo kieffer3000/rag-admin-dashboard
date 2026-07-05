@@ -1,3 +1,4 @@
+import { STACK_PRIVACY_GUARDRAIL } from '@/lib/rag/stack-privacy';
 import { authorizeConnection, rateLimited, openCors } from '@/lib/rag/public-api';
 import { doctrineFor, injectDoctrine } from '@/lib/rag/doctrines';
 import { runOpine, type Artifact } from '@/lib/rag/opine';
@@ -166,6 +167,8 @@ export async function POST(req: Request) {
     guides,
     await doctrineFor(conn.scope, conn.project_id, conn.bank_node_id)
   );
+  // Stack privacy rides every public answer (see lib/rag/stack-privacy.ts).
+  guides = [STACK_PRIVACY_GUARDRAIL, ...guides];
   const references: Artifact[] = Array.isArray(body.references)
     ? (body.references as unknown[])
         .filter((r): r is Artifact => !!r && typeof (r as Artifact).content === 'string')

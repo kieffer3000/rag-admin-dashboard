@@ -463,14 +463,14 @@ export function BoardChest({
                         e.stopPropagation();
                         if (
                           window.confirm(
-                            `Delete "${m.name}" permanently? This removes it from your knowledge base and Pinecone. This cannot be undone.`
+                            `Delete "${m.name}" permanently? This removes it from your knowledge base and its search index. This cannot be undone.`
                           )
                         ) {
                           if (placed) onRecallMedia(m.id);
                           deleteMedia(m.id);
                         }
                       }}
-                      title="Delete permanently — removes it from your knowledge base and Pinecone"
+                      title="Delete permanently — removes it from your knowledge base and its search index"
                       className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-muted-foreground/50 opacity-0 transition-all hover:bg-red-500/10 hover:text-red-500 group-hover:opacity-100"
                     >
                       <Trash2 className="h-3.5 w-3.5" />

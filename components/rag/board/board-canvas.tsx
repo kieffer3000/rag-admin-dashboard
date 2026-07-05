@@ -1097,7 +1097,7 @@ function BoardCanvasInner() {
           if (
             mediaId &&
             window.confirm(
-              `Delete "${item?.name ?? mediaId}" permanently? This removes it from your knowledge base and Pinecone. This cannot be undone.`
+              `Delete "${item?.name ?? mediaId}" permanently? This removes it from your knowledge base and its search index. This cannot be undone.`
             )
           ) {
             recallMedia(mediaId);
@@ -1740,7 +1740,7 @@ function BoardCanvasInner() {
         if (
           mediaId &&
           window.confirm(
-            `Delete "${item?.name ?? mediaId}" permanently? This removes it from your knowledge base and Pinecone. This cannot be undone.`
+            `Delete "${item?.name ?? mediaId}" permanently? This removes it from your knowledge base and its search index. This cannot be undone.`
           )
         ) {
           recallMedia(mediaId);
@@ -3006,12 +3006,8 @@ function BoardCanvasInner() {
             fitView({ nodes: [{ id: nodeId }], duration: 450, padding: 0.35 });
         }}
       />
-      {/* Build stamp — confirm you're on the latest code at a glance.
-          TOP-right: the bottom-right corner belongs to the zoom Controls
-          (the badge used to overlap them). */}
-      <div className="pointer-events-none absolute right-2 top-1.5 z-50 rounded bg-black/55 px-2 py-0.5 font-mono text-[10px] text-amber-300/90">
-        build {process.env.NEXT_PUBLIC_BUILD ?? 'dev'}
-      </div>
+      {/* Build number now lives at the bottom of the olive rail (lib/version.ts) —
+          the old top-right stamp leaked deploy internals on every screenshot. */}
       <BoardChest
         placedIds={placedIds}
         onSave={saveNow}

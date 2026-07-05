@@ -35,6 +35,8 @@ answer can show where it came from.
 - **Team** — invite members; an organization shares one workspace.
 - **API Keys** — for developers connecting other apps.
 
+The current build number is shown at the bottom of the left rail.
+
 # Projects
 
 A project keeps its own sources, board, conversations, and notes. The switcher
@@ -80,12 +82,18 @@ The Board is a desk where knowledge is physical:
   Fast/Normal modes, a cited-only toggle, and can run in full-screen Research
   Mode.
 - **Wiring** — drag from a piece/box to a DataBank. Cut a wire with the
-  scissors that appear on it. Pieces can also string-connect to each other
-  (top handle) so a family of pieces travels together.
+  scissors that appear on it. Pieces can also connect to each other: drag the
+  string from one piece's dot and drop it ANYWHERE on another piece (the
+  target lights up). Same-type pieces CLAMP together into a stack (with a
+  click sound); different types stay tied by a visible string. Un-snap a
+  stack with the scissors in the seam.
 - **Agents / personas** — a persona node wired into a DataBank changes HOW it
-  answers (tone, role, format). Edit its face (emoji spread, any typed emoji,
-  or an uploaded image with optional background removal), name, and system
-  prompt.
+  answers (tone, role, format). Click the robot once to open its editor panel
+  (face, name, instructions). Faces: emoji spread, any typed emoji, or an
+  uploaded image with optional background removal. Note: a robot on the board
+  keeps its own copy of the instructions — edit the placed robot itself, not
+  the Agents list, to change how a wired DataBank answers. Creating an agent
+  from the board drops it straight onto the canvas.
 - **Examples** — sample documents that steer style/judgment ("make it like
   this"); never indexed, never cited.
 - **Drafts (artifacts)** — YOUR working document, carried whole. Wire it to a
