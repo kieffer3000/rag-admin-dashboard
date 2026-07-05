@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useRag } from '@/lib/rag/store';
+import { useBoard } from '@/lib/rag/board/store';
 import { Agent } from '@/lib/rag/types';
 import {
   Dialog,
@@ -27,6 +28,7 @@ import { IconPicker } from '@/components/rag/icon-picker';
 
 export function AgentsView() {
   const { agents, addAgent, updateAgent, deleteAgent } = useRag();
+  const { board, updateBoardNodeData } = useBoard();
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<Agent | null>(null);
@@ -62,6 +64,17 @@ export function AgentsView() {
         icon,
         avatar
       });
+      // CONNECTED AGENTS: push the edit into every copy of this agent placed
+      // on the current board, so the robot on the canvas never drifts from
+      // the saved Agent.
+      for (const n of board.nodes)
+        if (n.type === 'agent' && n.data.agentId === editing.id)
+          updateBoardNodeData(n.id, {
+            name: name.trim(),
+            icon: avatar ? '' : icon,
+            avatar,
+            text: systemPrompt.trim()
+          });
     } else {
       addAgent({
         name: name.trim(),

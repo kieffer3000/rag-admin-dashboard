@@ -14,6 +14,7 @@ import { Label } from '@/components/ui/label';
 import { Bot, Upload, Eraser, Loader2, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useBoard } from '@/lib/rag/board/store';
+import { useRag } from '@/lib/rag/store';
 import type { AgentData } from '@/lib/rag/board/types';
 
 // A spread of ready-made faces so a robot can read as a distinct "who" without
@@ -59,6 +60,7 @@ async function downscale(dataUrl: string, max = 224): Promise<string> {
  *  (the store's `agentEditor` holds the node id). */
 export function AgentEditDialog() {
   const { agentEditor, setAgentEditor, board, updateBoardNodeData } = useBoard();
+  const { agents, updateAgent } = useRag();
   const node = agentEditor ? board.nodes.find((n) => n.id === agentEditor) : null;
   const d = (node?.data ?? {}) as AgentData;
 
@@ -119,12 +121,30 @@ export function AgentEditDialog() {
 
   function save() {
     if (!agentEditor) return;
-    updateBoardNodeData(agentEditor, {
+    const patch = {
       name: name.trim() || 'Agent',
       icon: avatar ? '' : icon.trim(),
       avatar,
       text
-    });
+    };
+    updateBoardNodeData(agentEditor, patch);
+    // CONNECTED AGENTS: a placed robot is an INSTANCE of the saved Agent.
+    // Editing it here writes through to the Agents list (settings) and to
+    // every other copy of the same agent on this board — no more two-copies
+    // drift between the board and the Agents page.
+    const aId = (d.agentId as string) || '';
+    if (aId) {
+      if (agents.some((a) => a.id === aId))
+        updateAgent(aId, {
+          name: patch.name,
+          icon: patch.icon,
+          avatar: avatar || undefined,
+          systemPrompt: text
+        });
+      for (const n of board.nodes)
+        if (n.id !== agentEditor && n.type === 'agent' && n.data.agentId === aId)
+          updateBoardNodeData(n.id, patch);
+    }
     setAgentEditor(null);
   }
 
