@@ -2432,7 +2432,7 @@ function BoardCanvasInner() {
           variant={BackgroundVariant.Dots}
           gap={22}
           size={1.4}
-          color="rgb(var(--hairline) / 0.16)"
+          color="hsl(67 28% 50% / 0.35)"
         />
         <Controls
           position="bottom-right"

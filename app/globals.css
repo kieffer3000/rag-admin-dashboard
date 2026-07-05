@@ -7,10 +7,10 @@
     /* Light — Olive & Parchment (earthy, scholarly). Warm parchment canvas +
        olive/moss accent + warm ink. Distinct from Anthropic's coral and from
        the old Apple indigo. */
-    --background: 45 30% 92.5%; /* #F2EFE6 — warm parchment */
+    --background: 45 38% 93.5%; /* warm parchment, sunlit */
     --foreground: 42 18% 11%; /* #211E17 — warm near-black ink */
 
-    --card: 46 33% 97.5%; /* #FBFAF5 — ivory panel */
+    --card: 46 42% 98%; /* ivory panel, creamier */
     --card-foreground: 40 20% 10%;
 
     --popover: 46 33% 97.5%;
@@ -25,13 +25,13 @@
     --muted: 44 26% 91%;
     --muted-foreground: 40 10% 46%; /* warm gray */
 
-    --accent: 68 39% 33%; /* #6B7333 — olive / moss, THE brand thread */
+    --accent: 67 44% 33%; /* golden olive — THE brand thread, richer */
     --accent-foreground: 46 33% 97%;
 
     --destructive: 12 56% 45%; /* #B0492F — brick (answersDoc heritage red, earthier) */
     --destructive-foreground: 46 33% 97%;
 
-    --border: 42 18% 86%;
+    --border: 42 22% 86.5%;
     --input: 42 18% 84%;
     --ring: 68 39% 33%;
 
@@ -121,7 +121,9 @@
     letter-spacing: -0.011em;
   }
 
-  /* Unified, premium midnight mesh background */
+  /* Ambient light — a warm golden-hour wash instead of the old indigo mesh
+     (that violet was a relic of the pre-olive design and fought the palette).
+     Top-right sun, soft amber floor glow. Barely there; felt, not seen. */
   body::before {
     content: '';
     position: fixed;
@@ -129,14 +131,14 @@
     z-index: -1;
     pointer-events: none;
     background:
-      radial-gradient(58% 50% at 88% -4%, hsl(248 80% 60% / 0.10), transparent 70%),
-      radial-gradient(46% 42% at -6% 104%, hsl(268 80% 58% / 0.06), transparent 70%);
+      radial-gradient(58% 50% at 88% -4%, hsl(58 62% 58% / 0.12), transparent 70%),
+      radial-gradient(46% 42% at -6% 104%, hsl(35 70% 60% / 0.08), transparent 70%);
   }
   .dark body::before {
     background:
-      radial-gradient(60% 52% at 86% -6%, hsl(248 90% 62% / 0.16), transparent 68%),
-      radial-gradient(50% 46% at -8% 106%, hsl(272 86% 60% / 0.10), transparent 70%),
-      radial-gradient(40% 40% at 50% 120%, hsl(235 90% 60% / 0.05), transparent 70%);
+      radial-gradient(60% 52% at 86% -6%, hsl(68 50% 42% / 0.13), transparent 68%),
+      radial-gradient(50% 46% at -8% 106%, hsl(35 55% 45% / 0.08), transparent 70%),
+      radial-gradient(40% 40% at 50% 120%, hsl(68 40% 35% / 0.05), transparent 70%);
   }
 
   /* Tighter, modern headings */
@@ -181,7 +183,7 @@
   .card-glass {
     background-color: #ffffff;
     border: 1px solid transparent;
-    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04), 0 0 0 1px rgba(0, 0, 0, 0.02);
+    box-shadow: 0 1px 2px rgb(60 50 15 / 0.05), 0 0 0 1px rgb(60 50 15 / 0.03);
     transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1),
       box-shadow 0.25s ease, border-color 0.25s ease, background-color 0.2s ease;
   }
@@ -195,7 +197,7 @@
      Dark: gentle scale, brighter hairline, soft accent glow. */
   .hover-glow:hover {
     transform: translateY(-1px);
-    box-shadow: 0 6px 22px rgba(0, 0, 0, 0.08), 0 0 0 1px rgba(0, 0, 0, 0.025);
+    box-shadow: 0 6px 24px rgb(60 50 15 / 0.10), 0 0 0 1px rgb(60 50 15 / 0.03);
   }
   .dark .hover-glow:hover {
     transform: scale(1.02);
@@ -220,13 +222,13 @@
   }
 
   .shadow-soft {
-    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04), 0 4px 16px rgba(0, 0, 0, 0.05);
+    box-shadow: 0 1px 2px rgb(60 50 15 / 0.05), 0 4px 18px rgb(60 50 15 / 0.07);
   }
   .dark .shadow-soft {
     box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 4px 16px rgba(0, 0, 0, 0.35);
   }
   .shadow-float {
-    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.16);
+    box-shadow: 0 2px 6px rgb(60 50 15 / 0.07), 0 16px 44px rgb(60 50 15 / 0.16);
   }
   .dark .shadow-float {
     box-shadow: 0 8px 32px rgba(0, 0, 0, 0.45);
@@ -513,6 +515,32 @@ input[type='search']::-webkit-search-cancel-button {
    soft fill (via :hover — the cover is hit-testable during the drag — plus
    React Flow's own connectingto class). Connect FROM anywhere on the piece,
    no dot-aiming. */
+/* Zoom controls — a warm ivory jewel-box instead of RF's plain grey strip. */
+.react-flow__controls {
+  border-radius: 14px;
+  overflow: hidden;
+  box-shadow: 0 2px 6px rgb(60 50 15 / 0.08), 0 10px 28px rgb(60 50 15 / 0.12);
+}
+.react-flow__controls-button {
+  background: hsl(var(--card));
+  border-bottom: 1px solid hsl(var(--border) / 0.6);
+  color: hsl(var(--foreground) / 0.6);
+  width: 30px;
+  height: 30px;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+.react-flow__controls-button:hover {
+  background: hsl(var(--accent) / 0.10);
+  color: hsl(var(--foreground));
+}
+.react-flow__controls-button svg {
+  fill: currentColor;
+}
+.dark .react-flow__controls-button {
+  background: hsl(var(--card));
+  border-color: rgb(255 255 255 / 0.08);
+}
+
 .rf-chip-cover.react-flow__handle {
   background: transparent;
   border: 0;

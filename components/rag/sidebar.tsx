@@ -233,9 +233,9 @@ export function Sidebar() {
   // and a CONTRASTING brand-olive gradient so it reads as chrome, not canvas.
   // The old collapse toggle + "Vector store" info panel are gone.
   return (
-    <aside className="hidden w-[96px] shrink-0 flex-col items-center gap-1 overflow-y-auto bg-gradient-to-b from-[hsl(68_39%_24%)] via-[hsl(72_36%_18%)] to-[hsl(78_34%_12%)] py-4 lg:flex">
+    <aside className="hidden w-[96px] shrink-0 flex-col items-center gap-1 overflow-y-auto bg-gradient-to-b from-[hsl(66_48%_25%)] via-[hsl(70_45%_17%)] to-[hsl(76_42%_10%)] py-4 lg:flex">
       <Link href="/" className="mb-2 flex flex-col items-center gap-1.5">
-        <div className="relative flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-[14px] bg-[#efe9da] shadow-[0_4px_18px_rgb(0_0_0/0.35)]">
+        <div className="relative flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-[14px] bg-[#efe9da] shadow-[0_4px_18px_rgb(0_0_0/0.35)] ring-1 ring-white/20">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src="/answersdoc-logo.png"
@@ -262,7 +262,7 @@ export function Sidebar() {
               className={cn(
                 'group flex w-full flex-col items-center gap-1 rounded-[14px] px-1 py-2 transition-all duration-150',
                 active
-                  ? 'bg-white/[0.16] text-white shadow-[inset_0_1px_0_rgb(255_255_255/0.12)]'
+                  ? 'bg-gradient-to-b from-white/[0.20] to-white/[0.09] text-white ring-1 ring-white/[0.14] shadow-[0_4px_14px_rgb(0_0_0/0.30),inset_0_1px_0_rgb(255_255_255/0.18)]'
                   : 'text-[#e6e4cf]/70 hover:bg-white/[0.08] hover:text-[#f4f2e3]'
               )}
             >
