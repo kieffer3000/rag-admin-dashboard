@@ -103,34 +103,56 @@ export function ProjectSwitcher({ compact = false }: { compact?: boolean }) {
           <DropdownMenuLabel className="flex items-center gap-1.5 text-[11px] uppercase tracking-wide text-muted-foreground">
             <FolderOpen className="h-3 w-3" /> Projects
           </DropdownMenuLabel>
-          {projects.map((p) => (
-            <DropdownMenuItem
-              key={p.id}
-              onClick={() => setActiveProject(p.id)}
-              className="gap-2.5"
-            >
-              <span className="text-base">{p.icon}</span>
-              <span className="min-w-0 flex-1">
-                <span className="block truncate text-[13px] font-medium">{p.name}</span>
-                <span className="block text-[11px] text-muted-foreground">
-                  {p.sourceIds.length} sources
-                </span>
-              </span>
-              <Check
-                className={cn(
-                  'h-3.5 w-3.5 text-accent',
-                  p.id === activeProject.id ? 'opacity-100' : 'opacity-0'
-                )}
-              />
-            </DropdownMenuItem>
-          ))}
+          {/* Big workspaces: ~8 rows visible, scroll to at most 13, everything
+              else lives behind "View all projects…". The ACTIVE project is
+              always kept in the list even when it would've been cut. */}
+          {(() => {
+            const MAX_LISTED = 13;
+            let listed = projects;
+            if (projects.length > MAX_LISTED) {
+              listed = projects.slice(0, MAX_LISTED);
+              if (!listed.some((p) => p.id === activeProject.id))
+                listed = [...listed.slice(0, MAX_LISTED - 1), activeProject];
+            }
+            return (
+              <div className="max-h-[416px] overflow-y-auto overscroll-contain">
+                {listed.map((p) => (
+                  <DropdownMenuItem
+                    key={p.id}
+                    onClick={() => setActiveProject(p.id)}
+                    className="gap-2.5"
+                  >
+                    <span className="text-base">{p.icon}</span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-[13px] font-medium">{p.name}</span>
+                      <span className="block text-[11px] text-muted-foreground">
+                        {p.sourceIds.length} sources
+                      </span>
+                    </span>
+                    <Check
+                      className={cn(
+                        'h-3.5 w-3.5 text-accent',
+                        p.id === activeProject.id ? 'opacity-100' : 'opacity-0'
+                      )}
+                    />
+                  </DropdownMenuItem>
+                ))}
+              </div>
+            );
+          })()}
           <DropdownMenuSeparator />
           <DropdownMenuItem onClick={() => setCreateOpen(true)} className="gap-2 text-accent">
             <Plus className="h-3.5 w-3.5" /> New project
           </DropdownMenuItem>
           <DropdownMenuItem asChild className="gap-2">
             <Link href="/projects">
-              <FolderOpen className="h-3.5 w-3.5" /> View all projects…
+              <FolderOpen className="h-3.5 w-3.5" />
+              View all projects…
+              {projects.length > 13 && (
+                <span className="ml-auto text-[11px] text-muted-foreground">
+                  {projects.length}
+                </span>
+              )}
             </Link>
           </DropdownMenuItem>
         </DropdownMenuContent>

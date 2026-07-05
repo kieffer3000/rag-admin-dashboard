@@ -7,5 +7,6 @@
  * Baseline: 3.5 declared 2026-07-05.
  * 3.6 — 2026-07-05: stack privacy (engine aliases, guardrail on every answer path), top-right stamp removed, manual refreshed.
  * 3.7 — 2026-07-05: villain decoy codenames over the wire; real ids resolve server-side only (model-map.server.ts).
+ * 3.8 — 2026-07-05: project switcher capped (~8 visible, scroll to 13, View all beyond).
  */
-export const BUILD_VERSION = '3.7';
+export const BUILD_VERSION = '3.8';
