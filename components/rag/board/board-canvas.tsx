@@ -1297,6 +1297,22 @@ function BoardCanvasInner() {
     [fitView]
   );
 
+  // Single click on a floating AGENT (robot) opens its editor panel — like
+  // clicking a module in Make.com. React Flow only fires this on a real click
+  // (a drag past the threshold is swallowed), so grab-to-move still works. We
+  // ignore clicks that land on an inner control (buttons/handles) so those keep
+  // their own behaviour, and skip docked agents (a box tile is for arranging).
+  const onNodeClick = useCallback(
+    (e: React.MouseEvent, node: Node) => {
+      if (node.type !== 'agent' || node.parentId) return;
+      const t = e.target as HTMLElement;
+      if (t.closest('button, a, input, textarea, [role="checkbox"], .react-flow__handle'))
+        return;
+      setAgentEditor(node.id);
+    },
+    [setAgentEditor]
+  );
+
   // ---- toolbar actions ----
   // Monotonic placement counter: a whole batch of imports fires synchronously
   // (one onNewSource per link) BEFORE React commits, so reading board.nodes each
@@ -2262,6 +2278,7 @@ function BoardCanvasInner() {
         onNodeDragStart={onNodeDragStart}
         onNodeDrag={onNodeDrag}
         onNodeDragStop={onNodeDragStop}
+        onNodeClick={onNodeClick}
         onNodeDoubleClick={onNodeDoubleClick}
         onNodeContextMenu={onNodeContextMenu}
         onPaneClick={() => setCtxMenu(null)}
