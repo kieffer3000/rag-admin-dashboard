@@ -10,5 +10,6 @@
  * 3.8 — 2026-07-05: project switcher capped (~8 visible, scroll to 13, View all beyond).
  * 3.9 — 2026-07-05: Olive Grove beauty pass (warm tokens, layered shadows, sunlit rail, olive dot grid, jewel zoom controls) + answersDoc wordmark under the top-right menu.
  * 3.10 — 2026-07-05: connected agents — board robot edits write through to the Agents page and back; copies on the board stay in sync.
+ * 3.11 — 2026-07-06: ni@tiosquare.com added to the access allowlist + invited via Clerk.
  */
-export const BUILD_VERSION = '3.10';
+export const BUILD_VERSION = '3.11';

@@ -11,9 +11,6 @@ const isPublicRoute = createRouteMatcher([
   // Server-to-server (Make ingest → Nova captioner). Clerk-exempt; the route
   // enforces its own CAPTION_WEBHOOK_SECRET shared-secret header instead.
   '/api/caption-image',
-  // TEMP (delete after use): headless Clerk invitation, guarded by
-  // CAPTION_WEBHOOK_SECRET header inside the route.
-  '/api/admin/invite-user',
   // Public published-Bank surfaces: the key-authed Q&A API (auth = per-Bank API
   // key, enforced in the route) and the embeddable chat widget that calls it.
   '/api/v1(.*)',
