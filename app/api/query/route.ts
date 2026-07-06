@@ -5,7 +5,13 @@ import { longFetch } from '@/lib/rag/long-fetch';
 import { runUtilityLLM } from '@/lib/rag/utility-llm';
 import { fetchSummaries, wantsSummary } from '@/lib/rag/summary-core';
 import { nsForUser } from '@/lib/rag/namespace';
-import { retrieveExpandedContext } from '@/lib/rag/expand';
+import { retrieveExpandedContext, type ContextChunk } from '@/lib/rag/expand';
+import {
+  extractMentionTerms,
+  mentionScan,
+  RARE_TERM_MAX_MATCHES,
+  type MentionScanResult
+} from '@/lib/rag/mention-scan';
 import { getOrgOpenrouterKey, scopeOf } from '@/lib/org-settings';
 import { doctrineFor, injectDoctrine } from '@/lib/rag/doctrines';
 
@@ -441,6 +447,19 @@ export async function POST(req: Request) {
   // billed to the user's own OpenRouter account. '' = fall back to Make's key.
   const orKey = await getOrgOpenrouterKey(scopeOf(orgId, userId));
 
+  // EXACT-MENTION LANE (3.16): if the question names an exact term (quoted
+  // phrase / proper noun / "is X mentioned"), lexically scan the wired sources
+  // IN PARALLEL with the semantic pass — embeddings cluster meaning and miss
+  // rare tokens by construction (the Kathy incident, journal 2026-07-06).
+  const mentionTerms = extractMentionTerms(userQuestion);
+  const mentionPromise: Promise<MentionScanResult> = mentionTerms.length
+    ? mentionScan(mentionTerms, sourceIds, ns).catch(() => ({
+        hits: [] as ContextChunk[],
+        scanned: 0,
+        truncated: false
+      }))
+    : Promise.resolve({ hits: [], scanned: 0, truncated: false });
+
   // First retrieval pass (T1) through Make.
   let result: MakeResult;
   try {
@@ -453,6 +472,48 @@ export async function POST(req: Request) {
       { error: e instanceof Error ? e.message : 'Query failed' },
       { status: 502 }
     );
+  }
+
+  // Exact-mention merge: re-answer ONCE with the literal hits injected when the
+  // scan found a RARE term in chunks the T1 answer never saw. Common terms
+  // (> RARE_TERM_MAX_MATCHES chunks) are left to semantic retrieval — an
+  // exhaustive injection of a book's main subject can't fit a context window.
+  const mention = await mentionPromise;
+  if (mention.hits.length > 0 && mention.hits.length <= RARE_TERM_MAX_MATCHES) {
+    const seenSnippets = new Set(
+      (result.citations ?? []).map((c) => (c.snippet ?? '').trim().slice(0, 80))
+    );
+    const unseen = mention.hits.filter(
+      (h) => !seenSnippets.has(h.metadata.text.trim().slice(0, 80))
+    );
+    if (unseen.length > 0) {
+      // Merge: literal hits first (certainty), then T1's semantic context so
+      // the re-answer keeps what retrieval already found.
+      const semanticCtx: ContextChunk[] = (result.citations ?? [])
+        .filter((c) => c.source_id && c.snippet)
+        .map((c) => ({
+          score: c.score ?? 0.5,
+          metadata: {
+            source_id: c.source_id as string,
+            source_name: (c as { source_name?: string }).source_name,
+            text: c.snippet as string
+          }
+        }));
+      const merged = [...mention.hits, ...semanticCtx];
+      try {
+        const r2 = await callMake(
+          url, prompted, userQuestion, sourceIds, mode, guides,
+          model, profile, speedParam, conversation, summary, ns,
+          JSON.stringify(merged), orKey
+        );
+        if (r2.answer && r2.answer.trim()) {
+          result = r2;
+          result.noMatch = false; // literal text was found and injected
+        }
+      } catch {
+        /* keep the T1 answer */
+      }
+    }
   }
 
   // Escalating small-to-big retrieval (gated by RAG_ESCALATE; requires the Make
