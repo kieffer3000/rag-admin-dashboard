@@ -11,6 +11,9 @@ const isPublicRoute = createRouteMatcher([
   // Server-to-server (Make ingest → Nova captioner). Clerk-exempt; the route
   // enforces its own CAPTION_WEBHOOK_SECRET shared-secret header instead.
   '/api/caption-image',
+  // TEMP (delete after use): headless Clerk invitation, guarded by
+  // CAPTION_WEBHOOK_SECRET header inside the route.
+  '/api/admin/invite-user',
   // Public published-Bank surfaces: the key-authed Q&A API (auth = per-Bank API
   // key, enforced in the route) and the embeddable chat widget that calls it.
   '/api/v1(.*)',
@@ -21,7 +24,7 @@ const isPublicRoute = createRouteMatcher([
 // ALLOWED_EMAILS). Clerk's native allowlist needs a paid plan, so we gate in
 // code: covers both the dashboard UI and the API routes in one chokepoint.
 const ALLOWED_EMAILS = (
-  process.env.ALLOWED_EMAILS ?? 'tiosquareinc@gmail.com,nc@tiosquare.com'
+  process.env.ALLOWED_EMAILS ?? 'tiosquareinc@gmail.com,nc@tiosquare.com,ni@tiosquare.com'
 )
   .split(',')
   .map((s) => s.trim().toLowerCase())
