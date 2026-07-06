@@ -151,6 +151,11 @@ export async function indexText(opts: {
   namespace: string;
   /** Extra metadata stored on every vector (e.g. { email }). */
   meta?: Record<string, unknown>;
+  /** Multi-part source (client-side split of a big book): part 1 clears the
+   *  old copy for the WHOLE source (chunk ids share the `sourceId#`
+   *  delete-prefix), later parts APPEND; the summary runs on the final part
+   *  only. Absent = classic single-shot behaviour. */
+  part?: { index: number; total: number };
 }): Promise<IndexResult> {
   const sourceId = opts.sourceId;
   const name = opts.name ?? sourceId;
@@ -167,7 +172,13 @@ export async function indexText(opts: {
   // Timing probe (2026-07-04, bulk-import slowness): one line per document in
   // the runtime logs saying where the seconds went. Cheap; keep it.
   const t0 = Date.now();
-  const deletedPrior = await deleteSourceVectors(sourceId, namespace);
+  const firstPart = !opts.part || opts.part.index <= 1;
+  const lastPart = !opts.part || opts.part.index >= opts.part.total;
+  // Delete-before-reindex only on the FIRST part — a later part deleting
+  // would erase the parts already landed.
+  const deletedPrior = firstPart
+    ? await deleteSourceVectors(sourceId, namespace)
+    : 0;
   const tDel = Date.now();
 
   // Embed every chunk in code (throws if any chunk fails to embed → no silent
@@ -176,7 +187,9 @@ export async function indexText(opts: {
   const tEmbed = Date.now();
 
   const records: PineVector[] = chunks.map((text, i) => ({
-    id: `${sourceId}#${i}`,
+    // Part-scoped ids so segments never collide; both shapes share the
+    // `${sourceId}#` prefix that deleteSourceVectors lists by.
+    id: opts.part ? `${sourceId}#p${opts.part.index}-${i}` : `${sourceId}#${i}`,
     values: values[i],
     // store BOTH `name` and `source_name` — the Make query scenario reads
     // metadata.source_name for citations; the app reads name. Keep them in sync.
@@ -217,6 +230,7 @@ export async function indexText(opts: {
   // client's 4 import slots per document — a 164-book import measured ~0.7
   // doc/min. The vectors above are already landed; the summary trails in.
   const summaryJob = async () => {
+    if (!lastPart) return; // summary once per source, on the final part
     try {
       const summary = await summarizeText(String(opts.text), name);
       if (summary) await upsertSummary({ sourceId, name, summary, namespace });

@@ -13,5 +13,6 @@
  * 3.11 — 2026-07-06: ni@tiosquare.com added to the access allowlist + invited via Clerk.
  * 3.12 — 2026-07-06: unixtech7@gmail.com added to the access allowlist + invited via Clerk.
  * 3.13 — 2026-07-06: model picker + all engine-name displays removed from the UI (selection not exposed yet).
+ * 3.14 — 2026-07-06: local-first PDFs — the browser reads the text layer (pdf.js), auto-splits, and indexes parts under ONE source; converter only for true scans.
  */
-export const BUILD_VERSION = '3.13';
+export const BUILD_VERSION = '3.14';

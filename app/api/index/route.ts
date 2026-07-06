@@ -9,7 +9,7 @@ import { nsForUser } from '@/lib/rag/namespace';
 // Chunk + upsert logic lives in lib/rag/index-core.ts (shared with /api/index-doc).
 
 export const runtime = 'nodejs';
-export const maxDuration = 60;
+export const maxDuration = 300;
 
 export async function POST(req: Request) {
   const { userId } = await auth();
@@ -26,12 +26,17 @@ export async function POST(req: Request) {
   }
 
   try {
+    const part =
+      Number.isFinite(body.part_index) && Number.isFinite(body.part_total)
+        ? { index: Number(body.part_index), total: Number(body.part_total) }
+        : undefined;
     const r = await indexText({
       sourceId: body.source_id,
       name: body.name,
       type: body.type,
       text: String(body.text),
-      namespace: nsForUser(userId)
+      namespace: nsForUser(userId),
+      part
     });
     return Response.json({
       status: 'indexed',

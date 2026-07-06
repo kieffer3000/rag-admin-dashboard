@@ -13,6 +13,8 @@
 // cap 100% of the time ("why does this 529-page PDF keep failing?"). The cap
 // is BYTES, never pages.
 
+import { extractPdfLocally, segmentText } from '@/lib/rag/pdf-local';
+
 const BINARY = /\.(pdf|epub|docx|doc|rtf|odt)$/i;
 /** Retry-through-direct-route ceiling — Vercel's request-body cap is ~4.5MB. */
 const DIRECT_MAX = 4 * 1024 * 1024;
@@ -120,6 +122,43 @@ async function indexDocumentFileInner({
   ocr?: boolean;
 }): Promise<DocIndexResult> {
   if (file.size > MAX_DOC_BYTES) throw sizeError(file);
+
+  // LOCAL-FIRST PDFs (2026-07-06): read the text layer IN THE BROWSER
+  // (pdf.js) — no converter, no 300s wall, no per-page conversion minutes.
+  // A 1,770-page encyclopedia extracts in seconds and indexes in ~1.5M-char
+  // segments that all share THIS source_id — ONE book in Pinecone and one
+  // Library row (query filters match source_id; part-scoped chunk ids keep
+  // the `sourceId#` delete-prefix intact). Scans (no text layer)
+  // and any pdf.js hiccup fall through to the converter/OCR path unchanged;
+  // a user-forced OCR upload skips local reading entirely.
+  if (/\.pdf$/i.test(file.name) && !ocr) {
+    const local = await extractPdfLocally(file);
+    if (local) {
+      const segs = segmentText(local.text);
+      let chunks = 0;
+      for (let s = 0; s < segs.length; s++) {
+        const r = await fetch('/api/index', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            source_id: id,
+            name,
+            type: 'document',
+            text: segs[s],
+            part_index: s + 1,
+            part_total: segs.length
+          })
+        });
+        const j = await r.json().catch(() => ({}));
+        if (!r.ok)
+          throw new Error(
+            j?.error ?? `index failed (part ${s + 1} of ${segs.length})`
+          );
+        chunks += j.chunks ?? 0;
+      }
+      return { chunks };
+    }
+  }
 
   if (BINARY.test(file.name)) {
     try {
