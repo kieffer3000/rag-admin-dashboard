@@ -1,6 +1,7 @@
 import { auth, clerkClient } from '@clerk/nextjs/server';
 import { nsForUser, memNsForUser } from '@/lib/rag/namespace';
 import { readUsage, monthPeriod } from '@/lib/rag/metering';
+import { resolvePlan } from '@/lib/rag/plans';
 import { scopeOf } from '@/lib/org-settings';
 
 // STORAGE METERING (2026-07-04). Real usage straight from Pinecone's
@@ -23,8 +24,11 @@ const OWNER = (process.env.ALLOWED_EMAILS ?? 'tiosquareinc@gmail.com')
 // Pinecone's stats API reports counts, not bytes, so bytes shown are estimates.
 const EST_BYTES_PER_VECTOR = 4300;
 
+// JSON can't carry Infinity — unlimited caps go over the wire as null.
+const capOrNull = (n: number) => (Number.isFinite(n) ? n : null);
+
 export async function GET() {
-  const { userId, orgId } = await auth();
+  const { userId, orgId, has } = await auth();
   if (!userId) return Response.json({ error: 'Unauthorized' }, { status: 401 });
 
   const host = process.env.PINECONE_HOST;
@@ -63,11 +67,22 @@ export async function GET() {
     estBytes: mine * EST_BYTES_PER_VECTOR,
     totalVectors: total,
     totalEstBytes: total * EST_BYTES_PER_VECTOR,
-    // OPS METERING (3.17): this month's counted usage for the caller's scope.
+    // OPS METERING (3.17/3.18): this month's counted usage + the caller's plan
+    // caps, so the Health page can render "n of cap" meters.
     month: monthPeriod(),
     questionsThisMonth: await readUsage(scopeOf(orgId, userId), 'questions', monthPeriod()),
     uploadsThisMonth: await readUsage(`user:${userId}`, 'uploads', monthPeriod())
   };
+  try {
+    const { slug, caps } = await resolvePlan(userId, has);
+    body.plan = slug;
+    body.caps = {
+      questionsPerMonth: capOrNull(caps.questionsPerMonth),
+      vectorsMax: capOrNull(caps.vectorsMax)
+    };
+  } catch {
+    /* plan lookup is best-effort — the page renders without meters */
+  }
 
   // Owner-only: the metering table — every namespace with its user resolved to
   // an email where possible (legacy/system namespaces show as-is).

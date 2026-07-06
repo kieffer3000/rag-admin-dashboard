@@ -32,6 +32,26 @@ interface Usage {
   totalVectors: number;
   totalEstBytes: number;
   breakdown?: UsageRow[];
+  /** Ops metering (3.17): this month's counted usage + the caller's plan. */
+  month?: string;
+  questionsThisMonth?: number;
+  uploadsThisMonth?: number;
+  plan?: string;
+  caps?: { questionsPerMonth: number | null; vectorsMax: number | null };
+}
+
+/** "132 of 2,000" meter — null cap = unlimited (no bar). */
+function Meter({ n, cap }: { n: number; cap: number | null | undefined }) {
+  if (cap == null) return null;
+  const pct = Math.min(100, Math.round((n / Math.max(1, cap)) * 100));
+  return (
+    <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-muted">
+      <div
+        className={`h-full rounded-full ${pct >= 90 ? 'bg-amber-500' : 'bg-primary'}`}
+        style={{ width: `${Math.max(2, pct)}%` }}
+      />
+    </div>
+  );
 }
 
 export function HealthView() {
@@ -98,7 +118,7 @@ export function HealthView() {
         <div className="px-6 pt-6 lg:px-8">
           <h1 className="text-[22px] font-semibold tracking-tight">Knowledge health</h1>
           <p className="mt-1 text-[13px] text-muted-foreground">
-            Your vector index at a glance — Pinecone <code className="text-[12px]">life-agents-kb</code>.
+            Your knowledge index and this month&apos;s usage at a glance.
           </p>
 
           <div className="mt-5 grid grid-cols-2 gap-3 lg:grid-cols-4">
@@ -115,6 +135,57 @@ export function HealthView() {
               );
             })}
           </div>
+
+          {/* THIS MONTH (3.18): the ops meters — questions asked (vs the plan
+              cap when one applies), documents added, and banked-vector budget.
+              Data rides the same /api/usage call as the cards above. */}
+          {usage && typeof usage.questionsThisMonth === 'number' && (
+            <div className="card-glass mt-4 rounded-[18px] p-4">
+              <div className="flex items-baseline justify-between">
+                <div className="text-[12px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+                  This month{usage.month ? ` · ${usage.month}` : ''}
+                </div>
+                {usage.plan && (
+                  <div className="rounded-full bg-primary/10 px-2.5 py-0.5 text-[11px] font-medium capitalize text-primary">
+                    {usage.plan === 'owner' ? 'unlimited' : `${usage.plan} plan`}
+                  </div>
+                )}
+              </div>
+              <div className="mt-3 grid grid-cols-1 gap-4 sm:grid-cols-3">
+                <div>
+                  <div className="text-[12px] text-muted-foreground">Questions asked</div>
+                  <div className="mt-1 text-[20px] font-semibold tracking-tight tabular-nums">
+                    {usage.questionsThisMonth.toLocaleString()}
+                    {usage.caps?.questionsPerMonth != null && (
+                      <span className="text-[13px] font-normal text-muted-foreground">
+                        {' '}of {usage.caps.questionsPerMonth.toLocaleString()}
+                      </span>
+                    )}
+                  </div>
+                  <Meter n={usage.questionsThisMonth} cap={usage.caps?.questionsPerMonth} />
+                </div>
+                <div>
+                  <div className="text-[12px] text-muted-foreground">Documents added</div>
+                  <div className="mt-1 text-[20px] font-semibold tracking-tight tabular-nums">
+                    {(usage.uploadsThisMonth ?? 0).toLocaleString()}
+                  </div>
+                </div>
+                <div>
+                  <div className="text-[12px] text-muted-foreground">Storage used</div>
+                  <div className="mt-1 text-[20px] font-semibold tracking-tight tabular-nums">
+                    {usage.vectors.toLocaleString()}
+                    {usage.caps?.vectorsMax != null && (
+                      <span className="text-[13px] font-normal text-muted-foreground">
+                        {' '}of {usage.caps.vectorsMax.toLocaleString()}
+                      </span>
+                    )}
+                    <span className="text-[13px] font-normal text-muted-foreground"> items</span>
+                  </div>
+                  <Meter n={usage.vectors} cap={usage.caps?.vectorsMax} />
+                </div>
+              </div>
+            </div>
+          )}
 
           {usage?.breakdown && (
             <div className="card-glass mt-5 rounded-[18px] p-4">

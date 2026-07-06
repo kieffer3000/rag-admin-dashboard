@@ -17,5 +17,6 @@
  * 3.15 — 2026-07-06: upload rows show size · detected pages · live phase + conservative ETA under the filename.
  * 3.16 — 2026-07-06: exact-mention lexical lane — "is X mentioned" / quoted / proper-noun questions get an exhaustive literal scan of the wired sources injected beside semantic retrieval (the Kathy fix).
  * 3.17 — 2026-07-06: metering + abuse layer — plan caps (questions/month gate on query+opine, live storage gate at ingest), usage_counters table, managed spend-capped OpenRouter sub-keys for non-BYOK scopes, public embed/API per-IP throttle + durable per-connection daily budget.
+ * 3.18 — 2026-07-06: Health page shows "This month" usage meters (questions vs cap, documents added, storage vs cap, plan badge); vendor name scrubbed from the Health header (stack privacy).
  */
-export const BUILD_VERSION = '3.17';
+export const BUILD_VERSION = '3.18';
