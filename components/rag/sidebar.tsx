@@ -79,11 +79,23 @@ export function ProjectSwitcher({ compact = false }: { compact?: boolean }) {
         <DropdownMenuTrigger asChild>
           <button
             className={cn(
-              'card-glass flex w-full items-center gap-2.5 rounded-[14px] px-2.5 py-2 text-left transition-all hover:brightness-[0.98]',
-              compact && 'w-auto'
+              'flex w-full items-center gap-2.5 rounded-[14px] px-2.5 py-2 text-left transition-all',
+              // 3.20: on the olive rail (compact) the tile keeps a FIXED
+              // olive-glass look in BOTH themes — card-glass went bright white
+              // in light mode and jumped out of the rail.
+              compact
+                ? 'w-auto bg-white/10 ring-1 ring-white/15 shadow-[inset_0_1px_0_rgb(255_255_255/0.12)] hover:bg-white/[0.16]'
+                : 'card-glass hover:brightness-[0.98]'
             )}
           >
-            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[10px] bg-[hsl(240_16%_96.5%)] text-base dark:bg-[rgb(255_255_255_/_0.06)]">
+            <span
+              className={cn(
+                'flex h-8 w-8 shrink-0 items-center justify-center rounded-[10px] text-base',
+                compact
+                  ? 'bg-white/10'
+                  : 'bg-[hsl(240_16%_96.5%)] dark:bg-[rgb(255_255_255_/_0.06)]'
+              )}
+            >
               {activeProject.icon}
             </span>
             {!compact && (
@@ -96,7 +108,12 @@ export function ProjectSwitcher({ compact = false }: { compact?: boolean }) {
                 </span>
               </span>
             )}
-            <ChevronsUpDown className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+            <ChevronsUpDown
+              className={cn(
+                'h-3.5 w-3.5 shrink-0',
+                compact ? 'text-white/70' : 'text-muted-foreground'
+              )}
+            />
           </button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="start" className="w-64">
@@ -235,15 +252,16 @@ export function Sidebar() {
   return (
     <aside className="hidden w-[96px] shrink-0 flex-col items-center gap-1 overflow-y-auto bg-gradient-to-b from-[hsl(66_48%_25%)] via-[hsl(70_45%_17%)] to-[hsl(76_42%_10%)] py-4 lg:flex">
       <Link href="/" className="mb-2 flex flex-col items-center gap-1.5">
-        <div className="relative flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-[14px] bg-[#efe9da] shadow-[0_4px_18px_rgb(0_0_0/0.35)] ring-1 ring-white/20">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src="/answersdoc-logo.png"
-            alt="answersDoc"
-            className="h-full w-full object-contain p-0.5"
-            draggable={false}
-          />
-        </div>
+        {/* 3.20: the white mark sits DIRECTLY on the olive rail (no tile box),
+            Make.com-style — answersdoc-logo-white.png is the brand mark
+            recolored white over the original alpha mask. */}
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src="/answersdoc-logo-white.png"
+          alt="answersDoc"
+          className="h-12 w-12 shrink-0 object-contain drop-shadow-[0_3px_10px_rgb(0_0_0/0.35)]"
+          draggable={false}
+        />
       </Link>
 
       <div className="mb-2 flex justify-center">
