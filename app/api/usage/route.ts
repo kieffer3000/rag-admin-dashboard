@@ -1,5 +1,7 @@
 import { auth, clerkClient } from '@clerk/nextjs/server';
 import { nsForUser, memNsForUser } from '@/lib/rag/namespace';
+import { readUsage, monthPeriod } from '@/lib/rag/metering';
+import { scopeOf } from '@/lib/org-settings';
 
 // STORAGE METERING (2026-07-04). Real usage straight from Pinecone's
 // describe_index_stats — not the client-side chunk estimate. Every signed-in
@@ -22,7 +24,7 @@ const OWNER = (process.env.ALLOWED_EMAILS ?? 'tiosquareinc@gmail.com')
 const EST_BYTES_PER_VECTOR = 4300;
 
 export async function GET() {
-  const { userId } = await auth();
+  const { userId, orgId } = await auth();
   if (!userId) return Response.json({ error: 'Unauthorized' }, { status: 401 });
 
   const host = process.env.PINECONE_HOST;
@@ -60,7 +62,11 @@ export async function GET() {
     vectors: mine,
     estBytes: mine * EST_BYTES_PER_VECTOR,
     totalVectors: total,
-    totalEstBytes: total * EST_BYTES_PER_VECTOR
+    totalEstBytes: total * EST_BYTES_PER_VECTOR,
+    // OPS METERING (3.17): this month's counted usage for the caller's scope.
+    month: monthPeriod(),
+    questionsThisMonth: await readUsage(scopeOf(orgId, userId), 'questions', monthPeriod()),
+    uploadsThisMonth: await readUsage(`user:${userId}`, 'uploads', monthPeriod())
   };
 
   // Owner-only: the metering table — every namespace with its user resolved to

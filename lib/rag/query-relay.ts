@@ -60,6 +60,9 @@ export interface RelayInput {
    *  GENERATION question the same way /api/query's buildPrompt does — the raw
    *  question still drives retrieval via query_text. */
   guides?: string[];
+  /** OpenRouter key this answer should ride (BYOK or the scope's managed
+   *  spend-capped sub-key). '' / absent = Make's house connection key. */
+  openrouterKey?: string;
 }
 
 /** POST one question to the Make Query scenario and shape the reply. Throws on
@@ -95,7 +98,7 @@ export async function relayPublicQuery(input: RelayInput): Promise<PublicAnswer>
       guides: '',
       namespace: input.namespace,
       injected_context: '',
-      openrouter_key: '',
+      openrouter_key: input.openrouterKey ?? '',
       model: input.model ? resolveRealModelId(input.model) : '',
       speed: input.speed ?? 'detailed'
     })

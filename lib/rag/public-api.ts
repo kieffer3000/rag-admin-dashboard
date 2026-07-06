@@ -30,6 +30,32 @@ export function rateLimited(id: string): boolean {
   return b.n > RATE;
 }
 
+// Per-IP throttle for the PUBLIC answer endpoints (3.17 abuse layer): a single
+// bot hammering a public embed room burns house LLM money with no account
+// attached. Best-effort in-memory like the per-key throttle above; the durable
+// boundary is the per-connection DAILY budget in usage_counters. 20/min/IP.
+const IP_RATE = 20;
+const ipBuckets = new Map<string, { n: number; reset: number }>();
+export function ipRateLimited(ip: string): boolean {
+  if (!ip) return false;
+  const now = Date.now();
+  const b = ipBuckets.get(ip);
+  if (!b || now > b.reset) {
+    // Opportunistic sweep so the map can't grow unbounded under an IP flood.
+    if (ipBuckets.size > 10_000)
+      for (const [k, v] of ipBuckets) if (now > v.reset) ipBuckets.delete(k);
+    ipBuckets.set(ip, { n: 1, reset: now + WINDOW_MS });
+    return false;
+  }
+  b.n += 1;
+  return b.n > IP_RATE;
+}
+
+/** First hop of x-forwarded-for = the client IP on Vercel. */
+export function clientIp(req: Request): string {
+  return (req.headers.get('x-forwarded-for') ?? '').split(',')[0].trim();
+}
+
 function selfOriginOf(req: Request): string {
   const host = req.headers.get('host') ?? '';
   const proto = req.headers.get('x-forwarded-proto') ?? 'https';

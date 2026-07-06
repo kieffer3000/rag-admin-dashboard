@@ -1,6 +1,13 @@
 import { resolveRealModelId } from '@/lib/rag/model-map.server';
 import { STACK_PRIVACY_GUARDRAIL } from '@/lib/rag/stack-privacy';
-import { authorizeConnection, rateLimited, openCors } from '@/lib/rag/public-api';
+import {
+  authorizeConnection,
+  rateLimited,
+  ipRateLimited,
+  clientIp,
+  openCors
+} from '@/lib/rag/public-api';
+import { gateUsage, dayPeriod } from '@/lib/rag/metering';
 import { doctrineFor, injectDoctrine } from '@/lib/rag/doctrines';
 import { runOpine, type Artifact } from '@/lib/rag/opine';
 import { fetchReadablePage } from '@/lib/rag/web-extract';
@@ -131,6 +138,23 @@ export async function POST(req: Request) {
 
   if (rateLimited(conn.id)) {
     return Response.json({ error: 'Rate limit exceeded — slow down.' }, { status: 429, headers: cors });
+  }
+  // ABUSE LAYER (3.17) — mirrors /api/v1/ask: per-IP throttle + a durable
+  // per-connection daily budget (opines share the connection's answer budget).
+  if (ipRateLimited(`opine:${clientIp(req)}`)) {
+    return Response.json({ error: 'Rate limit exceeded — slow down.' }, { status: 429, headers: cors });
+  }
+  const budget = await gateUsage(
+    `conn:${conn.id}`,
+    'public_answers',
+    dayPeriod(),
+    Number(process.env.PUBLIC_ANSWERS_PER_DAY ?? 300)
+  );
+  if (!budget.ok) {
+    return Response.json(
+      { error: 'This assistant has reached its daily answer limit. Try again tomorrow.' },
+      { status: 429, headers: cors }
+    );
   }
 
   const instruction = typeof body.instruction === 'string' ? body.instruction.trim() : '';

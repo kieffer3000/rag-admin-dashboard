@@ -1,6 +1,8 @@
 import { auth } from '@clerk/nextjs/server';
 import { indexText } from '@/lib/rag/index-core';
 import { nsForUser } from '@/lib/rag/namespace';
+import { resolvePlan } from '@/lib/rag/plans';
+import { namespaceVectorCount, bumpUsage, monthPeriod } from '@/lib/rag/metering';
 
 // Proxies Board ingestion to the Make.com Indexing scenario.
 // Contract (per chunk): { chunk_id, source_id, name, type, namespace, text }
@@ -12,7 +14,7 @@ export const runtime = 'nodejs';
 export const maxDuration = 300;
 
 export async function POST(req: Request) {
-  const { userId } = await auth();
+  const { userId, has } = await auth();
   if (!userId) {
     return Response.json({ error: 'Unauthorized' }, { status: 401 });
   }
@@ -30,6 +32,27 @@ export async function POST(req: Request) {
       Number.isFinite(body.part_index) && Number.isFinite(body.part_total)
         ? { index: Number(body.part_index), total: Number(body.part_total) }
         : undefined;
+
+    // STORAGE GATE (3.17): banked vectors vs the plan cap, measured live from
+    // Pinecone. Checked on part 1 only (later parts of one book must land).
+    // Fail-open: can't measure → allow.
+    if (!part || part.index <= 1) {
+      const { caps } = await resolvePlan(userId, has);
+      if (Number.isFinite(caps.vectorsMax)) {
+        const n = await namespaceVectorCount(nsForUser(userId));
+        if (n !== null && n >= caps.vectorsMax) {
+          return Response.json(
+            {
+              error: `Storage limit reached (${caps.vectorsMax.toLocaleString()} vectors). Delete sources you no longer need, or upgrade your plan.`
+            },
+            { status: 429 }
+          );
+        }
+      }
+      // Visibility counter — one tick per document (part 1), never gates.
+      void bumpUsage(`user:${userId}`, 'uploads', monthPeriod());
+    }
+
     const r = await indexText({
       sourceId: body.source_id,
       name: body.name,

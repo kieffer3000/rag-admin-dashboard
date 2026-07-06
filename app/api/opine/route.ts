@@ -4,6 +4,8 @@ import { longFetch } from '@/lib/rag/long-fetch';
 import { doctrineFor, injectDoctrine } from '@/lib/rag/doctrines';
 import { nsForUser } from '@/lib/rag/namespace';
 import { runOpine, type Artifact } from '@/lib/rag/opine';
+import { resolvePlan } from '@/lib/rag/plans';
+import { gateUsage, monthPeriod } from '@/lib/rag/metering';
 import { fetchReadablePage } from '@/lib/rag/web-extract';
 
 // "Opine" — the wired corpus (LEFT plug) reasons ABOUT an artifact (RIGHT plug),
@@ -31,9 +33,27 @@ const NOMATCH_THRESHOLD = Number(process.env.RAG_NOMATCH_THRESHOLD ?? 0.6);
 const HISTORY_MAX_MESSAGES = 30;
 
 export async function POST(req: Request) {
-  const { userId, orgId } = await auth();
+  const { userId, orgId, has } = await auth();
   if (!userId) {
     return Response.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
+  // METERING (3.17): an opine counts as a question (shared monthly cap with
+  // /api/query). Owners uncapped; fail-open on counting errors.
+  const plan = await resolvePlan(userId, has);
+  const gate = await gateUsage(
+    orgId ?? `user:${userId}`,
+    'questions',
+    monthPeriod(),
+    plan.caps.questionsPerMonth
+  );
+  if (!gate.ok) {
+    return Response.json(
+      {
+        error: `Monthly question limit reached (${plan.caps.questionsPerMonth}). It resets at the start of next month.`
+      },
+      { status: 429 }
+    );
   }
 
   const body = await req.json().catch(() => null);

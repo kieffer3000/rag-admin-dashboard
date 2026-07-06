@@ -2,6 +2,8 @@ import { auth } from '@clerk/nextjs/server';
 import { put } from '@vercel/blob';
 import { indexText } from '@/lib/rag/index-core';
 import { nsForUser } from '@/lib/rag/namespace';
+import { resolvePlan } from '@/lib/rag/plans';
+import { namespaceVectorCount, bumpUsage, monthPeriod } from '@/lib/rag/metering';
 import { extractPdfViaCloudConvert, pollDocText } from '@/lib/rag/cloudconvert';
 
 // Document ingestion (PDF / DOCX / TXT). Text extraction is deterministic
@@ -80,8 +82,24 @@ async function extractEpub(buf: Buffer): Promise<string> {
 }
 
 export async function POST(req: Request) {
-  const { userId } = await auth();
+  const { userId, has } = await auth();
   if (!userId) return Response.json({ error: 'Unauthorized' }, { status: 401 });
+
+  // STORAGE GATE (3.17): banked vectors vs plan cap, measured live from
+  // Pinecone. Fail-open (can't measure → allow). Mirrors /api/index.
+  const { caps } = await resolvePlan(userId, has);
+  if (Number.isFinite(caps.vectorsMax)) {
+    const banked = await namespaceVectorCount(nsForUser(userId));
+    if (banked !== null && banked >= caps.vectorsMax) {
+      return Response.json(
+        {
+          error: `Storage limit reached (${caps.vectorsMax.toLocaleString()} vectors). Delete sources you no longer need, or upgrade your plan.`
+        },
+        { status: 429 }
+      );
+    }
+  }
+  void bumpUsage(`user:${userId}`, 'uploads', monthPeriod());
 
   // ── JSON job mode ──────────────────────────────────────────────────────────
   // The client uploaded the RAW file straight to CloudConvert (no 4.5MB cap) and

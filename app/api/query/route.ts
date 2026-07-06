@@ -12,7 +12,10 @@ import {
   RARE_TERM_MAX_MATCHES,
   type MentionScanResult
 } from '@/lib/rag/mention-scan';
-import { getOrgOpenrouterKey, scopeOf } from '@/lib/org-settings';
+import { scopeOf } from '@/lib/org-settings';
+import { resolvePlan } from '@/lib/rag/plans';
+import { gateUsage, monthPeriod } from '@/lib/rag/metering';
+import { getAnswerKey } from '@/lib/rag/openrouter-provision';
 import { doctrineFor, injectDoctrine } from '@/lib/rag/doctrines';
 
 // Proxies the Board's brain queries to the Make.com Query scenario.
@@ -318,9 +321,27 @@ async function callMake(
 }
 
 export async function POST(req: Request) {
-  const { userId, orgId } = await auth();
+  const { userId, orgId, has } = await auth();
   if (!userId) {
     return Response.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
+  // METERING (3.17): one question = one counter tick, gated by plan. Owners
+  // are uncapped (not even counted). Fail-open on any counting error.
+  const plan = await resolvePlan(userId, has);
+  const gate = await gateUsage(
+    scopeOf(orgId, userId),
+    'questions',
+    monthPeriod(),
+    plan.caps.questionsPerMonth
+  );
+  if (!gate.ok) {
+    return Response.json(
+      {
+        error: `Monthly question limit reached (${plan.caps.questionsPerMonth}). It resets at the start of next month.`
+      },
+      { status: 429 }
+    );
   }
 
   const url = process.env.MAKE_QUERY_WEBHOOK_URL;
@@ -443,9 +464,10 @@ export async function POST(req: Request) {
 
   const ns = nsForUser(userId);
   const prompted = buildPrompt(userQuestion, mode, guides, contextTexts);
-  // BYOK: the org's OpenRouter key (decrypted) — passed to Make so the LLM is
-  // billed to the user's own OpenRouter account. '' = fall back to Make's key.
-  const orKey = await getOrgOpenrouterKey(scopeOf(orgId, userId));
+  // The OpenRouter key this answer rides (3.17): BYOK if the org set one, else
+  // the scope's spend-capped managed sub-key (minted on first use when
+  // provisioning is configured), else '' = Make's house connection key.
+  const orKey = await getAnswerKey(scopeOf(orgId, userId), plan.caps.managedLlmUsdPerMonth);
 
   // EXACT-MENTION LANE (3.16): if the question names an exact term (quoted
   // phrase / proper noun / "is X mentioned"), lexically scan the wired sources

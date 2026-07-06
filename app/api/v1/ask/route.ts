@@ -1,8 +1,26 @@
 import { STACK_PRIVACY_GUARDRAIL } from '@/lib/rag/stack-privacy';
-import { authorizeConnection, rateLimited, openCors } from '@/lib/rag/public-api';
+import {
+  authorizeConnection,
+  rateLimited,
+  ipRateLimited,
+  clientIp,
+  openCors
+} from '@/lib/rag/public-api';
 import { doctrineFor } from '@/lib/rag/doctrines';
 import { relayPublicQuery } from '@/lib/rag/query-relay';
+import { gateUsage, dayPeriod } from '@/lib/rag/metering';
+import { getAnswerKey } from '@/lib/rag/openrouter-provision';
 import { isRelayTimeout } from '@/lib/rag/long-fetch';
+
+// ABUSE LAYER (3.17): these endpoints answer UNAUTHENTICATED visitors on house
+// resources — the #1 spend-abuse surface. Three rails: per-IP throttle
+// (in-memory), per-connection DAILY answer budget (durable, usage_counters),
+// and the answer rides the connection owner's spend-capped OpenRouter sub-key
+// when one exists (their room, their cap).
+const PUBLIC_ANSWERS_PER_DAY = Number(process.env.PUBLIC_ANSWERS_PER_DAY ?? 300);
+// USD/month ceiling for a public connection's managed sub-key (only used when
+// the owner has no BYOK key and provisioning is configured).
+const PUBLIC_MANAGED_LLM_USD = Number(process.env.PUBLIC_MANAGED_LLM_USD ?? 10);
 
 // PUBLIC, key-authed Q&A over one published Answers Bank. NOT Clerk-gated
 // (see middleware isPublicRoute) — a per-Bank API key is the credential. The
@@ -65,6 +83,25 @@ export async function POST(req: Request) {
       { status: 429, headers: cors }
     );
   }
+  if (ipRateLimited(`ask:${clientIp(req)}`)) {
+    return Response.json(
+      { error: 'Rate limit exceeded — slow down.' },
+      { status: 429, headers: cors }
+    );
+  }
+  // Durable daily budget per connection — survives serverless instance churn.
+  const budget = await gateUsage(
+    `conn:${conn.id}`,
+    'public_answers',
+    dayPeriod(),
+    PUBLIC_ANSWERS_PER_DAY
+  );
+  if (!budget.ok) {
+    return Response.json(
+      { error: 'This assistant has reached its daily answer limit. Try again tomorrow.' },
+      { status: 429, headers: cors }
+    );
+  }
 
   const question = typeof body.question === 'string' ? body.question.trim() : '';
   if (!question) {
@@ -116,7 +153,10 @@ export async function POST(req: Request) {
       model: conn.model,
       speed: speed ?? 'detailed',
       conversation,
-      guides: [STACK_PRIVACY_GUARDRAIL, ...(doctrine ? [doctrine] : [])]
+      guides: [STACK_PRIVACY_GUARDRAIL, ...(doctrine ? [doctrine] : [])],
+      // Bill the connection OWNER's key (BYOK or managed sub-key) when one
+      // exists — public traffic spends against their cap, not the house.
+      openrouterKey: await getAnswerKey(conn.scope, PUBLIC_MANAGED_LLM_USD)
     });
 
     // Citations are intentionally NOT exposed via the public API — only the
