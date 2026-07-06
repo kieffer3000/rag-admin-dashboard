@@ -11,5 +11,6 @@
  * 3.9 — 2026-07-05: Olive Grove beauty pass (warm tokens, layered shadows, sunlit rail, olive dot grid, jewel zoom controls) + answersDoc wordmark under the top-right menu.
  * 3.10 — 2026-07-05: connected agents — board robot edits write through to the Agents page and back; copies on the board stay in sync.
  * 3.11 — 2026-07-06: ni@tiosquare.com added to the access allowlist + invited via Clerk.
+ * 3.12 — 2026-07-06: unixtech7@gmail.com added to the access allowlist + invited via Clerk.
  */
-export const BUILD_VERSION = '3.11';
+export const BUILD_VERSION = '3.12';
