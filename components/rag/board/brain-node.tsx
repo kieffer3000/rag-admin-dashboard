@@ -33,7 +33,7 @@ import {
   splitGraphicBlocks,
   sanitizeHtml
 } from '@/components/rag/board/markdown';
-import { LLM_MODELS, PROVIDER_META, normalizeModelId } from '@/lib/rag/models';
+import { LLM_MODELS, normalizeModelId } from '@/lib/rag/models';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -1247,7 +1247,6 @@ function BrainNodeInner({ id, data, selected }: NodeProps) {
             large={sizeMode === 'full'}
             onCitation={openViewer}
             onCiteHover={pulseSource}
-            modelLabel={model.label}
             onVoiceover={handleVoiceover}
             voicing={voicingId === m.id}
             onEdit={handleEditInText}
@@ -1423,51 +1422,9 @@ function BrainNodeInner({ id, data, selected }: NodeProps) {
               </button>
             </div>
           </div>
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <button className="nodrag flex items-center gap-1.5 rounded-md px-1.5 py-0.5 text-[16px] font-medium text-muted-foreground/80 transition-colors hover:bg-black/[0.04] hover:text-foreground dark:hover:bg-white/[0.06]">
-                <span
-                  className={cn(
-                    'h-1.5 w-1.5 rounded-full',
-                    PROVIDER_META[model.provider].dot
-                  )}
-                />
-                {model.label}
-                <ChevronDown className="h-[15px] w-[15px]" />
-              </button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="start" className="w-60">
-              {LLM_MODELS.map((m) => (
-                <DropdownMenuItem
-                  key={m.id}
-                  onClick={() => updateBoardNodeData(id, { modelId: m.id })}
-                  className="gap-2.5"
-                >
-                  <span
-                    className={cn(
-                      'h-1.5 w-1.5 shrink-0 rounded-full',
-                      PROVIDER_META[m.provider].dot
-                    )}
-                  />
-                  <span className="min-w-0 flex-1">
-                    <span className="block text-[12.5px] font-medium">
-                      {m.label}
-                    </span>
-                    <span className="block text-[10.5px] text-muted-foreground">
-                      {m.blurb}
-                      {m.provider !== 'gemini' && ' · routes to the S-Series for now'}
-                    </span>
-                  </span>
-                  <Check
-                    className={cn(
-                      'h-3.5 w-3.5 text-accent',
-                      m.id === modelId ? 'opacity-100' : 'opacity-0'
-                    )}
-                  />
-                </DropdownMenuItem>
-              ))}
-            </DropdownMenuContent>
-          </DropdownMenu>
+          {/* Model picker intentionally hidden — users don't choose engines yet,
+              and we don't surface engine names anywhere in the UI. The default
+              model still drives the query under the hood. */}
           {/* answer mode: cited-only vs cited + the model's own knowledge */}
           <button
             onClick={() =>
@@ -1810,9 +1767,6 @@ export function BrainMessage({
               </span>
               {m.citations.length} source{m.citations.length === 1 ? '' : 's'}
             </button>
-          )}
-          {modelLabel && (
-            <span className="text-[11px] text-muted-foreground/55">{modelLabel}</span>
           )}
           <div className="ml-auto flex items-center gap-0.5">
             {onRewrite && (

@@ -3,7 +3,7 @@
 import { useRef, useState } from 'react';
 import { useRag } from '@/lib/rag/store';
 import { cn } from '@/lib/utils';
-import { LLM_MODELS, PROVIDER_META, LlmProvider, normalizeModelId } from '@/lib/rag/models';
+// Model imports removed with the picker — engine choice/names are not surfaced.
 import { ChatAttachment, AttachmentMode } from '@/lib/rag/types';
 import {
   ArrowUp,
@@ -36,8 +36,6 @@ const PILL_BTN =
 
 export function Composer({ onSend, busy }: ComposerProps) {
   const { contextItems, modelId, setModel } = useRag();
-  const activeModel =
-    LLM_MODELS.find((m) => m.id === normalizeModelId(modelId)) ?? LLM_MODELS[0];
   const [text, setText] = useState('');
   const [attachment, setAttachment] = useState<ChatAttachment | undefined>();
   const fileRef = useRef<HTMLInputElement>(null);
@@ -162,46 +160,8 @@ export function Composer({ onSend, busy }: ComposerProps) {
               <Paperclip className="h-[17px] w-[17px]" />
             </button>
 
-            {/* model picker */}
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <button className={PILL_BTN}>
-                  <span className={cn('h-2 w-2 rounded-full', PROVIDER_META[activeModel.provider].dot)} />
-                  <span className="hidden max-w-[120px] truncate sm:inline">{activeModel.label}</span>
-                  <span className="sm:hidden">{activeModel.short}</span>
-                  <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
-                </button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="start" className="w-72">
-                {(['claude', 'gemini'] as LlmProvider[]).map((prov) => (
-                  <div key={prov}>
-                    <DropdownMenuLabel className="flex items-center gap-1.5 text-[11px] uppercase tracking-wide text-muted-foreground">
-                      <span className={cn('h-2 w-2 rounded-full', PROVIDER_META[prov].dot)} />
-                      {PROVIDER_META[prov].label}
-                    </DropdownMenuLabel>
-                    {LLM_MODELS.filter((m) => m.provider === prov).map((m) => (
-                      <DropdownMenuItem
-                        key={m.id}
-                        onClick={() => setModel(m.id)}
-                        className="flex items-start gap-2"
-                      >
-                        <Check
-                          className={cn(
-                            'mt-0.5 h-3.5 w-3.5 shrink-0',
-                            modelId === m.id ? 'opacity-100 text-accent' : 'opacity-0'
-                          )}
-                        />
-                        <div className="min-w-0">
-                          <div className="text-[13px] font-medium">{m.label}</div>
-                          <div className="text-[11px] text-muted-foreground">{m.blurb}</div>
-                        </div>
-                      </DropdownMenuItem>
-                    ))}
-                    {prov === 'claude' && <DropdownMenuSeparator />}
-                  </div>
-                ))}
-              </DropdownMenuContent>
-            </DropdownMenu>
+            {/* Model picker intentionally hidden — engine choice isn't exposed
+                to users yet, and engine names are never shown in the UI. */}
 
             <div className="flex-1" />
 
