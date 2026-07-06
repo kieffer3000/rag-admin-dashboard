@@ -1565,16 +1565,24 @@ function BoardCanvasInner() {
       ocr?: boolean;
     }) => {
       try {
-        const res = await indexDocumentFile({ id, name, file, ocr });
+        const res = await indexDocumentFile({
+          id,
+          name,
+          file,
+          ocr,
+          onInfo: (p) => queueMediaPatch(id, p)
+        });
         queueMediaPatch(id, {
           status: 'indexed',
           chunks: res.chunks,
-          source: res.source
+          source: res.source,
+          statusNote: ''
         });
       } catch (e) {
         queueMediaPatch(id, {
           status: 'failed',
-          error: e instanceof Error ? e.message : 'index failed'
+          error: e instanceof Error ? e.message : 'index failed',
+          statusNote: ''
         });
       }
     },

@@ -715,6 +715,20 @@ export function BoardToolbar(p: BoardToolbarProps) {
                             {m.error}
                           </span>
                         )}
+                        {/* Live data line: size · detected pages while reading,
+                            phase + conservative ETA while working, chunk count
+                            once landed. Fed by indexDocumentFile's onInfo. */}
+                        {st !== 'failed' && (m?.sizeLabel || m?.statusNote) && (
+                          <span className="block truncate text-[10.5px] text-muted-foreground/70">
+                            {m?.sizeLabel}
+                            {st === 'indexed' && m?.chunks
+                              ? `${m?.sizeLabel ? ' · ' : ''}${m.chunks.toLocaleString()} chunks`
+                              : ''}
+                            {st !== 'indexed' && m?.statusNote
+                              ? `${m?.sizeLabel ? ' · ' : ''}${m.statusNote}`
+                              : ''}
+                          </span>
+                        )}
                       </span>
                       {st === 'failed' ? (
                         <div className="flex shrink-0 items-center gap-1">

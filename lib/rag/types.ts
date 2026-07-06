@@ -35,6 +35,9 @@ export interface MediaItem {
   durationLabel?: string;
   /** Why indexing failed (shown on the failed chip/row); cleared on retry. */
   error?: string;
+  /** LIVE line under the filename while processing ("reading page 450 of
+   *  1,770 · ~2 min") — cleared ('') when the row settles. */
+  statusNote?: string;
 }
 
 export interface Prompt {

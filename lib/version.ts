@@ -14,5 +14,6 @@
  * 3.12 — 2026-07-06: unixtech7@gmail.com added to the access allowlist + invited via Clerk.
  * 3.13 — 2026-07-06: model picker + all engine-name displays removed from the UI (selection not exposed yet).
  * 3.14 — 2026-07-06: local-first PDFs — the browser reads the text layer (pdf.js), auto-splits, and indexes parts under ONE source; converter only for true scans.
+ * 3.15 — 2026-07-06: upload rows show size · detected pages · live phase + conservative ETA under the filename.
  */
-export const BUILD_VERSION = '3.14';
+export const BUILD_VERSION = '3.15';

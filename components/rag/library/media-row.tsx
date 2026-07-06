@@ -128,7 +128,18 @@ export function MediaRow({
               <span className="text-border">·</span>
               <span>
                 {item.sizeLabel ?? item.durationLabel ?? `${item.chunks} chunks`}
+                {item.sizeLabel && item.status === 'indexed' && item.chunks
+                  ? ` · ${item.chunks.toLocaleString()} chunks`
+                  : ''}
               </span>
+              {item.status === 'processing' && item.statusNote ? (
+                <>
+                  <span className="text-border">·</span>
+                  <span className="text-amber-600 dark:text-amber-400">
+                    {item.statusNote}
+                  </span>
+                </>
+              ) : null}
               {item.source?.startsWith('http') && (
                 <>
                   <span className="text-border">·</span>

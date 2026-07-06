@@ -95,12 +95,33 @@ function uploadEnded() {
   if (--inFlightUploads === 0) window.removeEventListener('beforeunload', warnUnload);
 }
 
+/** Live row-info channel: size, detected pages, phase + ETA. Callers patch
+ *  the media row so the user watches "6.4 MB · 1,770 pages · reading p. 450
+ *  · ~2 min" instead of a silent spinner. */
+export interface DocInfoPatch {
+  sizeLabel?: string;
+  statusNote?: string;
+}
+
+function fmtMB(bytes: number): string {
+  return `${(bytes / 1048576).toFixed(1)} MB`;
+}
+
+/** Humanized, CONSERVATIVE eta — quoted at ~60% of the measured rate per the
+ *  standing "finish early, never late" rule. */
+function fmtEta(seconds: number): string {
+  const s = Math.ceil(seconds / 0.6);
+  if (s < 50) return `~${Math.max(10, Math.ceil(s / 10) * 10)}s`;
+  return `~${Math.ceil(s / 60)} min`;
+}
+
 /** Index one document file end-to-end. Throws with a human message on failure. */
 export async function indexDocumentFile(job: {
   id: string;
   name: string;
   file: File;
   ocr?: boolean;
+  onInfo?: (patch: DocInfoPatch) => void;
 }): Promise<DocIndexResult> {
   uploadStarted();
   try {
@@ -114,14 +135,18 @@ async function indexDocumentFileInner({
   id,
   name,
   file,
-  ocr
+  ocr,
+  onInfo
 }: {
   id: string;
   name: string;
   file: File;
   ocr?: boolean;
+  onInfo?: (patch: DocInfoPatch) => void;
 }): Promise<DocIndexResult> {
   if (file.size > MAX_DOC_BYTES) throw sizeError(file);
+  const mb = fmtMB(file.size);
+  onInfo?.({ sizeLabel: mb });
 
   // LOCAL-FIRST PDFs (2026-07-06): read the text layer IN THE BROWSER
   // (pdf.js) — no converter, no 300s wall, no per-page conversion minutes.
@@ -132,11 +157,34 @@ async function indexDocumentFileInner({
   // and any pdf.js hiccup fall through to the converter/OCR path unchanged;
   // a user-forced OCR upload skips local reading entirely.
   if (/\.pdf$/i.test(file.name) && !ocr) {
-    const local = await extractPdfLocally(file);
+    const t0 = Date.now();
+    let pagesSeen = 0;
+    const local = await extractPdfLocally(file, (page, pages) => {
+      pagesSeen = pages;
+      if (page === 1)
+        onInfo?.({ sizeLabel: `${mb} · ${pages.toLocaleString()} pages` });
+      if (page % 50 === 0 && page < pages) {
+        const rate = page / Math.max(1, (Date.now() - t0) / 1000);
+        onInfo?.({
+          statusNote: `reading page ${page.toLocaleString()} of ${pages.toLocaleString()} · ${fmtEta((pages - page) / rate)}`
+        });
+      }
+    });
     if (local) {
+      onInfo?.({ sizeLabel: `${mb} · ${local.pages.toLocaleString()} pages` });
       const segs = segmentText(local.text);
+      // Indexing time per segment, measured 2026-07-05 ([index-timing]:
+      // embed+upsert 11-49s for up to 6.8k chunks) — ~35s covers a full
+      // 1.5M-char segment.
+      const SEG_SECONDS = 35;
       let chunks = 0;
       for (let s = 0; s < segs.length; s++) {
+        onInfo?.({
+          statusNote:
+            segs.length === 1
+              ? `indexing · ${fmtEta(SEG_SECONDS)}`
+              : `indexing part ${s + 1} of ${segs.length} · ${fmtEta((segs.length - s) * SEG_SECONDS)}`
+        });
         const r = await fetch('/api/index', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -156,11 +204,16 @@ async function indexDocumentFileInner({
           );
         chunks += j.chunks ?? 0;
       }
+      onInfo?.({ statusNote: '' });
       return { chunks };
     }
+    // No text layer (scan) → the converter/OCR path below.
+    if (pagesSeen)
+      onInfo?.({ sizeLabel: `${mb} · ${pagesSeen.toLocaleString()} pages` });
   }
 
   if (BINARY.test(file.name)) {
+    onInfo?.({ statusNote: 'converting (large file — takes minutes)…' });
     try {
       const jobId = await uploadViaConverter(file, ocr);
       if (jobId) {

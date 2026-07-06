@@ -185,11 +185,18 @@ export function UploadDialog({
                 // Shared big-file-safe path (presigned CloudConvert hop for
                 // binaries — no ~4.5MB body cap). The old raw multipart POST
                 // here meant any BOOK over ~4.5MB failed 100% of the time.
-                const res = await indexDocumentFile({ id, name: nm, file, ocr });
+                const res = await indexDocumentFile({
+                  id,
+                  name: nm,
+                  file,
+                  ocr,
+                  onInfo: (p) => updateMedia(id, p)
+                });
                 updateMedia(id, {
                   status: 'indexed',
                   chunks: res.chunks,
-                  source: res.source
+                  source: res.source,
+                  statusNote: ''
                 });
                 return;
               }
