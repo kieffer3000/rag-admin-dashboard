@@ -29,8 +29,10 @@ interface UsageRow {
 interface Usage {
   vectors: number;
   estBytes: number;
-  totalVectors: number;
-  totalEstBytes: number;
+  /** Owner-only (3.19): index-wide totals + per-user breakdown. */
+  isOwner?: boolean;
+  totalVectors?: number;
+  totalEstBytes?: number;
   breakdown?: UsageRow[];
   /** Ops metering (3.17): this month's counted usage + the caller's plan. */
   month?: string;
@@ -56,6 +58,11 @@ function Meter({ n, cap }: { n: number; cap: number | null | undefined }) {
 
 export function HealthView() {
   const { media, projects, reindexMedia, deleteMedia } = useRag();
+
+  // ADMIN/USER VIEW TOGGLE (3.19): owners can flip to "User view" to see the
+  // page EXACTLY as a non-owner sees it (admin-only blocks hidden). Regular
+  // users never get the toggle — their view is already the user view.
+  const [asUser, setAsUser] = useState(false);
 
   // REAL metered usage from Pinecone (/api/usage) — the client-side chunk
   // estimate below stays as the instant placeholder until this resolves.
@@ -105,21 +112,50 @@ export function HealthView() {
       icon: HardDrive
     },
     {
-      label: 'Namespaces',
+      // 3.19: this card previously said "Namespaces · one per project" — WRONG.
+      // Isolation is one private space per ACCOUNT (all projects share it,
+      // separated by source filters at question time).
+      label: 'Projects',
       value: String(projects.length),
-      sub: 'one per project',
+      sub: 'all in your private space',
       icon: Activity
     }
   ];
+
+  const showAdmin = !!usage?.isOwner && !asUser;
 
   return (
     <div className="h-full p-2.5">
       <div className="panel flex h-full flex-col overflow-hidden rounded-[26px]">
         <div className="px-6 pt-6 lg:px-8">
-          <h1 className="text-[22px] font-semibold tracking-tight">Knowledge health</h1>
-          <p className="mt-1 text-[13px] text-muted-foreground">
-            Your knowledge index and this month&apos;s usage at a glance.
-          </p>
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <h1 className="text-[22px] font-semibold tracking-tight">Knowledge health</h1>
+              <p className="mt-1 text-[13px] text-muted-foreground">
+                Your knowledge index and this month&apos;s usage at a glance.
+              </p>
+            </div>
+            {usage?.isOwner && (
+              <div className="flex shrink-0 items-center gap-1 rounded-full bg-muted p-1">
+                {(['Admin', 'User'] as const).map((v) => {
+                  const active = (v === 'User') === asUser;
+                  return (
+                    <button
+                      key={v}
+                      onClick={() => setAsUser(v === 'User')}
+                      className={`rounded-full px-3 py-1 text-[12px] font-medium transition-colors ${
+                        active
+                          ? 'bg-card text-foreground shadow-sm'
+                          : 'text-muted-foreground hover:text-foreground'
+                      }`}
+                    >
+                      {v} view
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
 
           <div className="mt-5 grid grid-cols-2 gap-3 lg:grid-cols-4">
             {CARDS.map((c) => {
@@ -187,11 +223,12 @@ export function HealthView() {
             </div>
           )}
 
-          {usage?.breakdown && (
+          {showAdmin && usage?.breakdown && (
             <div className="card-glass mt-5 rounded-[18px] p-4">
               <div className="text-[12px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
-                Storage by user (admin) · index total {usage.totalVectors.toLocaleString()} vectors
-                · ~{fmtBytes(usage.totalEstBytes)}
+                Storage by user (admin) · index total{' '}
+                {(usage.totalVectors ?? 0).toLocaleString()} vectors
+                · ~{fmtBytes(usage.totalEstBytes ?? 0)}
               </div>
               <div className="mt-3 space-y-1.5">
                 {usage.breakdown.map((r) => (
@@ -210,7 +247,7 @@ export function HealthView() {
                       <div
                         className="h-full rounded-full bg-primary"
                         style={{
-                          width: `${Math.max(1, Math.round((r.vectors / Math.max(1, usage.totalVectors)) * 100))}%`
+                          width: `${Math.max(1, Math.round((r.vectors / Math.max(1, usage.totalVectors ?? 0)) * 100))}%`
                         }}
                       />
                     </div>

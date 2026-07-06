@@ -18,5 +18,6 @@
  * 3.16 — 2026-07-06: exact-mention lexical lane — "is X mentioned" / quoted / proper-noun questions get an exhaustive literal scan of the wired sources injected beside semantic retrieval (the Kathy fix).
  * 3.17 — 2026-07-06: metering + abuse layer — plan caps (questions/month gate on query+opine, live storage gate at ingest), usage_counters table, managed spend-capped OpenRouter sub-keys for non-BYOK scopes, public embed/API per-IP throttle + durable per-connection daily budget.
  * 3.18 — 2026-07-06: Health page shows "This month" usage meters (questions vs cap, documents added, storage vs cap, plan badge); vendor name scrubbed from the Health header (stack privacy).
+ * 3.19 — 2026-07-06: Health split into Admin/User views (owner toggle previews exactly what a user sees); index-wide totals now owner-only in /api/usage (were in every response); "Namespaces · one per project" card corrected to "Projects · all in your private space".
  */
-export const BUILD_VERSION = '3.18';
+export const BUILD_VERSION = '3.19';

@@ -62,11 +62,12 @@ export async function GET() {
   const mine = count(nsForUser(userId)) + count(memNsForUser(userId));
   const total = stats.totalVectorCount ?? 0;
 
+  // A user's response carries ONLY their own numbers. Index-wide totals ride
+  // in the owner branch below (3.19) — they were previously returned to every
+  // caller (unrendered, but in the JSON = an information leak).
   const body: Record<string, unknown> = {
     vectors: mine,
     estBytes: mine * EST_BYTES_PER_VECTOR,
-    totalVectors: total,
-    totalEstBytes: total * EST_BYTES_PER_VECTOR,
     // OPS METERING (3.17/3.18): this month's counted usage + the caller's plan
     // caps, so the Health page can render "n of cap" meters.
     month: monthPeriod(),
@@ -95,6 +96,9 @@ export async function GET() {
       ''
     ).toLowerCase();
     if (OWNER.includes(email)) {
+      body.isOwner = true;
+      body.totalVectors = total;
+      body.totalEstBytes = total * EST_BYTES_PER_VECTOR;
       const rows = await Promise.all(
         Object.entries(namespaces).map(async ([ns, v]) => {
           const m = /^u_(user_[A-Za-z0-9]+?)(__mem)?$/.exec(ns);
