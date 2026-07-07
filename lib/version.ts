@@ -28,5 +28,6 @@
  * 3.26 — 2026-07-06: caps re-derived at the WORST legitimate mix (all-research, ~$0.023/credit): starter $3 / pro $13 / team $75 — the internal dollar brake can never bind a legitimate month.
  * 3.27 — 2026-07-06: overage top-up packs — `topup_questions` counter adds to the monthly allowance at both question gates; owner-only /api/admin/grant-credits grants packs ($10/100, $39/500); storage marketed in PAGES (~10 vectors/page measured).
  * 3.28 — 2026-07-06: figure billing design pinned — a figure = 2 pages of storage, 50 figures = 1 upload credit (constants in plans.ts; extraction feature itself queued).
+ * 3.29 — 2026-07-06: 📋 Forms — smart form filling: fillable PDF's fields read in-browser (pdf-lib, the PDF never leaves the tab), answered from wired sources via /api/fill-form (one batched JSON generation, 3 credits), values written back locally with per-field evidence + editable review.
  */
-export const BUILD_VERSION = '3.28';
+export const BUILD_VERSION = '3.29';

@@ -13,7 +13,8 @@ import {
   Plus,
   Check,
   FolderOpen,
-  Workflow
+  Workflow,
+  ClipboardList
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { BUILD_VERSION } from '@/lib/version';
@@ -48,6 +49,8 @@ export const NAV = [
   { href: '/library', label: 'Library', icon: Library },
   { href: '/projects', label: 'Projects', icon: FolderOpen },
   { href: '/agents', label: 'Agents', icon: Bot },
+  // Smart form filling (3.29): fillable PDF + your sources → filled PDF.
+  { href: '/forms', label: 'Forms', icon: ClipboardList },
   // Notes tab retired 2026-07-04 — notes live in the Board's Notes drawer
   // (dock 🗒 button / right-click a piece → Add note). Same store, same data.
   { href: '/health', label: 'Health', icon: Activity, adminOnly: true },
