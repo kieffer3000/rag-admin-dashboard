@@ -46,12 +46,14 @@ export const BYOK_QUESTION_MULTIPLIER = 2;
 // usage. Suggested prices: starter $12 / pro $29 / team $149 (5 seats) —
 // configure in the Clerk billing dashboard.
 //
-// SIZING RULE (3.25): managedLlmUsdPerMonth must cover the FULL credit
-// allowance at blended LLM cost (~$0.014/credit) — the CREDIT gate is the
-// limiter customers experience; the dollar cap is only the emergency brake
-// (runaway context, abuse, a bug). Sized ≈ full-burn + ~15% headroom. A
-// full-burn month is rare and still gross-positive (Pro ≈ 37%, Team ≈ 35%);
-// the business margin is the expected-usage number above.
+// SIZING RULE (3.25→3.26): customers ONLY ever see credits — the dollar cap
+// is internal and must NEVER bind a legitimate month. Sized at the WORST
+// legitimate mix (every credit spent on research, the priciest lane at
+// ~$0.023/credit with today's engine defaults) + ~10% headroom:
+//   cap = questionsPerMonth × $0.023 × 1.1
+// Per-ask LLM COGS (live Gemini prices 2026-07-06): fast ≈ $0.004 · normal ≈
+// $0.008 · opine ≈ $0.03 (2 cr) · research ≈ $0.07 (3 cr). The model picker is
+// removed (3.13), so WE control these ceilings — revisit if defaults change.
 export const PLAN_CAPS: Record<PlanSlug, PlanCaps> = {
   owner: {
     questionsPerMonth: Infinity,
@@ -67,7 +69,7 @@ export const PLAN_CAPS: Record<PlanSlug, PlanCaps> = {
     uploadsPerMonth: 100,
     projectsMax: 100,
     publicAnswersPerDay: 1_500,
-    managedLlmUsdPerMonth: 48
+    managedLlmUsdPerMonth: 75
   },
   pro: {
     questionsPerMonth: 500,
@@ -75,7 +77,7 @@ export const PLAN_CAPS: Record<PlanSlug, PlanCaps> = {
     uploadsPerMonth: 20,
     projectsMax: 25,
     publicAnswersPerDay: 300,
-    managedLlmUsdPerMonth: 8
+    managedLlmUsdPerMonth: 13
   },
   starter: {
     questionsPerMonth: 120,
@@ -83,7 +85,7 @@ export const PLAN_CAPS: Record<PlanSlug, PlanCaps> = {
     uploadsPerMonth: 10,
     projectsMax: 10,
     publicAnswersPerDay: 100,
-    managedLlmUsdPerMonth: 2
+    managedLlmUsdPerMonth: 3
   },
   free: {
     questionsPerMonth: 25,
