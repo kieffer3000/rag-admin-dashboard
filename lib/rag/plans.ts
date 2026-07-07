@@ -54,6 +54,19 @@ export const BYOK_QUESTION_MULTIPLIER = 2;
 // Per-ask LLM COGS (live Gemini prices 2026-07-06): fast ≈ $0.004 · normal ≈
 // $0.008 · opine ≈ $0.03 (2 cr) · research ≈ $0.07 (3 cr). The model picker is
 // removed (3.13), so WE control these ceilings — revisit if defaults change.
+//
+// OVERAGE (3.27): extra credits sell as top-up packs — $10/100 ($0.10/cr,
+// ~80% margin at blended COGS ~$0.02/cr) and $39/500 ($0.078/cr, ~74%).
+// Mechanics: a `topup_questions` counter per scope-month ADDS to the monthly
+// allowance at the question gates; granted via the owner-only
+// /api/admin/grant-credits route (manual sale today; Stripe/Clerk add-on
+// checkout later). Storage overage: $5/mo per extra 10,000 pages (~100k
+// vectors ≈ $0.14 COGS, ~97% margin) — grant by raising vectorsMax later.
+//
+// UNITS: market storage in PAGES, not books — a "book" spans 100–10,000 pages.
+// MEASURED conversion (Hersen 2026-07-06): 24,853 chunks / 1,770 dense pages
+// ≈ 14 vectors/page; lighter text ≈ 6 → plan on ~10 vectors/page average.
+// Plan caps in pages: starter ≈ 2,500 · pro ≈ 15,000 · team ≈ 100,000.
 export const PLAN_CAPS: Record<PlanSlug, PlanCaps> = {
   owner: {
     questionsPerMonth: Infinity,

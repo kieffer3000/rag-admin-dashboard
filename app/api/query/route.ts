@@ -14,7 +14,7 @@ import {
 } from '@/lib/rag/mention-scan';
 import { scopeOf, getOrgOpenrouterKey } from '@/lib/org-settings';
 import { resolvePlan, BYOK_QUESTION_MULTIPLIER } from '@/lib/rag/plans';
-import { gateUsage, monthPeriod } from '@/lib/rag/metering';
+import { gateUsage, readUsage, monthPeriod } from '@/lib/rag/metering';
 import { getAnswerKey } from '@/lib/rag/openrouter-provision';
 import { doctrineFor, injectDoctrine } from '@/lib/rag/doctrines';
 
@@ -342,21 +342,19 @@ export async function POST(req: Request) {
   // are uncapped (not even counted). Fail-open on any counting error.
   const plan = await resolvePlan(userId, has);
   if (Number.isFinite(plan.caps.questionsPerMonth)) {
-    const byok = !!(await getOrgOpenrouterKey(scopeOf(orgId, userId)));
+    const scope = scopeOf(orgId, userId);
+    const byok = !!(await getOrgOpenrouterKey(scope));
+    // Allowance = plan credits (×2 with BYOK) + purchased top-up packs (3.27).
+    const topup = await readUsage(scope, 'topup_questions', monthPeriod());
     const credits =
-      plan.caps.questionsPerMonth * (byok ? BYOK_QUESTION_MULTIPLIER : 1);
+      plan.caps.questionsPerMonth * (byok ? BYOK_QUESTION_MULTIPLIER : 1) +
+      topup;
     const cost = body.speed === 'research' ? 3 : 1;
-    const gate = await gateUsage(
-      scopeOf(orgId, userId),
-      'questions',
-      monthPeriod(),
-      credits,
-      cost
-    );
+    const gate = await gateUsage(scope, 'questions', monthPeriod(), credits, cost);
     if (!gate.ok) {
       return Response.json(
         {
-          error: `Monthly question credits used up (${credits}). They reset at the start of next month${byok ? '' : ' — or add your own AI key in Settings to double your allowance'}.`
+          error: `Monthly question credits used up (${credits}). Buy a credit pack or wait for the monthly reset${byok ? '' : ' — adding your own AI key in Settings doubles your allowance'}.`
         },
         { status: 429 }
       );

@@ -26,5 +26,6 @@
  * 3.24 — 2026-07-06: pricing plans wired — starter/pro/team caps from the researched cost model (80-90% margin), question CREDITS (ask 1 / research 3 / opine 2), BYOK doubles the allowance, monthly upload gate, starter plan slug.
  * 3.25 — 2026-07-06: managed LLM caps resized to cover FULL credit burn + headroom (starter $2 / pro $8 / team $48) — the credit gate is the limiter customers feel; the dollar cap is only the emergency brake.
  * 3.26 — 2026-07-06: caps re-derived at the WORST legitimate mix (all-research, ~$0.023/credit): starter $3 / pro $13 / team $75 — the internal dollar brake can never bind a legitimate month.
+ * 3.27 — 2026-07-06: overage top-up packs — `topup_questions` counter adds to the monthly allowance at both question gates; owner-only /api/admin/grant-credits grants packs ($10/100, $39/500); storage marketed in PAGES (~10 vectors/page measured).
  */
-export const BUILD_VERSION = '3.26';
+export const BUILD_VERSION = '3.27';
