@@ -42,9 +42,16 @@ export const BYOK_QUESTION_MULTIPLIER = 2;
 // per-question COGS ≈ $0.03 managed (Make ~10 ops ≈ $0.012 + Gemini-Flash-class
 // LLM ≈ $0.01-0.02 + Pinecone query ≈ negligible), ≈ $0.013 BYOK; indexing ≈
 // $0.20/avg book (embed $0.20/M tok + WUs + summary); storage ≈ $1.42 per 1M
-// vectors/mo. Caps sized for 80-90% gross margin at expected (~35% of cap)
-// usage and ≥50% even at full cap burn. Suggested prices: starter $12 / pro
-// $29 / team $149 (5 seats) — configure in the Clerk billing dashboard.
+// vectors/mo. Caps sized for 80-90% gross margin at EXPECTED (~35% of cap)
+// usage. Suggested prices: starter $12 / pro $29 / team $149 (5 seats) —
+// configure in the Clerk billing dashboard.
+//
+// SIZING RULE (3.25): managedLlmUsdPerMonth must cover the FULL credit
+// allowance at blended LLM cost (~$0.014/credit) — the CREDIT gate is the
+// limiter customers experience; the dollar cap is only the emergency brake
+// (runaway context, abuse, a bug). Sized ≈ full-burn + ~15% headroom. A
+// full-burn month is rare and still gross-positive (Pro ≈ 37%, Team ≈ 35%);
+// the business margin is the expected-usage number above.
 export const PLAN_CAPS: Record<PlanSlug, PlanCaps> = {
   owner: {
     questionsPerMonth: Infinity,
@@ -60,7 +67,7 @@ export const PLAN_CAPS: Record<PlanSlug, PlanCaps> = {
     uploadsPerMonth: 100,
     projectsMax: 100,
     publicAnswersPerDay: 1_500,
-    managedLlmUsdPerMonth: 15
+    managedLlmUsdPerMonth: 48
   },
   pro: {
     questionsPerMonth: 500,
@@ -68,7 +75,7 @@ export const PLAN_CAPS: Record<PlanSlug, PlanCaps> = {
     uploadsPerMonth: 20,
     projectsMax: 25,
     publicAnswersPerDay: 300,
-    managedLlmUsdPerMonth: 3
+    managedLlmUsdPerMonth: 8
   },
   starter: {
     questionsPerMonth: 120,
@@ -76,7 +83,7 @@ export const PLAN_CAPS: Record<PlanSlug, PlanCaps> = {
     uploadsPerMonth: 10,
     projectsMax: 10,
     publicAnswersPerDay: 100,
-    managedLlmUsdPerMonth: 1
+    managedLlmUsdPerMonth: 2
   },
   free: {
     questionsPerMonth: 25,
