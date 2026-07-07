@@ -126,7 +126,12 @@ export function HealthView() {
 
   return (
     <div className="h-full p-2.5">
-      <div className="panel flex h-full flex-col overflow-hidden rounded-[26px]">
+      {/* 3.21: the WHOLE panel scrolls as one column. The old split (fixed
+          header + flex-1 scrolling list) broke once the header grew (This-month
+          card + admin table): the fixed part exceeded the viewport and crushed
+          the list's scroll area to zero height — per-source rows unreachable. */}
+      <div className="panel h-full overflow-hidden rounded-[26px]">
+        <div className="scroll-clean h-full overflow-y-auto">
         <div className="px-6 pt-6 lg:px-8">
           <div className="flex items-start justify-between gap-3">
             <div>
@@ -269,7 +274,7 @@ export function HealthView() {
           </h2>
         </div>
 
-        <div className="scroll-clean flex-1 space-y-2 overflow-y-auto px-6 py-4 lg:px-8">
+        <div className="space-y-2 px-6 py-4 lg:px-8">
           {media.map((m) => (
             <div key={m.id} className="card-glass flex items-center gap-3.5 rounded-[18px] px-4 py-3">
               <MediaIcon type={m.type} size="sm" />
@@ -300,6 +305,7 @@ export function HealthView() {
               </Button>
             </div>
           ))}
+        </div>
         </div>
       </div>
     </div>
