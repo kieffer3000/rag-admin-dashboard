@@ -4,7 +4,8 @@ import { longFetch } from '@/lib/rag/long-fetch';
 import { doctrineFor, injectDoctrine } from '@/lib/rag/doctrines';
 import { nsForUser } from '@/lib/rag/namespace';
 import { runOpine, type Artifact } from '@/lib/rag/opine';
-import { resolvePlan } from '@/lib/rag/plans';
+import { resolvePlan, BYOK_QUESTION_MULTIPLIER } from '@/lib/rag/plans';
+import { getOrgOpenrouterKey } from '@/lib/org-settings';
 import { gateUsage, monthPeriod } from '@/lib/rag/metering';
 import { fetchReadablePage } from '@/lib/rag/web-extract';
 
@@ -38,22 +39,24 @@ export async function POST(req: Request) {
     return Response.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  // METERING (3.17): an opine counts as a question (shared monthly cap with
-  // /api/query). Owners uncapped; fail-open on counting errors.
+  // METERING (3.17/3.24): an opine costs 2 question credits (two-pass
+  // rubric→check orchestration = heavier models + more Make ops); BYOK doubles
+  // the monthly allowance. Owners uncapped; fail-open on counting errors.
   const plan = await resolvePlan(userId, has);
-  const gate = await gateUsage(
-    orgId ?? `user:${userId}`,
-    'questions',
-    monthPeriod(),
-    plan.caps.questionsPerMonth
-  );
-  if (!gate.ok) {
-    return Response.json(
-      {
-        error: `Monthly question limit reached (${plan.caps.questionsPerMonth}). It resets at the start of next month.`
-      },
-      { status: 429 }
-    );
+  if (Number.isFinite(plan.caps.questionsPerMonth)) {
+    const scope = orgId ?? `user:${userId}`;
+    const byok = !!(await getOrgOpenrouterKey(scope));
+    const credits =
+      plan.caps.questionsPerMonth * (byok ? BYOK_QUESTION_MULTIPLIER : 1);
+    const gate = await gateUsage(scope, 'questions', monthPeriod(), credits, 2);
+    if (!gate.ok) {
+      return Response.json(
+        {
+          error: `Monthly question credits used up (${credits}). They reset at the start of next month${byok ? '' : ' — or add your own AI key in Settings to double your allowance'}.`
+        },
+        { status: 429 }
+      );
+    }
   }
 
   const body = await req.json().catch(() => null);

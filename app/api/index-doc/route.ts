@@ -3,7 +3,7 @@ import { put } from '@vercel/blob';
 import { indexText } from '@/lib/rag/index-core';
 import { nsForUser } from '@/lib/rag/namespace';
 import { resolvePlan } from '@/lib/rag/plans';
-import { namespaceVectorCount, bumpUsage, monthPeriod } from '@/lib/rag/metering';
+import { namespaceVectorCount, gateUsage, monthPeriod } from '@/lib/rag/metering';
 import { extractPdfViaCloudConvert, pollDocText } from '@/lib/rag/cloudconvert';
 
 // Document ingestion (PDF / DOCX / TXT). Text extraction is deterministic
@@ -99,7 +99,21 @@ export async function POST(req: Request) {
       );
     }
   }
-  void bumpUsage(`user:${userId}`, 'uploads', monthPeriod());
+  // Uploads gate (3.24): one credit per document.
+  const up = await gateUsage(
+    `user:${userId}`,
+    'uploads',
+    monthPeriod(),
+    caps.uploadsPerMonth
+  );
+  if (!up.ok) {
+    return Response.json(
+      {
+        error: `Monthly upload limit reached (${caps.uploadsPerMonth} documents). It resets at the start of next month.`
+      },
+      { status: 429 }
+    );
+  }
 
   // ── JSON job mode ──────────────────────────────────────────────────────────
   // The client uploaded the RAW file straight to CloudConvert (no 4.5MB cap) and

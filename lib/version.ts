@@ -23,5 +23,6 @@
  * 3.21 — 2026-07-06: Health page scrolls as one column — the grown header (This-month + admin table) was crushing the per-source list's scroll area to zero height.
  * 3.22 — 2026-07-06: Health per-source list shows ALL projects, grouped (active project live + manageable, others read-only snapshots); Sources card counts every project.
  * 3.23 — 2026-07-06: Health organization — sortable sources (name/chunks/size/indexed, click to flip), collapsible project groups (persisted; first visit opens only the current project), search box, per-group chunk/size totals, expand/collapse all.
+ * 3.24 — 2026-07-06: pricing plans wired — starter/pro/team caps from the researched cost model (80-90% margin), question CREDITS (ask 1 / research 3 / opine 2), BYOK doubles the allowance, monthly upload gate, starter plan slug.
  */
-export const BUILD_VERSION = '3.23';
+export const BUILD_VERSION = '3.24';

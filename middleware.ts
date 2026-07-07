@@ -32,7 +32,7 @@ const ALLOWED_EMAILS = (
 // subscription (individual `pro` or org `team` seat) gets in; everyone else is
 // sent to /pricing to subscribe.
 const BILLING_OPEN = process.env.BILLING_OPEN === 'on';
-const PLAN_SLUGS = ['pro', 'team'];
+const PLAN_SLUGS = ['starter', 'pro', 'team'];
 
 export default clerkMiddleware(async (auth, req) => {
   const { userId, has } = await auth();

@@ -12,8 +12,8 @@ import {
   RARE_TERM_MAX_MATCHES,
   type MentionScanResult
 } from '@/lib/rag/mention-scan';
-import { scopeOf } from '@/lib/org-settings';
-import { resolvePlan } from '@/lib/rag/plans';
+import { scopeOf, getOrgOpenrouterKey } from '@/lib/org-settings';
+import { resolvePlan, BYOK_QUESTION_MULTIPLIER } from '@/lib/rag/plans';
 import { gateUsage, monthPeriod } from '@/lib/rag/metering';
 import { getAnswerKey } from '@/lib/rag/openrouter-provision';
 import { doctrineFor, injectDoctrine } from '@/lib/rag/doctrines';
@@ -326,24 +326,6 @@ export async function POST(req: Request) {
     return Response.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  // METERING (3.17): one question = one counter tick, gated by plan. Owners
-  // are uncapped (not even counted). Fail-open on any counting error.
-  const plan = await resolvePlan(userId, has);
-  const gate = await gateUsage(
-    scopeOf(orgId, userId),
-    'questions',
-    monthPeriod(),
-    plan.caps.questionsPerMonth
-  );
-  if (!gate.ok) {
-    return Response.json(
-      {
-        error: `Monthly question limit reached (${plan.caps.questionsPerMonth}). It resets at the start of next month.`
-      },
-      { status: 429 }
-    );
-  }
-
   const url = process.env.MAKE_QUERY_WEBHOOK_URL;
   if (!url) {
     return Response.json(
@@ -353,6 +335,33 @@ export async function POST(req: Request) {
   }
 
   const body = await req.json();
+
+  // METERING (3.17/3.24): questions are CREDITS gated by plan — a normal ask
+  // costs 1, research costs 3 (heavier models + more Make ops). BYOK doubles
+  // the monthly allowance (the LLM bill moves to the customer's key). Owners
+  // are uncapped (not even counted). Fail-open on any counting error.
+  const plan = await resolvePlan(userId, has);
+  if (Number.isFinite(plan.caps.questionsPerMonth)) {
+    const byok = !!(await getOrgOpenrouterKey(scopeOf(orgId, userId)));
+    const credits =
+      plan.caps.questionsPerMonth * (byok ? BYOK_QUESTION_MULTIPLIER : 1);
+    const cost = body.speed === 'research' ? 3 : 1;
+    const gate = await gateUsage(
+      scopeOf(orgId, userId),
+      'questions',
+      monthPeriod(),
+      credits,
+      cost
+    );
+    if (!gate.ok) {
+      return Response.json(
+        {
+          error: `Monthly question credits used up (${credits}). They reset at the start of next month${byok ? '' : ' — or add your own AI key in Settings to double your allowance'}.`
+        },
+        { status: 429 }
+      );
+    }
+  }
   const sourceIds: string[] = body.source_ids ?? [];
   const contextTexts: string[] = body.context_texts ?? [];
   let guides: string[] = (body.guides ?? []).filter(

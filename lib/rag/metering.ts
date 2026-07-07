@@ -75,16 +75,18 @@ export async function readUsage(
 }
 
 /** Count the op AND check the cap in one call. `cap` Infinity/NaN = unlimited
- *  (not even counted — owners stay out of the table). n===0 means the DB
+ *  (not even counted — owners stay out of the table). `by` = credit cost of
+ *  this op (research ask = 3, opine = 2, default 1). n===0 means the DB
  *  couldn't count → allow (fail-open). */
 export async function gateUsage(
   scope: string,
   metric: string,
   period: string,
-  cap: number
+  cap: number,
+  by = 1
 ): Promise<{ ok: boolean; n: number }> {
   if (!Number.isFinite(cap)) return { ok: true, n: 0 };
-  const n = await bumpUsage(scope, metric, period);
+  const n = await bumpUsage(scope, metric, period, by);
   return { ok: n === 0 || n <= cap, n };
 }
 

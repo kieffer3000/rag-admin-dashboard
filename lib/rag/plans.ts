@@ -12,13 +12,20 @@ import { clerkClient } from '@clerk/nextjs/server';
 // belt-and-braces default — the middleware already 402s unsubscribed users
 // when BILLING_OPEN is on, and blocks them entirely when it's off.
 
-export type PlanSlug = 'owner' | 'team' | 'pro' | 'free';
+export type PlanSlug = 'owner' | 'team' | 'pro' | 'starter' | 'free';
 
 export interface PlanCaps {
-  /** /api/query + /api/opine calls per month (usage_counters `questions`). */
+  /** Question CREDITS per month (usage_counters `questions`). Costs: normal
+   *  ask = 1, research ask = 3, opine = 2 (heavier models + more Make ops). */
   questionsPerMonth: number;
-  /** Max vectors banked in the user's Pinecone namespace (storage gate). */
+  /** Max vectors banked in the user's Pinecone namespace (storage gate).
+   *  Conversion (MEASURED 2026-07-04): ~4.3 KB/vector → 1M vectors ≈ 4.3 GB. */
   vectorsMax: number;
+  /** Document uploads per month (gated at the ingest routes). */
+  uploadsPerMonth: number;
+  /** Projects allotted (UX guardrail — projects are architecturally free; not
+   *  yet enforced server-side, displayed as the plan promise). */
+  projectsMax: number;
   /** Public embed/API answers per day, PER CONNECTION (usage_counters). */
   publicAnswersPerDay: number;
   /** Monthly USD ceiling for the scope's managed OpenRouter sub-key. 0 = don't
@@ -26,30 +33,58 @@ export interface PlanCaps {
   managedLlmUsdPerMonth: number;
 }
 
+/** BYOK doubles question credits: the LLM (the dominant variable cost) moves
+ *  to the customer's own OpenRouter account, so our per-question COGS drops
+ *  ~60% (Make ops + Pinecone remain). Applied at the question gates. */
+export const BYOK_QUESTION_MULTIPLIER = 2;
+
+// PRICED 2026-07-06 from live vendor pages (journal has the full math):
+// per-question COGS ≈ $0.03 managed (Make ~10 ops ≈ $0.012 + Gemini-Flash-class
+// LLM ≈ $0.01-0.02 + Pinecone query ≈ negligible), ≈ $0.013 BYOK; indexing ≈
+// $0.20/avg book (embed $0.20/M tok + WUs + summary); storage ≈ $1.42 per 1M
+// vectors/mo. Caps sized for 80-90% gross margin at expected (~35% of cap)
+// usage and ≥50% even at full cap burn. Suggested prices: starter $12 / pro
+// $29 / team $149 (5 seats) — configure in the Clerk billing dashboard.
 export const PLAN_CAPS: Record<PlanSlug, PlanCaps> = {
   owner: {
     questionsPerMonth: Infinity,
     vectorsMax: Infinity,
+    uploadsPerMonth: Infinity,
+    projectsMax: Infinity,
     publicAnswersPerDay: Infinity,
     managedLlmUsdPerMonth: 0
   },
   team: {
-    questionsPerMonth: 10_000,
-    vectorsMax: 2_000_000,
-    publicAnswersPerDay: 2_000,
-    managedLlmUsdPerMonth: 40
+    questionsPerMonth: 3_000,
+    vectorsMax: 1_000_000,
+    uploadsPerMonth: 100,
+    projectsMax: 100,
+    publicAnswersPerDay: 1_500,
+    managedLlmUsdPerMonth: 15
   },
   pro: {
-    questionsPerMonth: 2_000,
-    vectorsMax: 250_000,
-    publicAnswersPerDay: 500,
-    managedLlmUsdPerMonth: 10
+    questionsPerMonth: 500,
+    vectorsMax: 150_000,
+    uploadsPerMonth: 20,
+    projectsMax: 25,
+    publicAnswersPerDay: 300,
+    managedLlmUsdPerMonth: 3
+  },
+  starter: {
+    questionsPerMonth: 120,
+    vectorsMax: 25_000,
+    uploadsPerMonth: 10,
+    projectsMax: 10,
+    publicAnswersPerDay: 100,
+    managedLlmUsdPerMonth: 1
   },
   free: {
-    questionsPerMonth: 50,
+    questionsPerMonth: 25,
     vectorsMax: 5_000,
+    uploadsPerMonth: 3,
+    projectsMax: 5,
     publicAnswersPerDay: 50,
-    managedLlmUsdPerMonth: 1
+    managedLlmUsdPerMonth: 0.5
   }
 };
 
@@ -100,6 +135,7 @@ export async function resolvePlan(
   try {
     if (has?.({ plan: 'team' })) return { slug: 'team', caps: PLAN_CAPS.team };
     if (has?.({ plan: 'pro' })) return { slug: 'pro', caps: PLAN_CAPS.pro };
+    if (has?.({ plan: 'starter' })) return { slug: 'starter', caps: PLAN_CAPS.starter };
   } catch {
     /* fall through */
   }

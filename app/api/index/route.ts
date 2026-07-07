@@ -2,7 +2,7 @@ import { auth } from '@clerk/nextjs/server';
 import { indexText } from '@/lib/rag/index-core';
 import { nsForUser } from '@/lib/rag/namespace';
 import { resolvePlan } from '@/lib/rag/plans';
-import { namespaceVectorCount, bumpUsage, monthPeriod } from '@/lib/rag/metering';
+import { namespaceVectorCount, gateUsage, monthPeriod } from '@/lib/rag/metering';
 
 // Proxies Board ingestion to the Make.com Indexing scenario.
 // Contract (per chunk): { chunk_id, source_id, name, type, namespace, text }
@@ -49,8 +49,21 @@ export async function POST(req: Request) {
           );
         }
       }
-      // Visibility counter — one tick per document (part 1), never gates.
-      void bumpUsage(`user:${userId}`, 'uploads', monthPeriod());
+      // Uploads gate (3.24): one credit per document (part 1 only).
+      const up = await gateUsage(
+        `user:${userId}`,
+        'uploads',
+        monthPeriod(),
+        caps.uploadsPerMonth
+      );
+      if (!up.ok) {
+        return Response.json(
+          {
+            error: `Monthly upload limit reached (${caps.uploadsPerMonth} documents). It resets at the start of next month.`
+          },
+          { status: 429 }
+        );
+      }
     }
 
     const r = await indexText({
