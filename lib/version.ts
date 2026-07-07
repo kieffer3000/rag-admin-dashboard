@@ -22,5 +22,6 @@
  * 3.20 — 2026-07-06: white brand mark sits directly on the olive rail (no tile box, Make.com-style); rail project-switcher tile keeps a fixed olive-glass look in both themes.
  * 3.21 — 2026-07-06: Health page scrolls as one column — the grown header (This-month + admin table) was crushing the per-source list's scroll area to zero height.
  * 3.22 — 2026-07-06: Health per-source list shows ALL projects, grouped (active project live + manageable, others read-only snapshots); Sources card counts every project.
+ * 3.23 — 2026-07-06: Health organization — sortable sources (name/chunks/size/indexed, click to flip), collapsible project groups (persisted; first visit opens only the current project), search box, per-group chunk/size totals, expand/collapse all.
  */
-export const BUILD_VERSION = '3.22';
+export const BUILD_VERSION = '3.23';

@@ -12,7 +12,9 @@ import {
   RefreshCw,
   Trash2,
   Activity,
-  AlertTriangle
+  AlertTriangle,
+  ChevronDown,
+  ChevronRight
 } from 'lucide-react';
 
 function fmtBytes(n: number) {
@@ -113,6 +115,93 @@ export function HealthView() {
   }, [media, projects, activeProject, otherMedia]);
 
   const allItems = useMemo(() => groups.flatMap((g) => g.items), [groups]);
+
+  // ORGANIZATION (3.23): search, sort, and collapsible groups.
+  const [q, setQ] = useState('');
+  type SortKey = 'name' | 'chunks' | 'size' | 'date';
+  const [sortKey, setSortKey] = useState<SortKey>('date');
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
+  const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
+  const [collapseInit, setCollapseInit] = useState(false);
+
+  // Collapse state persists per browser; first visit = only the active
+  // project open (the overview stays scannable at 10+ projects).
+  useEffect(() => {
+    if (collapseInit || projects.length === 0) return;
+    try {
+      const saved = localStorage.getItem('ad_health_collapsed');
+      if (saved) {
+        setCollapsed(new Set(JSON.parse(saved) as string[]));
+        setCollapseInit(true);
+        return;
+      }
+    } catch {
+      /* fall through to default */
+    }
+    setCollapsed(new Set(projects.filter((p) => p.id !== activeProject.id).map((p) => p.id)));
+    setCollapseInit(true);
+  }, [collapseInit, projects, activeProject.id]);
+
+  const persistCollapsed = (n: Set<string>) => {
+    setCollapsed(n);
+    try {
+      localStorage.setItem('ad_health_collapsed', JSON.stringify([...n]));
+    } catch {
+      /* private mode — session-only */
+    }
+  };
+  const toggleGroup = (id: string) => {
+    const n = new Set(collapsed);
+    if (n.has(id)) n.delete(id);
+    else n.add(id);
+    persistCollapsed(n);
+  };
+  const allCollapsed = groups.every((g) => collapsed.has(g.project.id));
+  const setAllCollapsed = () =>
+    persistCollapsed(allCollapsed ? new Set<string>() : new Set(groups.map((g) => g.project.id)));
+
+  // Search filters by source name; sorting applies within each group.
+  // `size` shares chunk ordering (size is derived from chunks) but stays a
+  // separate control so the header pills match the visible columns.
+  const searching = q.trim().toLowerCase();
+  const viewGroups = useMemo(() => {
+    const dir = sortDir === 'asc' ? 1 : -1;
+    const cmp = (a: MediaItem, b: MediaItem) => {
+      if (sortKey === 'name') return a.name.localeCompare(b.name) * dir;
+      if (sortKey === 'date') return (a.date || '').localeCompare(b.date || '') * dir;
+      return (a.chunks - b.chunks) * dir; // chunks + size
+    };
+    return groups.map((g) => ({
+      ...g,
+      items: (searching
+        ? g.items.filter((m) => m.name.toLowerCase().includes(searching))
+        : g.items
+      )
+        .slice()
+        .sort(cmp)
+    }));
+  }, [groups, searching, sortKey, sortDir]);
+
+  const sortPill = (k: SortKey, label: string) => (
+    <button
+      key={k}
+      onClick={() => {
+        if (sortKey === k) setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
+        else {
+          setSortKey(k);
+          setSortDir(k === 'name' ? 'asc' : 'desc');
+        }
+      }}
+      className={`rounded-full px-2.5 py-1 text-[11px] font-medium transition-colors ${
+        sortKey === k
+          ? 'bg-primary/10 text-primary'
+          : 'text-muted-foreground hover:text-foreground'
+      }`}
+    >
+      {label}
+      {sortKey === k ? (sortDir === 'asc' ? ' ↑' : ' ↓') : ''}
+    </button>
+  );
 
   // REAL metered usage from Pinecone (/api/usage) — the client-side chunk
   // estimate below stays as the instant placeholder until this resolves.
@@ -321,28 +410,64 @@ export function HealthView() {
             </div>
           )}
 
-          <h2 className="mt-7 text-[12px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
-            Per-source index status · by project
-          </h2>
+          <div className="mt-7 flex flex-wrap items-center gap-2">
+            <h2 className="text-[12px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+              Per-source index status · by project
+            </h2>
+            <div className="ml-auto flex flex-wrap items-center gap-1">
+              <input
+                value={q}
+                onChange={(e) => setQ(e.target.value)}
+                placeholder="Search sources…"
+                className="h-7 w-44 rounded-full border border-border bg-card px-3 text-[12px] outline-none placeholder:text-muted-foreground/50 focus:ring-1 focus:ring-primary/40"
+              />
+              <span className="mx-1 text-[11px] text-muted-foreground/50">sort</span>
+              {sortPill('name', 'Name')}
+              {sortPill('chunks', 'Chunks')}
+              {sortPill('size', 'Size')}
+              {sortPill('date', 'Indexed')}
+              <button
+                onClick={setAllCollapsed}
+                className="ml-1 rounded-full px-2.5 py-1 text-[11px] font-medium text-muted-foreground transition-colors hover:text-foreground"
+              >
+                {allCollapsed ? 'Expand all' : 'Collapse all'}
+              </button>
+            </div>
+          </div>
         </div>
 
         {/* 3.22: sources grouped by project — every project, not just the
             active one. The active project's rows are live and manageable;
             other projects' rows are their saved snapshot (switch to that
             project to re-index or delete). */}
-        <div className="space-y-5 px-6 py-4 lg:px-8">
-          {groups
+        <div className="space-y-3 px-6 py-4 lg:px-8">
+          {viewGroups
             .filter((g) => g.items.length > 0)
-            .map((g) => (
+            .map((g) => {
+              // While searching, groups with matches are forced open so hits
+              // are never hidden behind a collapsed header.
+              const isOpen = searching ? true : !collapsed.has(g.project.id);
+              const gChunks = g.items.reduce((a, m) => a + m.chunks, 0);
+              return (
               <div key={g.project.id}>
-                <div className="mb-2 flex items-baseline gap-2 text-[13px] font-semibold">
+                <button
+                  onClick={() => toggleGroup(g.project.id)}
+                  className="mb-2 flex w-full items-center gap-2 rounded-[12px] px-1 py-1 text-left text-[13px] font-semibold transition-colors hover:bg-muted/60"
+                >
+                  {isOpen ? (
+                    <ChevronDown className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                  ) : (
+                    <ChevronRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                  )}
                   <span>{g.project.icon}</span>
                   <span className="truncate">{g.project.name}</span>
                   <span className="text-[11px] font-normal text-muted-foreground/70">
-                    {g.items.length} source{g.items.length === 1 ? '' : 's'}
+                    {g.items.length} source{g.items.length === 1 ? '' : 's'} ·{' '}
+                    {gChunks.toLocaleString()} chunks · ~{fmtBytes(gChunks * (768 * 4 + 1024))}
                     {g.live ? ' · current project' : ''}
                   </span>
-                </div>
+                </button>
+                {isOpen && (
                 <div className="space-y-2">
                   {g.items.map((m) => (
                     <div
@@ -386,9 +511,16 @@ export function HealthView() {
                     </div>
                   ))}
                 </div>
+                )}
               </div>
-            ))}
-          {groups.some((g) => g.items.length === 0) && (
+              );
+            })}
+          {searching && viewGroups.every((g) => g.items.length === 0) && (
+            <div className="text-[12px] text-muted-foreground/70">
+              No sources match “{q.trim()}”.
+            </div>
+          )}
+          {!searching && groups.some((g) => g.items.length === 0) && (
             <div className="text-[12px] text-muted-foreground/70">
               {groups
                 .filter((g) => g.items.length === 0)
