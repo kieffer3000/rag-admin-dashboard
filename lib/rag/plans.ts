@@ -67,6 +67,18 @@ export const BYOK_QUESTION_MULTIPLIER = 2;
 // MEASURED conversion (Hersen 2026-07-06): 24,853 chunks / 1,770 dense pages
 // ≈ 14 vectors/page; lighter text ≈ 6 → plan on ~10 vectors/page average.
 // Plan caps in pages: starter ≈ 2,500 · pro ≈ 15,000 · team ≈ 100,000.
+//
+// FIGURES (design pinned 2026-07-06; feature not yet built): images/graphs
+// inside a book get caption + pixel-embedding (~$0.002–0.01 COGS each — up to
+// ~10× a text page's ingest cost, and NOT covered by the OpenRouter $-brake:
+// captions ride the Make image scenario). They bill in the EXISTING units:
+//   storage — 1 figure counts as FIGURE_PAGE_EQUIVALENT pages (vector + bytes)
+//   ingest  — FIGURES_PER_UPLOAD_CREDIT figures consume 1 upload credit,
+//             on top of the document's own 1 credit
+// Worst case is bounded by uploadsPerMonth: Pro's 20 credits ≤ ~1,000 figures
+// ≈ $5 caption spend. Keep an "index figures" toggle per upload when built.
+export const FIGURE_PAGE_EQUIVALENT = 2;
+export const FIGURES_PER_UPLOAD_CREDIT = 50;
 export const PLAN_CAPS: Record<PlanSlug, PlanCaps> = {
   owner: {
     questionsPerMonth: Infinity,
