@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useRag } from '@/lib/rag/store';
+import type { MediaItem } from '@/lib/rag/types';
 import { MediaIcon, StatusBadge } from '@/components/rag/shared';
 import { Button } from '@/components/ui/button';
 import {
@@ -57,12 +58,61 @@ function Meter({ n, cap }: { n: number; cap: number | null | undefined }) {
 }
 
 export function HealthView() {
-  const { media, projects, reindexMedia, deleteMedia } = useRag();
+  const { media, projects, activeProject, reindexMedia, deleteMedia } = useRag();
 
   // ADMIN/USER VIEW TOGGLE (3.19): owners can flip to "User view" to see the
   // page EXACTLY as a non-owner sees it (admin-only blocks hidden). Regular
   // users never get the toggle — their view is already the user view.
   const [asUser, setAsUser] = useState(false);
+
+  // ALL-PROJECTS SOURCES (3.22): the client only hydrates the ACTIVE project's
+  // media (each project's board doc carries its own list), so the page fetches
+  // the other projects' docs itself and renders every source grouped by
+  // project. The active project keeps its LIVE store copy (statuses update);
+  // other projects show their saved snapshot, read-only.
+  const [otherMedia, setOtherMedia] = useState<Record<string, MediaItem[]>>({});
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const others = projects.filter((p) => p.id !== activeProject.id);
+      const entries = await Promise.all(
+        others.map(async (p) => {
+          try {
+            const r = await fetch(`/api/board?projectId=${encodeURIComponent(p.id)}`);
+            const j = r.ok ? await r.json() : null;
+            const items = Array.isArray(j?.data?.media) ? (j.data.media as MediaItem[]) : [];
+            return [p.id, items] as const;
+          } catch {
+            return [p.id, [] as MediaItem[]] as const;
+          }
+        })
+      );
+      if (!cancelled) setOtherMedia(Object.fromEntries(entries));
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [projects, activeProject.id]);
+
+  // Per-project groups: active project first (LIVE store rows — statuses tick),
+  // then every other project's saved snapshot. Projects with no sources are
+  // listed at the end as a one-line count, not empty sections.
+  const groups = useMemo(() => {
+    const activeItems = media.filter((m) => activeProject.sourceIds.includes(m.id));
+    const out: { project: typeof activeProject; items: MediaItem[]; live: boolean }[] = [
+      { project: activeProject, items: activeItems, live: true }
+    ];
+    for (const p of projects) {
+      if (p.id === activeProject.id) continue;
+      const items = (otherMedia[p.id] ?? []).filter(
+        (m) => !p.sourceIds.length || p.sourceIds.includes(m.id)
+      );
+      out.push({ project: p, items, live: false });
+    }
+    return out;
+  }, [media, projects, activeProject, otherMedia]);
+
+  const allItems = useMemo(() => groups.flatMap((g) => g.items), [groups]);
 
   // REAL metered usage from Pinecone (/api/usage) — the client-side chunk
   // estimate below stays as the instant placeholder until this resolves.
@@ -82,15 +132,17 @@ export function HealthView() {
     };
   }, []);
 
+  // Counts span ALL projects (3.22) — the old per-active-project numbers made
+  // the Sources card read "1" while nine other projects held documents.
   const stats = useMemo(() => {
-    const totalChunks = media.reduce((a, m) => a + m.chunks, 0);
-    const indexed = media.filter((m) => m.status === 'indexed').length;
-    const processing = media.filter((m) => m.status === 'processing').length;
-    const failed = media.filter((m) => m.status === 'failed').length;
+    const totalChunks = allItems.reduce((a, m) => a + m.chunks, 0);
+    const indexed = allItems.filter((m) => m.status === 'indexed').length;
+    const processing = allItems.filter((m) => m.status === 'processing').length;
+    const failed = allItems.filter((m) => m.status === 'failed').length;
     // 768 dims × 4 bytes per float + ~1KB metadata per chunk
     const storage = totalChunks * (768 * 4 + 1024);
     return { totalChunks, indexed, processing, failed, storage };
-  }, [media]);
+  }, [allItems]);
 
   const CARDS = [
     {
@@ -101,8 +153,8 @@ export function HealthView() {
     },
     {
       label: 'Sources',
-      value: String(media.length),
-      sub: `${stats.indexed} indexed · ${stats.processing} processing`,
+      value: String(allItems.length),
+      sub: `${stats.indexed} indexed · ${stats.processing} processing · all projects`,
       icon: Boxes
     },
     {
@@ -270,41 +322,81 @@ export function HealthView() {
           )}
 
           <h2 className="mt-7 text-[12px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
-            Per-source index status
+            Per-source index status · by project
           </h2>
         </div>
 
-        <div className="space-y-2 px-6 py-4 lg:px-8">
-          {media.map((m) => (
-            <div key={m.id} className="card-glass flex items-center gap-3.5 rounded-[18px] px-4 py-3">
-              <MediaIcon type={m.type} size="sm" />
-              <div className="min-w-0 flex-1">
-                <div className="truncate text-[13px] font-medium">{m.name}</div>
-                <div className="mt-0.5 text-[11px] text-muted-foreground/70">
-                  {m.chunks} chunks ·{' '}
-                  {fmtBytes(m.chunks * (768 * 4 + 1024))} · indexed {m.date}
+        {/* 3.22: sources grouped by project — every project, not just the
+            active one. The active project's rows are live and manageable;
+            other projects' rows are their saved snapshot (switch to that
+            project to re-index or delete). */}
+        <div className="space-y-5 px-6 py-4 lg:px-8">
+          {groups
+            .filter((g) => g.items.length > 0)
+            .map((g) => (
+              <div key={g.project.id}>
+                <div className="mb-2 flex items-baseline gap-2 text-[13px] font-semibold">
+                  <span>{g.project.icon}</span>
+                  <span className="truncate">{g.project.name}</span>
+                  <span className="text-[11px] font-normal text-muted-foreground/70">
+                    {g.items.length} source{g.items.length === 1 ? '' : 's'}
+                    {g.live ? ' · current project' : ''}
+                  </span>
+                </div>
+                <div className="space-y-2">
+                  {g.items.map((m) => (
+                    <div
+                      key={m.id}
+                      className="card-glass flex items-center gap-3.5 rounded-[18px] px-4 py-3"
+                    >
+                      <MediaIcon type={m.type} size="sm" />
+                      <div className="min-w-0 flex-1">
+                        <div className="truncate text-[13px] font-medium">{m.name}</div>
+                        <div className="mt-0.5 text-[11px] text-muted-foreground/70">
+                          {m.chunks} chunks ·{' '}
+                          {fmtBytes(m.chunks * (768 * 4 + 1024))} · indexed {m.date}
+                        </div>
+                      </div>
+                      <StatusBadge status={m.status} />
+                      {g.live ? (
+                        <>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="gap-1.5 rounded-lg text-muted-foreground hover:text-foreground"
+                            disabled={m.status === 'processing'}
+                            onClick={() => reindexMedia(m.id)}
+                          >
+                            <RefreshCw className="h-3.5 w-3.5" /> Re-index
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="gap-1.5 rounded-lg text-muted-foreground hover:text-red-500"
+                            onClick={() => deleteMedia(m.id)}
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </Button>
+                        </>
+                      ) : (
+                        <span className="text-[11px] text-muted-foreground/60">
+                          switch project to manage
+                        </span>
+                      )}
+                    </div>
+                  ))}
                 </div>
               </div>
-              <StatusBadge status={m.status} />
-              <Button
-                variant="ghost"
-                size="sm"
-                className="gap-1.5 rounded-lg text-muted-foreground hover:text-foreground"
-                disabled={m.status === 'processing'}
-                onClick={() => reindexMedia(m.id)}
-              >
-                <RefreshCw className="h-3.5 w-3.5" /> Re-index
-              </Button>
-              <Button
-                variant="ghost"
-                size="sm"
-                className="gap-1.5 rounded-lg text-muted-foreground hover:text-red-500"
-                onClick={() => deleteMedia(m.id)}
-              >
-                <Trash2 className="h-3.5 w-3.5" />
-              </Button>
+            ))}
+          {groups.some((g) => g.items.length === 0) && (
+            <div className="text-[12px] text-muted-foreground/70">
+              {groups
+                .filter((g) => g.items.length === 0)
+                .map((g) => `${g.project.icon} ${g.project.name}`)
+                .join(' · ')}{' '}
+              — no sources yet
             </div>
-          ))}
+          )}
         </div>
         </div>
       </div>
