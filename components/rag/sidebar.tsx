@@ -19,6 +19,10 @@ import {
 import { cn } from '@/lib/utils';
 import { BUILD_VERSION } from '@/lib/version';
 import { RoundTableIcon } from '@/components/rag/round-table-icon';
+import { HelpBot } from '@/components/rag/help-bot';
+import { SoundToggle } from '@/components/rag/sound-toggle';
+import { ThemeToggle } from '@/components/rag/theme-toggle';
+import { User } from '@/components/rag/user';
 import { useRag } from '@/lib/rag/store';
 import { useIsAdmin } from '@/lib/rag/use-role';
 import {
@@ -44,19 +48,82 @@ export const NAV = [
   // NOTE: the old Chat tab is retired (2026-07-04) — conversations live in
   // the DataBanks; '/' already redirected to /board anyway. ChatView code
   // stays in the tree, unrouted, in case it's ever wanted back.
-  { href: '/board', label: 'Board', icon: Workflow },
-  { href: '/boardroom', label: 'Boardroom', icon: RoundTableIcon },
-  { href: '/library', label: 'Library', icon: Library },
-  { href: '/projects', label: 'Projects', icon: FolderOpen },
-  { href: '/agents', label: 'Agents', icon: Bot },
+  // 3.30: `tech` = tiny parenthetical for advanced users (RAG, prompts,
+  // artifacts…); `desc` = native tooltip explaining what the tab really is.
+  {
+    href: '/board',
+    label: 'Board',
+    tech: 'canvas',
+    desc: 'Your working canvas — wire sources, banks and agents into answer pipelines.',
+    icon: Workflow
+  },
+  {
+    href: '/boardroom',
+    label: 'Boardroom',
+    tech: 'artifacts',
+    desc: 'A panel of experts debates your pasted artifact — temporary working memory, nothing is indexed.',
+    icon: RoundTableIcon
+  },
+  {
+    href: '/library',
+    label: 'Library',
+    tech: 'RAG',
+    desc: 'Your indexed corpus — every source here is embedded for retrieval-augmented generation (RAG).',
+    icon: Library
+  },
+  {
+    href: '/projects',
+    label: 'Projects',
+    tech: 'workspaces',
+    desc: 'Workspaces that point at Library files — each project sees only what you point it at.',
+    icon: FolderOpen
+  },
+  {
+    href: '/agents',
+    label: 'Agents',
+    tech: 'prompts',
+    desc: 'Reusable system prompts — answering personas you wire into any brain.',
+    icon: Bot
+  },
   // Smart form filling (3.29): fillable PDF + your sources → filled PDF.
-  { href: '/forms', label: 'Forms', icon: ClipboardList },
+  {
+    href: '/forms',
+    label: 'Forms',
+    tech: 'auto-fill',
+    desc: 'Smart form filling — a fillable PDF answered from your indexed sources.',
+    icon: ClipboardList
+  },
   // Notes tab retired 2026-07-04 — notes live in the Board's Notes drawer
   // (dock 🗒 button / right-click a piece → Add note). Same store, same data.
-  { href: '/health', label: 'Health', icon: Activity, adminOnly: true },
-  { href: '/members', label: 'Team', icon: Users },
-  { href: '/api-keys', label: 'API Keys', icon: KeyRound }
-] as { href: string; label: string; icon: any; adminOnly?: boolean }[];
+  {
+    href: '/health',
+    label: 'Health',
+    tech: 'usage',
+    desc: 'Index health, usage meters and per-source diagnostics.',
+    icon: Activity,
+    adminOnly: true
+  },
+  {
+    href: '/members',
+    label: 'Team',
+    desc: 'Invite teammates and manage roles.',
+    icon: Users
+  },
+  {
+    href: '/api-keys',
+    label: 'API Keys',
+    tech: 'BYOK',
+    desc: 'Bring your own model key and manage API access.',
+    icon: KeyRound
+  }
+] as {
+  href: string;
+  label: string;
+  icon: any;
+  tech?: string;
+  desc?: string;
+  adminOnly?: boolean;
+}[];
 
 const PROJECT_EMOJIS = ['🧠', '🚀', '📚', '⚖️', '🔬', '💼', '🎓', '🏥', '🎨', '🏗️'];
 
@@ -249,11 +316,13 @@ export function Sidebar() {
   const pathname = usePathname();
   const isAdmin = useIsAdmin();
 
-  // Make-style rail (2026-07-03): always compact, large icon + word beneath,
-  // and a CONTRASTING brand-olive gradient so it reads as chrome, not canvas.
-  // The old collapse toggle + "Vector store" info panel are gone.
+  // Make-style rail. 3.30 (user walkthrough): ONE flat dark-olive color (the
+  // gradient's darker end — the gradient washed out label contrast), labels
+  // PURE WHITE, the wordmark sits under the logo (moved off the old top bar),
+  // and the top-bar controls (help / sound / theme / account) live at the
+  // rail's bottom — the desktop top bar itself is gone.
   return (
-    <aside className="hidden w-[96px] shrink-0 flex-col items-center gap-1 overflow-y-auto bg-gradient-to-b from-[hsl(66_48%_25%)] via-[hsl(70_45%_17%)] to-[hsl(76_42%_10%)] py-4 lg:flex">
+    <aside className="hidden w-[96px] shrink-0 flex-col items-center gap-1 overflow-y-auto bg-[hsl(72_45%_13%)] py-4 lg:flex">
       <Link href="/" className="mb-2 flex flex-col items-center gap-1.5">
         {/* 3.20: the white mark sits DIRECTLY on the olive rail (no tile box),
             Make.com-style — answersdoc-logo-white.png is the brand mark
@@ -265,6 +334,10 @@ export function Sidebar() {
           className="h-12 w-12 shrink-0 object-contain drop-shadow-[0_3px_10px_rgb(0_0_0/0.35)]"
           draggable={false}
         />
+        {/* Brand wordmark — under the logo (3.30), no longer in a top bar. */}
+        <span className="select-none text-[10.5px] font-bold tracking-tight text-white">
+          answersDoc
+        </span>
       </Link>
 
       <div className="mb-2 flex justify-center">
@@ -280,30 +353,44 @@ export function Sidebar() {
             <Link
               key={item.href}
               href={item.href}
+              title={item.desc}
               className={cn(
                 'group flex w-full flex-col items-center gap-1 rounded-[14px] px-1 py-2 transition-all duration-150',
                 active
-                  ? 'bg-gradient-to-b from-white/[0.20] to-white/[0.09] text-white ring-1 ring-white/[0.14] shadow-[0_4px_14px_rgb(0_0_0/0.30),inset_0_1px_0_rgb(255_255_255/0.18)]'
-                  : 'text-[#e6e4cf]/70 hover:bg-white/[0.08] hover:text-[#f4f2e3]'
+                  ? 'bg-white/[0.16] ring-1 ring-white/[0.14] shadow-[0_4px_14px_rgb(0_0_0/0.30),inset_0_1px_0_rgb(255_255_255/0.18)]'
+                  : 'hover:bg-white/[0.08]'
               )}
             >
               <Icon
                 className={cn(
                   'h-[22px] w-[22px] shrink-0 transition-colors',
-                  active ? 'text-white' : 'text-[#e6e4cf]/70 group-hover:text-[#f4f2e3]'
+                  active ? 'text-white' : 'text-white/80 group-hover:text-white'
                 )}
               />
-              <span className="text-[10px] font-semibold leading-none tracking-wide">
+              {/* Labels are PURE WHITE at all times — legibility (3.30). */}
+              <span className="text-[10.5px] font-bold leading-none tracking-wide text-white">
                 {item.label}
               </span>
+              {/* Tiny technical alias for advanced users — (RAG), (prompts)… */}
+              {item.tech && (
+                <span className="text-[8.5px] font-medium leading-none text-white/55">
+                  ({item.tech})
+                </span>
+              )}
             </Link>
           );
         })}
       </nav>
 
-      {/* Build number — pinned to the rail's bottom. Bump rules in lib/version.ts. */}
-      <div className="mt-auto pt-3">
-        <span className="block text-center text-[9.5px] font-semibold tracking-wide text-[#e6e4cf]/45">
+      {/* Bottom control stack (3.30) — everything the old top bar held:
+          help bot, sound, theme, org switcher + account. */}
+      <div className="mt-auto flex flex-col items-center gap-1 pt-3">
+        <HelpBot rail />
+        <SoundToggle rail />
+        <ThemeToggle rail />
+        <User rail />
+        {/* Build number — bump rules in lib/version.ts. */}
+        <span className="block pt-2 text-center text-[9.5px] font-semibold tracking-wide text-white/45">
           Build {BUILD_VERSION}
         </span>
       </div>

@@ -237,7 +237,7 @@ export function LibraryView() {
       </div>
 
       {/* List */}
-      <div className="scroll-clean flex-1 space-y-2 overflow-y-auto px-6 py-4 lg:px-8">
+      <div className="scroll-clean flex-1 space-y-1.5 overflow-y-auto px-6 py-3 lg:px-8">
         {visible.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-20 text-center">
             <div className="mb-3 flex h-14 w-14 items-center justify-center rounded-2xl bg-secondary text-muted-foreground">

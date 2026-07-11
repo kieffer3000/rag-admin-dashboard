@@ -22,7 +22,7 @@ const GREETING: Msg = {
 
 const LS_KEY = 'answersdoc_helpbot_v1';
 
-export function HelpBot() {
+export function HelpBot({ rail = false }: { rail?: boolean }) {
   const [open, setOpen] = useState(false);
   const [msgs, setMsgs] = useState<Msg[]>([GREETING]);
   const [input, setInput] = useState('');
@@ -100,14 +100,23 @@ export function HelpBot() {
           'relative flex h-9 w-9 items-center justify-center rounded-xl transition-colors',
           open
             ? 'bg-accent text-accent-foreground'
-            : 'text-muted-foreground hover:bg-[rgb(var(--hairline)/0.06)] hover:text-foreground'
+            : rail
+              ? 'text-white/75 hover:bg-white/10 hover:text-white'
+              : 'text-muted-foreground hover:bg-[rgb(var(--hairline)/0.06)] hover:text-foreground'
         )}
       >
         <HelpCircle className="h-[18px] w-[18px]" />
       </button>
 
       {open && (
-        <div className="fixed right-3 top-14 z-50 flex h-[min(72vh,640px)] w-[min(400px,calc(100vw-24px))] flex-col overflow-hidden rounded-[20px] border border-[rgb(var(--hairline)/0.12)] bg-card shadow-[0_12px_48px_rgb(0_0_0/0.18)]">
+        <div
+          className={cn(
+            'fixed z-50 flex h-[min(72vh,640px)] w-[min(400px,calc(100vw-24px))] flex-col overflow-hidden rounded-[20px] border border-[rgb(var(--hairline)/0.12)] bg-card shadow-[0_12px_48px_rgb(0_0_0/0.18)]',
+            // Rail launcher sits bottom-left — open the panel beside it, not
+            // across the screen (3.30).
+            rail ? 'bottom-3 left-[104px]' : 'right-3 top-14'
+          )}
+        >
           {/* header */}
           <div className="flex items-center gap-2.5 border-b border-[rgb(var(--hairline)/0.08)] bg-accent/[0.06] px-4 py-3">
             <span className="flex h-8 w-8 items-center justify-center rounded-[10px] bg-accent text-accent-foreground">

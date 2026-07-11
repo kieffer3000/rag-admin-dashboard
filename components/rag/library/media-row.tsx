@@ -14,12 +14,7 @@ import {
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu';
 import { cn } from '@/lib/utils';
-import {
-  MoreHorizontal,
-  Trash2,
-  Pencil,
-  ExternalLink
-} from 'lucide-react';
+import { MoreHorizontal, Trash2, Pencil } from 'lucide-react';
 
 export function MediaRow({
   item,
@@ -52,7 +47,7 @@ export function MediaRow({
   return (
     <div
       className={cn(
-        'group flex items-center gap-3.5 rounded-[18px] bg-card px-4 py-3.5 transition-all',
+        'group flex items-center gap-3 rounded-[14px] bg-card px-3.5 py-2 transition-all',
         'shadow-[0_1px_2px_rgba(0,0,0,0.03),0_4px_14px_rgba(0,0,0,0.04)] hover:shadow-[0_2px_4px_rgba(0,0,0,0.04),0_8px_24px_rgba(0,0,0,0.07)]',
         'dark:bg-[rgb(255_255_255_/_0.03)] dark:shadow-none dark:ring-1 dark:ring-white/[0.06]',
         checked && 'ring-1 ring-accent/25 dark:ring-accent/40'
@@ -116,45 +111,34 @@ export function MediaRow({
             </div>
           </div>
         ) : (
-          <>
-            <div className="flex items-center gap-2">
-              <span className="truncate text-sm font-medium">{item.name}</span>
-            </div>
-            <div className="mt-0.5 truncate text-[13px] text-muted-foreground">
-              {item.description || 'No description'}
-            </div>
-            <div className="mt-1 flex items-center gap-2.5 text-[11px] text-muted-foreground/60">
-              <span>{item.date}</span>
-              <span className="text-border">·</span>
+          /* 3.30: ONE dense line — name, description, then meta pinned to the
+             right edge. The old 3-line stack left a desert of white space
+             between the text and the status badge on wide screens.
+             NOTE the old "source ↗" external link is GONE: it navigated to
+             whatever URL a source was imported from — a dead/parked domain
+             (madisonavenue.ai → Atom's marketplace) hijacked the click. */
+          <div className="flex min-w-0 items-center gap-3">
+            <span className="min-w-0 max-w-[38%] shrink-0 truncate text-sm font-medium">
+              {item.name}
+            </span>
+            <span className="hidden min-w-0 flex-1 truncate text-[12.5px] text-muted-foreground md:block">
+              {item.description || ''}
+            </span>
+            <span className="ml-auto flex shrink-0 items-center gap-2.5 whitespace-nowrap text-[11px] text-muted-foreground/60">
+              {item.status === 'processing' && item.statusNote ? (
+                <span className="text-amber-600 dark:text-amber-400">
+                  {item.statusNote}
+                </span>
+              ) : null}
+              <span className="hidden sm:inline">{item.date}</span>
               <span>
                 {item.sizeLabel ?? item.durationLabel ?? `${item.chunks} chunks`}
                 {item.sizeLabel && item.status === 'indexed' && item.chunks
                   ? ` · ${item.chunks.toLocaleString()} chunks`
                   : ''}
               </span>
-              {item.status === 'processing' && item.statusNote ? (
-                <>
-                  <span className="text-border">·</span>
-                  <span className="text-amber-600 dark:text-amber-400">
-                    {item.statusNote}
-                  </span>
-                </>
-              ) : null}
-              {item.source?.startsWith('http') && (
-                <>
-                  <span className="text-border">·</span>
-                  <a
-                    href={item.source}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="inline-flex items-center gap-0.5 text-accent hover:underline"
-                  >
-                    source <ExternalLink className="h-2.5 w-2.5" />
-                  </a>
-                </>
-              )}
-            </div>
-          </>
+            </span>
+          </div>
         )}
       </div>
 

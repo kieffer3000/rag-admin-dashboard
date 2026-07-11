@@ -153,36 +153,38 @@ export function ProjectsView() {
               No projects match “{query}”.
             </p>
           )}
-          <div className="flex flex-col gap-2">
+          <div className="flex flex-col gap-1.5">
             {visible.map((p) => {
               const isActive = p.id === activeProject.id;
               return (
                 <div
                   key={p.id}
-                  className="card-glass flex flex-wrap items-center gap-3 rounded-[18px] px-4 py-3"
+                  className="card-glass flex flex-wrap items-center gap-2.5 rounded-[14px] px-3 py-1.5"
                 >
-                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[12px] bg-[hsl(240_16%_96.5%)] text-lg dark:bg-[rgb(255_255_255_/_0.06)]">
+                  {/* 3.30: ONE dense line — icon · name · badge · counts ·
+                      description stretched across the middle · buttons. The
+                      old two-line block left a wide dead zone between the
+                      name and the action buttons. */}
+                  <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[10px] bg-[hsl(240_16%_96.5%)] text-base dark:bg-[rgb(255_255_255_/_0.06)]">
                     {p.icon}
                   </span>
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2">
-                      <span className="truncate text-[14px] font-semibold">
-                        {p.name}
-                      </span>
-                      {isActive && (
-                        <span className="inline-flex items-center gap-1 rounded-full bg-accent/10 px-2 py-0.5 text-[10.5px] font-semibold text-accent">
-                          <Check className="h-3 w-3" /> Active
-                        </span>
-                      )}
-                    </div>
-                    <p className="truncate text-[12px] text-muted-foreground">
-                      {p.sourceIds.length} source
-                      {p.sourceIds.length === 1 ? '' : 's'}
-                      {p.description ? ` · ${p.description}` : ''}
-                      {p.createdAt ? ` · created ${p.createdAt}` : ''}
-                    </p>
-                  </div>
-                  <div className="flex shrink-0 items-center gap-1.5">
+                  <span className="min-w-0 max-w-[26%] truncate text-[13.5px] font-semibold">
+                    {p.name}
+                  </span>
+                  {isActive && (
+                    <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-accent/10 px-2 py-0.5 text-[10.5px] font-semibold text-accent">
+                      <Check className="h-3 w-3" /> Active
+                    </span>
+                  )}
+                  <span className="shrink-0 whitespace-nowrap text-[12px] tabular-nums text-muted-foreground">
+                    {p.sourceIds.length} source
+                    {p.sourceIds.length === 1 ? '' : 's'}
+                  </span>
+                  <p className="hidden min-w-0 flex-1 truncate text-[12px] text-muted-foreground/70 md:block">
+                    {p.description || ''}
+                    {p.createdAt ? `${p.description ? ' · ' : ''}created ${p.createdAt}` : ''}
+                  </p>
+                  <div className="ml-auto flex shrink-0 items-center gap-1.5">
                     <Button
                       variant="accent"
                       size="sm"

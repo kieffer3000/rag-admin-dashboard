@@ -46,6 +46,12 @@ export function MobileNav() {
               >
                 <Icon className="h-[18px] w-[18px]" />
                 {item.label}
+                {/* Technical alias for advanced users (3.30) */}
+                {item.tech && (
+                  <span className="text-[11px] font-normal text-muted-foreground/60">
+                    ({item.tech})
+                  </span>
+                )}
               </Link>
             );
           })}

@@ -98,7 +98,8 @@ export function AgentsView() {
           <div>
             <h1 className="text-[22px] font-semibold tracking-tight">Agents</h1>
             <p className="mt-1 text-[13px] text-muted-foreground">
-              Reusable answering personas you can wire into any brain. {agents.length} saved.
+              Reusable answering personas (system prompts) you can wire into any
+              brain — click an agent&apos;s text to edit it. {agents.length} saved.
             </p>
           </div>
           <Button variant="accent" className="gap-1.5 rounded-xl" onClick={startNew}>
@@ -108,15 +109,19 @@ export function AgentsView() {
         <div className="h-4" />
       </div>
 
-      <div className="scroll-clean flex-1 overflow-y-auto px-6 py-5 lg:px-8">
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
+      <div className="scroll-clean flex-1 overflow-y-auto px-6 py-4 lg:px-8">
+        {/* 3.30: the card TEXT is the edit affordance — click the name or the
+            prompt to open editing (the walkthrough asked for exactly this).
+            The kebab keeps only Duplicate + Delete; icon+name share one line
+            so the card carries less air. */}
+        <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
           {agents.map((a) => (
             <div
               key={a.id}
-              className="card-glass hover-glow group flex flex-col rounded-[18px] p-4"
+              className="card-glass hover-glow group flex flex-col rounded-[16px] p-3.5"
             >
-              <div className="flex items-start justify-between">
-                <div className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-xl bg-secondary text-xl">
+              <div className="flex items-center gap-2.5">
+                <div className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-secondary text-lg">
                   {a.avatar ? (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img
@@ -128,16 +133,28 @@ export function AgentsView() {
                     a.icon ?? '🤖'
                   )}
                 </div>
+                <button
+                  onClick={() => startEdit(a)}
+                  title="Click to edit this agent"
+                  className="flex min-w-0 flex-1 items-center gap-2 text-left"
+                >
+                  <h3 className="truncate text-[14.5px] font-semibold group-hover:text-accent">
+                    {a.name}
+                  </h3>
+                  {a.builtIn && (
+                    <span className="shrink-0 rounded-md bg-secondary px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                      Built-in
+                    </span>
+                  )}
+                  <Pencil className="h-3 w-3 shrink-0 text-muted-foreground/0 transition-colors group-hover:text-muted-foreground/70" />
+                </button>
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
-                    <button className="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground opacity-0 transition-all hover:bg-[rgb(var(--hairline)/0.06)] group-hover:opacity-100">
+                    <button className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-muted-foreground/50 transition-all hover:bg-[rgb(var(--hairline)/0.06)] hover:text-foreground">
                       <MoreHorizontal className="h-4 w-4" />
                     </button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end" className="w-40">
-                    <DropdownMenuItem onClick={() => startEdit(a)} className="gap-2">
-                      <Pencil className="h-3.5 w-3.5" /> Edit
-                    </DropdownMenuItem>
                     <DropdownMenuItem
                       onClick={() =>
                         addAgent({
@@ -161,22 +178,20 @@ export function AgentsView() {
                 </DropdownMenu>
               </div>
 
-              <h3 className="mt-3 flex items-center gap-2 text-[15px] font-semibold">
-                {a.name}
-                {a.builtIn && (
-                  <span className="rounded-md bg-secondary px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-                    Built-in
-                  </span>
-                )}
-              </h3>
-              <p className="mt-1.5 line-clamp-3 flex-1 text-[13px] leading-relaxed text-muted-foreground">
-                {a.systemPrompt}
-              </p>
+              <button
+                onClick={() => startEdit(a)}
+                title="Click to edit this agent's prompt"
+                className="mt-2 flex-1 text-left"
+              >
+                <p className="line-clamp-3 text-[12.5px] leading-relaxed text-muted-foreground">
+                  {a.systemPrompt}
+                </p>
+              </button>
 
               <Button
                 variant="outline"
                 size="sm"
-                className="mt-4 w-full gap-1.5 rounded-xl"
+                className="mt-2.5 w-full gap-1.5 rounded-xl"
                 onClick={useOnBoard}
               >
                 <Workflow className="h-3.5 w-3.5" /> Use on board

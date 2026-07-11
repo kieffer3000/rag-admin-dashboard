@@ -565,3 +565,18 @@ input[type='search']::-webkit-search-cancel-button {
 .message-arrival {
   animation: message-arrival 0.4s cubic-bezier(0.16, 1, 0.3, 1) both;
 }
+
+/* ── Rail account cluster (3.30) ─────────────────────────────────────────
+   The Clerk OrganizationSwitcher sits on the 96px olive rail — hide its
+   text + chevron there so the trigger collapses to just the org avatar.
+   (Clerk components expose stable cl-* classes; if a class ever renames,
+   this degrades gracefully to a truncated white label.) */
+.rail-org .cl-organizationSwitcherTrigger {
+  max-width: 84px;
+  overflow: hidden;
+  color: #fff;
+}
+.rail-org .cl-organizationPreviewTextContainer,
+.rail-org .cl-organizationSwitcherTriggerIcon {
+  display: none;
+}

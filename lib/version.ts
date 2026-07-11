@@ -29,5 +29,6 @@
  * 3.27 — 2026-07-06: overage top-up packs — `topup_questions` counter adds to the monthly allowance at both question gates; owner-only /api/admin/grant-credits grants packs ($10/100, $39/500); storage marketed in PAGES (~10 vectors/page measured).
  * 3.28 — 2026-07-06: figure billing design pinned — a figure = 2 pages of storage, 50 figures = 1 upload credit (constants in plans.ts; extraction feature itself queued).
  * 3.29 — 2026-07-06: 📋 Forms — smart form filling: fillable PDF's fields read in-browser (pdf-lib, the PDF never leaves the tab), answered from wired sources via /api/fill-form (one batched JSON generation, 3 credits), values written back locally with per-field evidence + editable review.
+ * 3.30 — 2026-07-10: walkthrough UX pass — desktop top bar removed (controls live at the rail's bottom, wordmark under the logo); rail is ONE flat dark olive with pure-white labels + technical aliases (RAG/prompts/artifacts…) and tooltips; Library/Projects rows are single dense lines (the "source ↗" link that hijacked clicks to a parked domain is gone); Agents cards edit on text-click; Forms steps sit side-by-side; highlight-to-copy everywhere (SelectCopy).
  */
-export const BUILD_VERSION = '3.29';
+export const BUILD_VERSION = '3.30';

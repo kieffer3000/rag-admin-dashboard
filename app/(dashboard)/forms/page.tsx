@@ -175,8 +175,11 @@ export default function FormsPage() {
             leaves this browser; a fill uses 3 question credits.
           </p>
 
+          {/* 3.30: steps 1 + 2 sit SIDE BY SIDE on wide screens — the old
+              stacked cards left the whole right half of the page empty. */}
+          <div className="mt-4 grid items-start gap-3 lg:grid-cols-2">
           {/* Step 1 — the form */}
-          <div className="card-glass mt-5 rounded-[18px] p-5">
+          <div className="card-glass rounded-[18px] p-4">
             <div className="text-[12px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
               1 · The form
             </div>
@@ -202,7 +205,7 @@ export default function FormsPage() {
 
           {/* Step 2 — the data */}
           {stage !== 'idle' && (
-            <div className="card-glass mt-4 rounded-[18px] p-5">
+            <div className="card-glass rounded-[18px] p-4">
               <div className="text-[12px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
                 2 · The data source
               </div>
@@ -246,6 +249,7 @@ export default function FormsPage() {
               </Button>
             </div>
           )}
+          </div>
 
           {error && (
             <div className="mt-4 flex items-center gap-2 rounded-[14px] bg-amber-50 px-4 py-2.5 text-[13px] text-amber-700 dark:bg-amber-500/10 dark:text-amber-400">
@@ -255,7 +259,7 @@ export default function FormsPage() {
 
           {/* Step 3 — review + download */}
           {stage === 'done' && (
-            <div className="card-glass mt-4 rounded-[18px] p-5">
+            <div className="card-glass mt-3 rounded-[18px] p-4">
               <div className="flex items-baseline justify-between">
                 <div className="text-[12px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
                   3 · Review — {filledCount} of {fields.length} fields filled
@@ -264,7 +268,9 @@ export default function FormsPage() {
                   <Download className="h-4 w-4" /> Download filled PDF
                 </Button>
               </div>
-              <div className="mt-3 space-y-1.5">
+              {/* Two columns on wide screens — a 30-field form shouldn't be a
+                  narrow ribbon down an empty page (3.30). */}
+              <div className="mt-3 grid gap-x-8 gap-y-1.5 xl:grid-cols-2">
                 {fields.map((f) => (
                   <div key={f.name} className="flex items-center gap-3 text-[13px]">
                     <div className="w-56 shrink-0 truncate text-muted-foreground" title={f.name}>

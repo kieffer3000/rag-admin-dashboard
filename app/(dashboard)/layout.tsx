@@ -5,7 +5,8 @@ import { ThemeToggle } from '@/components/rag/theme-toggle';
 import { SoundToggle } from '@/components/rag/sound-toggle';
 import { HelpBot } from '@/components/rag/help-bot';
 import { SourceViewer } from '@/components/rag/source-viewer';
-import { User } from './user';
+import { SelectCopy } from '@/components/rag/select-copy';
+import { User } from '@/components/rag/user';
 import Providers from './providers';
 
 export default function DashboardLayout({
@@ -25,24 +26,21 @@ export default function DashboardLayout({
       >
         <Sidebar />
         <div className="flex min-w-0 flex-1 flex-col">
-          <header className="sticky top-0 z-30 flex shrink-0 flex-col bg-transparent px-4 pt-1.5">
-            <div className="flex h-11 items-center gap-3">
-              <MobileNav />
-              <div className="flex-1" />
-              <HelpBot />
-              <SoundToggle />
-              <ThemeToggle />
-              <User />
-            </div>
-            {/* Brand wordmark — quietly anchors the top-right, beneath the menu. */}
-            <div className="pointer-events-none -mt-0.5 pb-1 pr-1 text-right">
-              <span className="select-none text-[12.5px] font-bold tracking-tight text-accent/85">
-                answers<span className="text-foreground/70">Doc</span>
-              </span>
-            </div>
+          {/* 3.30: the desktop top bar is GONE — its controls (help / sound /
+              theme / account) live at the bottom of the rail, the wordmark
+              under the rail logo. This header survives ONLY on mobile, where
+              the rail is hidden and something must hold the menu + account. */}
+          <header className="sticky top-0 z-30 flex h-11 shrink-0 items-center gap-3 bg-transparent px-4 pt-1.5 lg:hidden">
+            <MobileNav />
+            <div className="flex-1" />
+            <HelpBot />
+            <SoundToggle />
+            <ThemeToggle />
+            <User />
           </header>
           <main className="min-h-0 flex-1 overflow-hidden">{children}</main>
         </div>
+        <SelectCopy />
         <SourceViewer />
       </div>
       <Analytics />
