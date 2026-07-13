@@ -221,6 +221,13 @@ interface BoardCtxState {
   /** Agent (robot) node being edited — its node id, or null = closed. */
   agentEditor: string | null;
   setAgentEditor: (id: string | null) => void;
+  /** Pill "click to add" request — a bank pill was clicked to add+wire content
+   *  into that lane (Library=sources, Draft=artifact, Examples=references,
+   *  Persona=robot). board-canvas hosts the dialog + does the wiring. */
+  pillAdd: { bankId: string; lane: 'sources' | 'artifact' | 'references' | 'robot' } | null;
+  setPillAdd: (
+    p: { bankId: string; lane: 'sources' | 'artifact' | 'references' | 'robot' } | null
+  ) => void;
   /** A node id awaiting delete confirmation, or null = closed. */
   pendingDelete: string | null;
   setPendingDelete: (id: string | null) => void;
@@ -877,6 +884,9 @@ export function BoardProvider({ children }: { children: ReactNode }) {
     { artId: string; afterCutEdge?: string } | null
   >(null);
   const [agentEditor, setAgentEditor] = useState<string | null>(null);
+  const [pillAdd, setPillAdd] = useState<
+    { bankId: string; lane: 'sources' | 'artifact' | 'references' | 'robot' } | null
+  >(null);
   const [pendingDelete, setPendingDelete] = useState<string | null>(null);
   const connectArtifactToBrain = useCallback(
     (artifactId: string, brainId: string) => {
@@ -1228,6 +1238,8 @@ export function BoardProvider({ children }: { children: ReactNode }) {
     setBrainPicker,
     agentEditor,
     setAgentEditor,
+    pillAdd,
+    setPillAdd,
     pendingDelete,
     setPendingDelete,
     unsnapPiece,

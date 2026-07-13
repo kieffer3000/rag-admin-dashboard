@@ -30,5 +30,6 @@
  * 3.28 — 2026-07-06: figure billing design pinned — a figure = 2 pages of storage, 50 figures = 1 upload credit (constants in plans.ts; extraction feature itself queued).
  * 3.29 — 2026-07-06: 📋 Forms — smart form filling: fillable PDF's fields read in-browser (pdf-lib, the PDF never leaves the tab), answered from wired sources via /api/fill-form (one batched JSON generation, 3 credits), values written back locally with per-field evidence + editable review.
  * 3.30 — 2026-07-10: walkthrough UX pass — desktop top bar removed (controls live at the rail's bottom, wordmark under the logo); rail is ONE flat dark olive with pure-white labels + technical aliases (RAG/prompts/artifacts…) and tooltips; Library/Projects rows are single dense lines (the "source ↗" link that hijacked clicks to a parked domain is gone); Agents cards edit on text-click; Forms steps sit side-by-side; highlight-to-copy everywhere (SelectCopy).
+ * 3.31 — 2026-07-13: click-to-add bank pills — clicking a bank's pill opens a popup that adds + WIRES content straight into that lane: Library → upload sources (one loose chip if single, a box if several), Draft → upload/paste one working doc → artifact, Examples → add a sample → reference, Persona → pick a saved agent → robot. New pillAdd store signal + board-canvas host; UploadDialog gained onSourcesAdded; new AgentPickDialog.
  */
-export const BUILD_VERSION = '3.30';
+export const BUILD_VERSION = '3.31';

@@ -70,6 +70,8 @@ import { ArtifactNode } from './artifact-node';
 import { ReferenceNode } from './reference-node';
 import { ArtifactDialog } from './artifact-dialog';
 import { AgentEditDialog } from './agent-edit-dialog';
+import { AgentPickDialog } from './agent-pick-dialog';
+import { UploadDialog } from '@/components/rag/library/upload-dialog';
 import { RenderProbe } from './render-probe';
 import { ArtifactBrainPicker } from './artifact-brain-picker';
 import { BrandSplash } from './brand-splash';
@@ -219,9 +221,9 @@ const FILL_MAX_ZOOM = 2;
 const FILL_MIN_ZOOM = 0.2;
 
 function BoardCanvasInner() {
-  const { board, setBoard, setBoardSilent, nextBoardId, busyBrains, saveNow, removeBoardNode, connectArtifactToBrain, setBrainPicker, setAgentEditor, pendingDelete, setPendingDelete, hydratedProject, researchBrainId, setResearchBrainId, resolveBrainScope } =
+  const { board, setBoard, setBoardSilent, nextBoardId, busyBrains, saveNow, removeBoardNode, connectArtifactToBrain, setBrainPicker, setAgentEditor, pendingDelete, setPendingDelete, hydratedProject, researchBrainId, setResearchBrainId, resolveBrainScope, pillAdd, setPillAdd } =
     useBoard();
-  const { media, projectMedia, addMedia, updateMedia, queueMediaPatch, deleteMedia, activeProjectId, activeProject, pendingBox, setPendingBox } = useRag();
+  const { media, projectMedia, addMedia, updateMedia, queueMediaPatch, deleteMedia, activeProjectId, activeProject, pendingBox, setPendingBox, addSourcesToProject } = useRag();
 
   // FLICKER PROBE (?probe=1): count every render of this canvas — the whole
   // board re-renders through context on each store update, which is the prime
@@ -1433,6 +1435,67 @@ function BoardCanvasInner() {
         return { ...prev, nodes: [...prev.nodes, { ...node, position }] };
       }),
     [setBoard]
+  );
+
+  // PILL UPLOAD (Library lane): after the popup creates sources, wire them into
+  // the bank's LEFT (sources) plug — a single source drops as one loose chip
+  // wired directly; several land in a fresh box (hub) wired as one. Placed just
+  // left of the bank (where the sources plug lives). The sources also join the
+  // active project so they show in its Library/Health.
+  const wireSourcesToBank = useCallback(
+    (bankId: string, ids: string[]) => {
+      if (!ids.length) return;
+      addSourcesToProject(activeProjectId, ids);
+      setBoard((prev) => {
+        const bank = prev.nodes.find((n) => n.id === bankId);
+        const base = bank
+          ? { x: bank.position.x - 340, y: bank.position.y }
+          : centerPos();
+        let nodes = [...prev.nodes];
+        const edges = [...prev.edges];
+        if (ids.length === 1) {
+          const chipId = nextBoardId('chip');
+          const pos = freePosition(nodes, base, CHIP_W, CHIP_H + 64);
+          nodes.push({ id: chipId, type: 'chip', position: pos, data: { mediaId: ids[0] } });
+          edges.push({
+            id: nextBoardId('e'),
+            type: 'scope',
+            source: chipId,
+            target: bankId,
+            targetHandle: 'sources'
+          });
+        } else {
+          const hubId = nextBoardId('hub');
+          const size = hubFootprint({ mediaType: 'cluster' }, ids.length);
+          const pos = freePosition(nodes, base, size.width, size.height);
+          nodes.push({
+            id: hubId,
+            type: 'hub',
+            position: pos,
+            data: { name: 'Uploads', mediaType: 'cluster' }
+          });
+          ids.forEach((mid) =>
+            nodes.push({
+              id: nextBoardId('chip'),
+              type: 'chip',
+              parentId: hubId,
+              position: { x: 0, y: 0 },
+              data: { mediaId: mid }
+            })
+          );
+          nodes = retile(nodes, hubId);
+          edges.push({
+            id: nextBoardId('e'),
+            type: 'scope',
+            source: hubId,
+            target: bankId,
+            targetHandle: 'sources'
+          });
+        }
+        return { ...prev, nodes, edges };
+      });
+    },
+    [setBoard, nextBoardId, centerPos, activeProjectId, addSourcesToProject]
   );
 
   // Drag a chest item onto the canvas → drop it as a piece at the cursor.
@@ -2953,6 +3016,133 @@ function BoardCanvasInner() {
       />
       <ArtifactBrainPicker />
       <AgentEditDialog />
+
+      {/* PILL "click to add" — a bank pill was clicked to add+wire content into
+          its lane. One dialog per lane; each wires straight into pillAdd.bankId
+          (direct for a single source, via a box for several) and closes. */}
+      {pillAdd && (
+        <>
+          <UploadDialog
+            open={pillAdd.lane === 'sources'}
+            onOpenChange={(o) => !o && setPillAdd(null)}
+            onSourcesAdded={(ids) => {
+              wireSourcesToBank(pillAdd.bankId, ids);
+              setPillAdd(null);
+            }}
+          />
+          <ArtifactDialog
+            open={pillAdd.lane === 'artifact'}
+            onOpenChange={(o) => !o && setPillAdd(null)}
+            onCreate={(a) => {
+              const artId = nextBoardId('art');
+              const bank = board.nodes.find((n) => n.id === pillAdd.bankId);
+              pushNode({
+                id: artId,
+                type: 'artifact',
+                position: bank
+                  ? { x: bank.position.x + 560, y: bank.position.y }
+                  : centerPos(),
+                width: 280,
+                height: 240,
+                data: {
+                  title: a.title ?? '',
+                  url: a.url ?? '',
+                  content: a.content,
+                  image: a.image,
+                  screenshot: a.screenshot
+                }
+              });
+              // Draft belongs to exactly one bank → wire straight to this one.
+              connectArtifactToBrain(artId, pillAdd.bankId);
+              setPillAdd(null);
+            }}
+          />
+          <ArtifactDialog
+            kind="reference"
+            open={pillAdd.lane === 'references'}
+            onOpenChange={(o) => !o && setPillAdd(null)}
+            onCreate={(a) => {
+              const refId = nextBoardId('ref');
+              const bank = board.nodes.find((n) => n.id === pillAdd.bankId);
+              pushNode({
+                id: refId,
+                type: 'reference',
+                position: bank
+                  ? { x: bank.position.x, y: bank.position.y - 260 }
+                  : centerPos(),
+                width: 234,
+                height: 170,
+                data: { title: a.title ?? '', url: a.url ?? '', content: a.content }
+              });
+              setBoard((prev) => ({
+                ...prev,
+                edges: [
+                  ...prev.edges,
+                  {
+                    id: nextBoardId('e'),
+                    type: 'scope',
+                    source: refId,
+                    target: pillAdd.bankId,
+                    targetHandle: 'references'
+                  }
+                ]
+              }));
+              setPillAdd(null);
+            }}
+          />
+          <AgentPickDialog
+            open={pillAdd.lane === 'robot'}
+            onOpenChange={(o) => !o && setPillAdd(null)}
+            onPick={(agent) => {
+              // Only ONE persona per bank.
+              const hasRobot = board.edges.some((e) => {
+                if (e.target !== pillAdd.bankId) return false;
+                const s = board.nodes.find((n) => n.id === e.source);
+                return !!s && (s.type === 'prompt' || s.type === 'agent');
+              });
+              if (hasRobot) {
+                window.alert(
+                  'This Answers Bank already has a Persona. Unplug the current one first.'
+                );
+                setPillAdd(null);
+                return;
+              }
+              const nodeId = nextBoardId('agent');
+              const bank = board.nodes.find((n) => n.id === pillAdd.bankId);
+              pushNode({
+                id: nodeId,
+                type: 'agent',
+                position: bank
+                  ? { x: bank.position.x, y: bank.position.y + 620 }
+                  : centerPos(),
+                width: AGENT_W,
+                height: AGENT_H,
+                data: {
+                  agentId: agent.id,
+                  name: agent.name,
+                  icon: agent.icon ?? '',
+                  avatar: agent.avatar ?? '',
+                  text: agent.systemPrompt
+                }
+              });
+              setBoard((prev) => ({
+                ...prev,
+                edges: [
+                  ...prev.edges,
+                  {
+                    id: nextBoardId('e'),
+                    type: 'scope',
+                    source: nodeId,
+                    target: pillAdd.bankId,
+                    targetHandle: 'robot'
+                  }
+                ]
+              }));
+              setPillAdd(null);
+            }}
+          />
+        </>
+      )}
       <RenderProbe counter={probeCounter} stats={probeStats} />
       {/* Delete confirmation — any node delete (robot button or right-click) asks
           first. */}

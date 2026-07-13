@@ -198,7 +198,8 @@ function BrainNodeInner({ id, data, selected }: NodeProps) {
     stashBrain,
     setResearchBrainId,
     removeBoardNode,
-    nextBoardId
+    nextBoardId,
+    setPillAdd
   } = useBoard();
   // Chat lives in the isolated store — only THIS brain re-renders on a stream
   // tick, not the whole board.
@@ -1503,9 +1504,17 @@ function BrainNodeInner({ id, data, selected }: NodeProps) {
             )}
           />
         </div>
-        <span className="pointer-events-none mr-2 rounded-full bg-accent px-2.5 py-0.5 text-center text-[10px] font-bold uppercase tracking-wider text-white shadow-md ring-1 ring-white/20 transition-transform group-hover/port:-translate-x-1">
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            setPillAdd({ bankId: id, lane: 'sources' });
+          }}
+          onPointerDown={(e) => e.stopPropagation()}
+          title="Add sources — upload & wire them into this bank's Library"
+          className="nodrag pointer-events-auto mr-2 cursor-pointer rounded-full bg-accent px-2.5 py-0.5 text-center text-[10px] font-bold uppercase tracking-wider text-white shadow-md ring-1 ring-white/20 transition-transform hover:brightness-110 group-hover/port:-translate-x-1"
+        >
           Library
-        </span>
+        </button>
       </div>
 
       {/* RIGHT — Draft (working doc) */}
@@ -1526,9 +1535,17 @@ function BrainNodeInner({ id, data, selected }: NodeProps) {
             )}
           />
         </div>
-        <span className="pointer-events-none ml-2 rounded-full bg-indigo-500 px-2.5 py-0.5 text-center text-[10px] font-bold uppercase tracking-wider text-white shadow-md ring-1 ring-white/20 transition-transform group-hover/port:translate-x-1">
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            setPillAdd({ bankId: id, lane: 'artifact' });
+          }}
+          onPointerDown={(e) => e.stopPropagation()}
+          title="Add a Draft — upload/paste the working doc you want help with"
+          className="nodrag pointer-events-auto ml-2 cursor-pointer rounded-full bg-indigo-500 px-2.5 py-0.5 text-center text-[10px] font-bold uppercase tracking-wider text-white shadow-md ring-1 ring-white/20 transition-transform hover:brightness-110 group-hover/port:translate-x-1"
+        >
           Draft
-        </span>
+        </button>
       </div>
 
       {/* TOP — Examples (reference samples) */}
@@ -1541,9 +1558,17 @@ function BrainNodeInner({ id, data, selected }: NodeProps) {
         title="Examples — wire samples that show the style/shape you want"
         className="!static !h-5 !w-5 !translate-x-0 !translate-y-0 !rounded-full !border-[3px] !border-card !bg-violet-500 !shadow-sm" />
         </div>
-        <span className="pointer-events-none mb-2 rounded-full bg-violet-500 px-2.5 py-0.5 text-center text-[10px] font-bold uppercase tracking-wider text-white shadow-md ring-1 ring-white/20 transition-transform group-hover/port:-translate-y-1">
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            setPillAdd({ bankId: id, lane: 'references' });
+          }}
+          onPointerDown={(e) => e.stopPropagation()}
+          title="Add an Example — a sample that shows the style/shape you want"
+          className="nodrag pointer-events-auto mb-2 cursor-pointer rounded-full bg-violet-500 px-2.5 py-0.5 text-center text-[10px] font-bold uppercase tracking-wider text-white shadow-md ring-1 ring-white/20 transition-transform hover:brightness-110 group-hover/port:-translate-y-1"
+        >
           Examples
-        </span>
+        </button>
       </div>
 
       {/* BOTTOM — Persona (voice/robot) */}
@@ -1556,9 +1581,17 @@ function BrainNodeInner({ id, data, selected }: NodeProps) {
         title="Persona — wire ONE agent/voice that shapes how it answers"
         className="!static !h-5 !w-5 !translate-x-0 !translate-y-0 !rounded-full !border-[3px] !border-card !bg-emerald-500 !shadow-sm" />
         </div>
-        <span className="pointer-events-none mt-2 rounded-full bg-emerald-500 px-2.5 py-0.5 text-center text-[10px] font-bold uppercase tracking-wider text-white shadow-md ring-1 ring-white/20 transition-transform group-hover/port:translate-y-1">
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            setPillAdd({ bankId: id, lane: 'robot' });
+          }}
+          onPointerDown={(e) => e.stopPropagation()}
+          title="Add a Persona — pick the agent/voice that shapes how it answers"
+          className="nodrag pointer-events-auto mt-2 cursor-pointer rounded-full bg-emerald-500 px-2.5 py-0.5 text-center text-[10px] font-bold uppercase tracking-wider text-white shadow-md ring-1 ring-white/20 transition-transform hover:brightness-110 group-hover/port:translate-y-1"
+        >
           Persona
-        </span>
+        </button>
       </div>
 
       <ConnectDialog

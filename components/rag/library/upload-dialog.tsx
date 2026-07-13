@@ -61,10 +61,15 @@ function nameFromUrl(url: string) {
 
 export function UploadDialog({
   open,
-  onOpenChange
+  onOpenChange,
+  onSourcesAdded
 }: {
   open: boolean;
   onOpenChange: (o: boolean) => void;
+  /** Fired with the ids of every source this submit created (before indexing
+   *  finishes). The board's pill-upload uses it to wire the new sources into a
+   *  bank; the Library passes nothing (plain upload). */
+  onSourcesAdded?: (ids: string[]) => void;
 }) {
   const { addMedia, updateMedia, media } = useRag();
   const [method, setMethod] = useState<Method>('file');
@@ -272,6 +277,11 @@ export function UploadDialog({
         }
       });
     }
+
+    // Report every source id created THIS submit (before indexing finishes) so
+    // a caller can wire them immediately — the chips show "processing" and flow
+    // into scope the moment each one indexes.
+    if (jobs.length) onSourcesAdded?.(jobs.map((j) => j.id));
 
     // Fire ingestion in the background (status updates live) — concurrency-capped.
     void (async () => {
