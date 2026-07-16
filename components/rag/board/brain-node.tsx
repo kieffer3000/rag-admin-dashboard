@@ -14,6 +14,7 @@ import { useRag } from '@/lib/rag/store';
 import { streamText } from '@/lib/rag/mock-answer';
 import { useScrollStyle } from '@/lib/rag/scroll-style';
 import { askBrain, opineBrain } from '@/lib/rag/board/ask';
+import { playVoiceover, type VoiceoverController } from '@/lib/rag/board/voiceover';
 import { ConnectDialog } from './connect-dialog';
 import { DoctrineDialog } from './doctrine-dialog';
 import {
@@ -69,6 +70,7 @@ import {
   Quote,
   Sparkles,
   Volume2,
+  Square,
   Copy,
   FileText,
   Type as TypeIcon,
@@ -330,32 +332,33 @@ function BrainNodeInner({ id, data, selected }: NodeProps) {
    * that already lives in the conversation, so it's regenerable on demand (click 🔈
    * again) and shouldn't clutter the board or the corpus.
    */
+  // Progressive playback: audio starts within seconds (first sentence) instead
+  // of after the whole answer synthesizes. Clicking the SAME message again stops
+  // it (and cancels pending chunk synths — you don't pay for what you don't
+  // hear). Synchronous so the <audio> element is born in the click gesture.
+  const voiceCtl = useRef<VoiceoverController | null>(null);
   const handleVoiceover = useCallback(
-    async (msg: ChatMessage) => {
-      if (!msg.content || voicingId) return;
-      setVoicingId(msg.id);
-      try {
-        const res = await fetch('/api/voiceover', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ text: msg.content })
-        });
-        const j = await res.json();
-        if (!res.ok) throw new Error(j?.error ?? 'voiceover failed');
-        const playUrl: string = j.url ?? j.dataUrl;
-        if (!playUrl) throw new Error('no audio returned');
-
-        // play it now (regenerable, so nothing is persisted)
-        try {
-          await new Audio(playUrl).play();
-        } catch {
-          /* autoplay may be blocked; clicking 🔈 again re-synthesizes and plays */
-        }
-      } catch {
-        /* surfaced via the button returning to idle; artifact text is regenerable */
-      } finally {
+    (msg: ChatMessage) => {
+      // Toggle off the one that's playing.
+      if (voicingId === msg.id) {
+        voiceCtl.current?.stop();
+        voiceCtl.current = null;
         setVoicingId(null);
+        return;
       }
+      if (!msg.content) return;
+      voiceCtl.current?.stop(); // a new read supersedes any current one
+      setVoicingId(msg.id);
+      voiceCtl.current = playVoiceover(msg.content, {
+        onEnd: () => {
+          voiceCtl.current = null;
+          setVoicingId(null);
+        },
+        onError: () => {
+          voiceCtl.current = null;
+          setVoicingId(null);
+        }
+      });
     },
     [voicingId]
   );
@@ -1823,13 +1826,17 @@ export function BrainMessage({
             )}
             {onVoiceover && (
               <button
-                onClick={() => !voicing && onVoiceover(m)}
-                disabled={voicing}
-                title="Read aloud"
-                className="nodrag flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground/70 transition-colors hover:bg-accent/10 hover:text-accent disabled:opacity-60"
+                onClick={() => onVoiceover(m)}
+                title={voicing ? 'Stop reading' : 'Read aloud'}
+                className={cn(
+                  'nodrag flex h-7 w-7 items-center justify-center rounded-md transition-colors',
+                  voicing
+                    ? 'bg-accent/15 text-accent'
+                    : 'text-muted-foreground/70 hover:bg-accent/10 hover:text-accent'
+                )}
               >
                 {voicing ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
+                  <Square className="h-3.5 w-3.5 fill-current" />
                 ) : (
                   <Volume2 className="h-4 w-4" />
                 )}

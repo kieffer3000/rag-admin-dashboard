@@ -106,7 +106,7 @@ export async function POST(req: Request) {
     );
   }
 
-  let body: { text?: string; voice?: string };
+  let body: { text?: string; voice?: string; chunk?: boolean };
   try {
     body = await req.json();
   } catch {
@@ -116,6 +116,10 @@ export async function POST(req: Request) {
   if (!text) return Response.json({ error: 'text is required' }, { status: 400 });
   const voice =
     typeof body?.voice === 'string' && body.voice ? body.voice : DEFAULT_VOICE;
+  // chunk mode (progressive playback): the client already sized this piece and
+  // orchestrates order/playback, so ALWAYS return an inline data URL — skip the
+  // Blob write (one tiny object per chunk = storage litter for regenerable audio).
+  const chunkMode = body?.chunk === true;
 
   try {
     const chunks = chunkText(text, MAX_CHARS);
@@ -128,7 +132,8 @@ export async function POST(req: Request) {
 
     // Durable cache when a Blob store is linked; else inline for the session
     // (the artifact's text is re-indexable regardless, so audio is regenerable).
-    if (process.env.BLOB_READ_WRITE_TOKEN) {
+    // Chunk mode always inlines (see above).
+    if (!chunkMode && process.env.BLOB_READ_WRITE_TOKEN) {
       try {
         const { put } = await import('@vercel/blob');
         const blob = await put(`voiceover/${userId}/${Date.now()}.wav`, wav, {

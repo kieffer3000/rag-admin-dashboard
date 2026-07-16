@@ -13,6 +13,7 @@ import {
 } from '@/lib/rag/board/brain-messages-store';
 import { useRag } from '@/lib/rag/store';
 import { askBrain, opineBrain } from '@/lib/rag/board/ask';
+import { playVoiceover, type VoiceoverController } from '@/lib/rag/board/voiceover';
 import { streamText } from '@/lib/rag/mock-answer';
 import { useScrollStyle } from '@/lib/rag/scroll-style';
 import { startHum, stopHum, playChime } from '@/lib/rag/board/sound';
@@ -139,24 +140,29 @@ export function ResearchOverlay({
   // Per-message actions — the same ones the brain card offers, so research mode
   // isn't a downgrade. Voiceover: ephemeral synth + play (regenerable). Edit:
   // drop the answer into an editable text piece on the canvas (there on exit).
-  async function handleVoiceover(msg: ChatMessage) {
-    if (!msg.content || voicingId) return;
-    setVoicingId(msg.id);
-    try {
-      const res = await fetch('/api/voiceover', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text: msg.content })
-      });
-      const j = await res.json();
-      if (!res.ok) throw new Error(j?.error ?? 'voiceover failed');
-      const playUrl: string = j.url ?? j.dataUrl;
-      if (playUrl) await new Audio(playUrl).play();
-    } catch {
-      /* clicking 🔈 again re-synthesizes */
-    } finally {
+  // Progressive playback (starts in seconds, not after the whole answer); click
+  // the active message again to stop + cancel pending chunk synths.
+  const voiceCtl = useRef<VoiceoverController | null>(null);
+  function handleVoiceover(msg: ChatMessage) {
+    if (voicingId === msg.id) {
+      voiceCtl.current?.stop();
+      voiceCtl.current = null;
       setVoicingId(null);
+      return;
     }
+    if (!msg.content) return;
+    voiceCtl.current?.stop();
+    setVoicingId(msg.id);
+    voiceCtl.current = playVoiceover(msg.content, {
+      onEnd: () => {
+        voiceCtl.current = null;
+        setVoicingId(null);
+      },
+      onError: () => {
+        voiceCtl.current = null;
+        setVoicingId(null);
+      }
+    });
   }
 
   function handleEditInText(msg: ChatMessage) {
