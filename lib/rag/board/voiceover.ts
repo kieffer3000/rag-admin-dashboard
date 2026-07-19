@@ -30,17 +30,24 @@ interface Opts {
   onError?: (e: unknown) => void;
 }
 
-const FIRST_MAX = 220; // ~one/two sentences → fast first audio
-const REST_MAX = 1200; // bigger = fewer round-trips; still well under engine limits
+// RAMPED chunk sizes (3.35). The pipeline only stays gapless if each clip's
+// PLAYBACK time covers the NEXT chunk's SYNTH time. Speech ≈ 13 chars/sec but
+// synth on this webhook ≈ overhead + ~25ms/char — so a tiny 220-char opener
+// (~17s of audio) could never cover a 1200-char follow-up (~35s synth): the
+// user heard "two lines… long gap… the rest". Growing sizes gradually keeps
+// every clip long enough to hide the synth of the one after it, while the
+// first still starts in seconds.
+const RAMP = [220, 350, 500, 700, 1000];
+const REST_MAX = 1200; // steady-state chunk once the buffer is built
 
-/** Sentence-aware plan with a short first chunk. */
+/** Sentence-aware plan with ramped chunk sizes (small → large). */
 function planChunks(text: string): string[] {
   const clean = text.replace(/\s+/g, ' ').trim();
   if (!clean) return [];
   const sentences = clean.match(/[^.!?]+[.!?]+|\S[^.!?]*$/g) ?? [clean];
   const chunks: string[] = [];
   let cur = '';
-  const limit = () => (chunks.length === 0 ? FIRST_MAX : REST_MAX);
+  const limit = () => RAMP[chunks.length] ?? REST_MAX;
   const flush = () => {
     if (cur.trim()) chunks.push(cur.trim());
     cur = '';
