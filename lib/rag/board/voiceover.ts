@@ -106,46 +106,43 @@ export function playVoiceover(text: string, opts: Opts = {}): VoiceoverControlle
     return { stop: () => {} };
   }
 
-  // Producer: synthesize chunks strictly ONE AT A TIME, in order (never burst
-  // the webhook). Results land in `ready` by index; '' marks a failed chunk.
-  const ready: Array<string | null> = new Array(chunks.length).fill(null);
-  let wake: (() => void) | null = null;
-  const bump = () => {
-    if (wake) {
-      const w = wake;
-      wake = null;
-      w();
-    }
-  };
-
-  (async () => {
-    for (let i = 0; i < chunks.length; i++) {
-      if (stopped) return;
+  // SERIALIZED synth via a promise CHAIN — chunk i's synth starts only after
+  // chunk i-1's settles, so the webhook is never called concurrently (a burst
+  // is what 502'd in 3.32). Each entry is a plain promise<url|null>. Awaiting a
+  // plain promise CANNOT lose a wakeup, unlike the hand-rolled latch this
+  // replaces: if the producer signalled in the gap between the consumer's
+  // "is it ready?" check and its sleep, that signal was lost and playback
+  // stalled after the first clip — the "reads 2 lines then stops" bug.
+  const synth: Array<Promise<string | null>> = [];
+  let prev: Promise<unknown> = Promise.resolve();
+  for (let i = 0; i < chunks.length; i++) {
+    const idx = i;
+    const mine = prev.then(async () => {
+      if (stopped) return null;
       try {
-        ready[i] = await synthChunk(chunks[i], opts.voice, ac.signal);
+        return await synthChunk(chunks[idx], opts.voice, ac.signal);
       } catch {
-        ready[i] = ''; // failed → consumer skips it
+        return null; // failed chunk → skipped at play time; chain continues
       }
-      bump();
-    }
-  })();
+    });
+    synth.push(mine);
+    prev = mine.catch(() => null); // keep the chain alive past any one failure
+  }
 
-  // Consumer: play chunks in order, waiting when the next isn't ready yet.
+  // Consumer: play chunks strictly in order. synth[i+1] is already running while
+  // chunk i plays, so these awaits resolve near-instantly and playback is gapless.
   (async () => {
     let started = false;
     for (let i = 0; i < chunks.length; i++) {
-      while (!stopped && ready[i] === null)
-        await new Promise<void>((res) => {
-          wake = res;
-        });
       if (stopped) return;
-      const url = ready[i];
-      if (!url) continue; // this chunk failed to synth → skip
+      const url = await synth[i];
+      if (stopped) return;
+      if (!url) continue; // this chunk failed to synth → skip, keep going
       audio.src = url;
       try {
         await audio.play();
       } catch (e) {
-        // Autoplay blocked / interrupted. If we've never made a sound, report.
+        // Autoplay blocked / interrupted. If nothing has sounded yet, report.
         if (!stopped && !started) {
           opts.onError?.(e);
           return;
@@ -156,12 +153,17 @@ export function playVoiceover(text: string, opts: Opts = {}): VoiceoverControlle
         started = true;
         opts.onStart?.();
       }
-      // Wait for this clip to finish (or error) before the next.
+      // Wait for THIS clip to finish before the next. Clear the handlers on
+      // settle so a stale event from the previous src can't resolve early.
       await new Promise<void>((resolve) => {
-        audio.onended = () => resolve();
-        audio.onerror = () => resolve();
+        const done = () => {
+          audio.onended = null;
+          audio.onerror = null;
+          resolve();
+        };
+        audio.onended = done;
+        audio.onerror = done;
       });
-      if (stopped) return;
     }
     if (!stopped) opts.onEnd?.();
   })();
@@ -170,7 +172,6 @@ export function playVoiceover(text: string, opts: Opts = {}): VoiceoverControlle
     stop: () => {
       stopped = true;
       ac.abort();
-      bump();
       try {
         audio.pause();
         audio.src = '';
