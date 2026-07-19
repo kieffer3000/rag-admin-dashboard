@@ -2,19 +2,20 @@
 // the whole answer renders.
 //
 // The engine (Gemini native TTS, reached via the Make webhook) returns a WHOLE
-// clip per call — it can't stream partial audio. So we stream at the CHUNK
-// level: split the text into a SHORT first chunk (one/two sentences → fast first
-// audio) followed by larger chunks, fetch them a couple ahead, and play them in
-// order through one <audio> element. Time-to-first-audio drops from "synthesize
-// everything" (minutes on a long answer) to "synthesize one sentence" (seconds).
+// clip per call AND can only handle ONE call at a time — the old route always
+// synthesized sequentially, so it never bursted it. So we do the same here:
+// split the text into a SHORT first chunk (fast first audio) + larger chunks,
+// synthesize them ONE AT A TIME in order (a bursted prefetch overloaded the
+// webhook → 502s → silence), and play each as it lands. Because a chunk's audio
+// is far longer than its synth time, the next chunk is always ready before the
+// current one ends — gapless without concurrency.
 //
-// Cost is UNCHANGED — the same characters are synthesized — and it's often
-// cheaper: stop() aborts in-flight + pending chunks, so a voiceover you cut off
-// never pays to synthesize the part you didn't hear. Accuracy is identical: same
-// engine, same voice.
+// Cost is UNCHANGED (same characters) and often cheaper: stop() aborts the
+// in-flight + remaining synths, so a voiceover you cut off never pays for the
+// part you didn't hear. Accuracy is identical: same engine, same voice.
 
 export interface VoiceoverController {
-  /** Stop playback, abort in-flight + pending chunk synths (stops the spend). */
+  /** Stop playback, abort the in-flight + remaining chunk synths (stops spend). */
   stop: () => void;
 }
 
@@ -22,19 +23,15 @@ interface Opts {
   voice?: string;
   /** Fired when the FIRST chunk actually begins playing. */
   onStart?: () => void;
-  /** Fired when the last chunk finishes (natural end). */
+  /** Fired when the last chunk finishes (natural end) or nothing could play. */
   onEnd?: () => void;
-  /** Fired if the first chunk never plays (synth/network error). Later-chunk
+  /** Fired if the FIRST chunk never plays (synth/network/autoplay). Later-chunk
    *  failures are skipped silently so one bad chunk can't kill the rest. */
   onError?: (e: unknown) => void;
 }
 
-// First chunk stays tiny so it returns fast; the rest are larger to keep the
-// round-trip count (and any per-call Make overhead) low without starving
-// playback — we prefetch ahead so the bigger chunks are ready in time.
-const FIRST_MAX = 220;
-const REST_MAX = 1200;
-const PREFETCH_AHEAD = 2;
+const FIRST_MAX = 220; // ~one/two sentences → fast first audio
+const REST_MAX = 1200; // bigger = fewer round-trips; still well under engine limits
 
 /** Sentence-aware plan with a short first chunk. */
 function planChunks(text: string): string[] {
@@ -61,6 +58,37 @@ function planChunks(text: string): string[] {
   return chunks;
 }
 
+/** Synthesize ONE chunk → object URL. One retry for a transient webhook 502. */
+async function synthChunk(
+  text: string,
+  voice: string | undefined,
+  signal: AbortSignal
+): Promise<string> {
+  let lastErr: unknown;
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      const res = await fetch('/api/voiceover', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        // chunk:true → inline data URL, no Blob litter; we sized the text here.
+        body: JSON.stringify({ text, voice, chunk: true }),
+        signal
+      });
+      const j = await res.json().catch(() => null);
+      if (!res.ok) throw new Error(j?.error ?? `voiceover ${res.status}`);
+      const url = j?.dataUrl ?? j?.url;
+      if (!url) throw new Error('no audio returned');
+      return url as string;
+    } catch (e) {
+      if (signal.aborted) throw e;
+      lastErr = e;
+      // brief backoff before the single retry (webhook was momentarily busy)
+      await new Promise((r) => setTimeout(r, 400));
+    }
+  }
+  throw lastErr;
+}
+
 /**
  * Start speaking `text`. Returns a controller whose stop() halts playback and
  * cancels outstanding synths. Call it from a click handler (the <audio> element
@@ -78,73 +106,71 @@ export function playVoiceover(text: string, opts: Opts = {}): VoiceoverControlle
     return { stop: () => {} };
   }
 
-  const fetches: Array<Promise<string> | null> = new Array(chunks.length).fill(null);
-
-  function fetchChunk(i: number): Promise<string> {
-    if (fetches[i]) return fetches[i]!;
-    const p = (async () => {
-      const res = await fetch('/api/voiceover', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        // chunk:true → the route returns an inline data URL (no Blob litter) and
-        // skips its own multi-chunk loop; we already sized the text here.
-        body: JSON.stringify({ text: chunks[i], voice: opts.voice, chunk: true }),
-        signal: ac.signal
-      });
-      const j = await res.json();
-      if (!res.ok) throw new Error(j?.error ?? 'voiceover failed');
-      const url = j.dataUrl ?? j.url;
-      if (!url) throw new Error('no audio returned');
-      return url as string;
-    })();
-    fetches[i] = p;
-    return p;
-  }
-
-  function prefetch(from: number) {
-    for (let i = from; i < Math.min(chunks.length, from + 1 + PREFETCH_AHEAD); i++)
-      fetchChunk(i).catch(() => {}); // errors surface at play time
-  }
-
-  async function playFrom(i: number) {
-    if (stopped) return;
-    if (i >= chunks.length) {
-      opts.onEnd?.();
-      return;
+  // Producer: synthesize chunks strictly ONE AT A TIME, in order (never burst
+  // the webhook). Results land in `ready` by index; '' marks a failed chunk.
+  const ready: Array<string | null> = new Array(chunks.length).fill(null);
+  let wake: (() => void) | null = null;
+  const bump = () => {
+    if (wake) {
+      const w = wake;
+      wake = null;
+      w();
     }
-    prefetch(i);
-    let url: string;
-    try {
-      url = await fetchChunk(i);
-    } catch (e) {
-      // First chunk failing = nothing to hear → report. A later chunk failing →
-      // skip it and keep going so one hiccup can't end the whole read.
+  };
+
+  (async () => {
+    for (let i = 0; i < chunks.length; i++) {
       if (stopped) return;
-      if (i === 0) opts.onError?.(e);
-      else playFrom(i + 1);
-      return;
+      try {
+        ready[i] = await synthChunk(chunks[i], opts.voice, ac.signal);
+      } catch {
+        ready[i] = ''; // failed → consumer skips it
+      }
+      bump();
     }
-    if (stopped) return;
-    audio.src = url;
-    audio.onended = () => playFrom(i + 1);
-    audio.onerror = () => {
-      if (!stopped) playFrom(i + 1);
-    };
-    try {
-      await audio.play();
-      if (i === 0) opts.onStart?.();
-    } catch (e) {
-      // Autoplay blocked or interrupted.
-      if (!stopped && i === 0) opts.onError?.(e);
-    }
-  }
+  })();
 
-  playFrom(0);
+  // Consumer: play chunks in order, waiting when the next isn't ready yet.
+  (async () => {
+    let started = false;
+    for (let i = 0; i < chunks.length; i++) {
+      while (!stopped && ready[i] === null)
+        await new Promise<void>((res) => {
+          wake = res;
+        });
+      if (stopped) return;
+      const url = ready[i];
+      if (!url) continue; // this chunk failed to synth → skip
+      audio.src = url;
+      try {
+        await audio.play();
+      } catch (e) {
+        // Autoplay blocked / interrupted. If we've never made a sound, report.
+        if (!stopped && !started) {
+          opts.onError?.(e);
+          return;
+        }
+        continue;
+      }
+      if (!started) {
+        started = true;
+        opts.onStart?.();
+      }
+      // Wait for this clip to finish (or error) before the next.
+      await new Promise<void>((resolve) => {
+        audio.onended = () => resolve();
+        audio.onerror = () => resolve();
+      });
+      if (stopped) return;
+    }
+    if (!stopped) opts.onEnd?.();
+  })();
 
   return {
     stop: () => {
       stopped = true;
       ac.abort();
+      bump();
       try {
         audio.pause();
         audio.src = '';
