@@ -14,7 +14,11 @@ import { useRag } from '@/lib/rag/store';
 import { streamText } from '@/lib/rag/mock-answer';
 import { useScrollStyle } from '@/lib/rag/scroll-style';
 import { askBrain, opineBrain } from '@/lib/rag/board/ask';
-import { playVoiceover, type VoiceoverController } from '@/lib/rag/board/voiceover';
+import {
+  playVoiceover,
+  unlockAudio,
+  type VoiceoverController
+} from '@/lib/rag/board/voiceover';
 import { ConnectDialog } from './connect-dialog';
 import { DoctrineDialog } from './doctrine-dialog';
 import {
@@ -189,6 +193,8 @@ function BrainNodeInner({ id, data, selected }: NodeProps) {
     color?: string;
     answerMode?: 'cited' | 'hybrid';
     speed?: 'fast' | 'detailed' | 'research';
+    /** Audio Mode (3.36): every arriving answer is read aloud automatically. */
+    audioMode?: boolean;
   };
   const {
     board,
@@ -337,6 +343,27 @@ function BrainNodeInner({ id, data, selected }: NodeProps) {
   // it (and cancels pending chunk synths — you don't pay for what you don't
   // hear). Synchronous so the <audio> element is born in the click gesture.
   const voiceCtl = useRef<VoiceoverController | null>(null);
+  // AUDIO MODE (3.36): the shared audio element is unlocked on the toggle
+  // CLICK (the only way auto-play outside a gesture is allowed). Ref so the
+  // async ask callback reads the CURRENT mode, not the render it closed over.
+  const audioModeRef = useRef(false);
+  audioModeRef.current = d.audioMode === true;
+
+  const startVoiceover = useCallback((msgId: string, content: string) => {
+    voiceCtl.current?.stop(); // a new read supersedes any current one
+    setVoicingId(msgId);
+    voiceCtl.current = playVoiceover(content, {
+      onEnd: () => {
+        voiceCtl.current = null;
+        setVoicingId(null);
+      },
+      onError: () => {
+        voiceCtl.current = null;
+        setVoicingId(null);
+      }
+    });
+  }, []);
+
   const handleVoiceover = useCallback(
     (msg: ChatMessage) => {
       // Toggle off the one that's playing.
@@ -347,20 +374,9 @@ function BrainNodeInner({ id, data, selected }: NodeProps) {
         return;
       }
       if (!msg.content) return;
-      voiceCtl.current?.stop(); // a new read supersedes any current one
-      setVoicingId(msg.id);
-      voiceCtl.current = playVoiceover(msg.content, {
-        onEnd: () => {
-          voiceCtl.current = null;
-          setVoicingId(null);
-        },
-        onError: () => {
-          voiceCtl.current = null;
-          setVoicingId(null);
-        }
-      });
+      startVoiceover(msg.id, msg.content);
     },
-    [voicingId]
+    [voicingId, startVoiceover]
   );
 
   /**
@@ -696,6 +712,10 @@ function BrainNodeInner({ id, data, selected }: NodeProps) {
         setBrainBusy(id, false);
         stopHum();
         playChime(); // the answer landed
+        // AUDIO MODE: the arriving answer reads itself — no 🔈 press needed.
+        // Uses the element unlocked at toggle time (autoplay-policy safe).
+        if (audioModeRef.current && content && !noMatch)
+          startVoiceover(asstId, content);
         void maybeUpdateSummary(q, content); // fold far-back turns (long convos)
         // long-term memory: remember this Q&A across sessions (skip no-match)
         if (content && !noMatch) {
@@ -1457,6 +1477,36 @@ function BrainNodeInner({ id, data, selected }: NodeProps) {
                 <Sparkles className="h-[15px] w-[15px]" /> Cited + AI
               </>
             )}
+          </button>
+          {/* AUDIO MODE (3.36) — every arriving answer reads itself aloud.
+              The toggle CLICK unlocks the shared audio element (autoplay
+              policy: an element that played in a gesture may play again
+              without one). Turning it off also stops any current read. */}
+          <button
+            onClick={() => {
+              const next = d.audioMode !== true;
+              if (next) {
+                unlockAudio(); // in-gesture: grants gesture-free playback later
+              } else {
+                voiceCtl.current?.stop();
+                voiceCtl.current = null;
+                setVoicingId(null);
+              }
+              updateBoardNodeData(id, { audioMode: next });
+            }}
+            title={
+              d.audioMode
+                ? 'Audio mode ON — every answer is read aloud as it arrives. Click to turn off.'
+                : 'Audio mode — read every answer aloud automatically as it arrives, hands-free.'
+            }
+            className={cn(
+              'nodrag flex items-center gap-1 rounded-full px-2 py-0.5 text-[15px] font-semibold uppercase tracking-wide transition-colors',
+              d.audioMode
+                ? 'bg-accent text-white shadow-[0_1px_3px_rgb(0_0_0/0.18)]'
+                : 'bg-muted text-muted-foreground hover:text-foreground'
+            )}
+          >
+            <Volume2 className="h-[15px] w-[15px]" /> Audio
           </button>
           {/* Opine citations toggle — only when an artifact (right plug) is wired.
               ON (default) = inline [n] footnotes; OFF = clean prose, still grounded. */}

@@ -143,17 +143,17 @@ export function ResearchOverlay({
   // Progressive playback (starts in seconds, not after the whole answer); click
   // the active message again to stop + cancel pending chunk synths.
   const voiceCtl = useRef<VoiceoverController | null>(null);
-  function handleVoiceover(msg: ChatMessage) {
-    if (voicingId === msg.id) {
-      voiceCtl.current?.stop();
-      voiceCtl.current = null;
-      setVoicingId(null);
-      return;
-    }
-    if (!msg.content) return;
+  // AUDIO MODE rides the bank's flag (set on the brain card) — answers asked
+  // from research mode read themselves too. Ref so the async ask callback sees
+  // the current value.
+  const audioModeRef = useRef(false);
+  audioModeRef.current =
+    board.nodes.find((n) => n.id === brainId)?.data.audioMode === true;
+
+  function startVoiceover(msgId: string, content: string) {
     voiceCtl.current?.stop();
-    setVoicingId(msg.id);
-    voiceCtl.current = playVoiceover(msg.content, {
+    setVoicingId(msgId);
+    voiceCtl.current = playVoiceover(content, {
       onEnd: () => {
         voiceCtl.current = null;
         setVoicingId(null);
@@ -163,6 +163,17 @@ export function ResearchOverlay({
         setVoicingId(null);
       }
     });
+  }
+
+  function handleVoiceover(msg: ChatMessage) {
+    if (voicingId === msg.id) {
+      voiceCtl.current?.stop();
+      voiceCtl.current = null;
+      setVoicingId(null);
+      return;
+    }
+    if (!msg.content) return;
+    startVoiceover(msg.id, msg.content);
   }
 
   function handleEditInText(msg: ChatMessage) {
@@ -455,6 +466,9 @@ export function ResearchOverlay({
         setBrainBusy(brainId, false);
         stopHum();
         playChime();
+        // AUDIO MODE: the arriving answer reads itself (bank's flag).
+        if (audioModeRef.current && content && !noMatch)
+          startVoiceover(asstId, content);
         if (content && !noMatch) {
           void fetch('/api/memory/store', {
             method: 'POST',

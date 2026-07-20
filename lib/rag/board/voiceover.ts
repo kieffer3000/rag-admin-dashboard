@@ -30,6 +30,68 @@ interface Opts {
   onError?: (e: unknown) => void;
 }
 
+// ONE shared <audio> element for the whole app (module singleton):
+//  - unlockAudio() plays silence through it INSIDE the Audio-Mode toggle click,
+//    which grants it the right to play() later WITHOUT a gesture (autoplay
+//    policy is per-element on iOS; prior playback satisfies Chrome too).
+//  - It also enforces one-voice-at-a-time: starting any voiceover stops the
+//    previous one, wherever it was started (bank card or research overlay).
+let sharedEl: HTMLAudioElement | null = null;
+let activeCtl: VoiceoverController | null = null;
+function getSharedEl(): HTMLAudioElement {
+  if (!sharedEl) {
+    sharedEl = new Audio();
+    sharedEl.preload = 'auto';
+  }
+  return sharedEl;
+}
+
+/** Answers are HTML (footnote sups, [n] markers, tags) — speak the PROSE only. */
+function speakableText(html: string): string {
+  return html
+    .replace(/<sup[^>]*>[\s\S]*?<\/sup>/gi, '')
+    .replace(/\[\d+\](?:\s*\[\d+\])*/g, '')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/&[a-z]+;/gi, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+/**
+ * UNLOCK the shared audio element for later gesture-free playback.
+ * MUST be called inside a user gesture (the Audio-Mode toggle click): it plays
+ * ~0.1s of silence, which grants the element the right to play() again later
+ * without a gesture. Call once; the grant lasts for the page's lifetime.
+ */
+export function unlockAudio(): void {
+  const el = getSharedEl();
+  // 0.1s of 24kHz 16-bit mono silence, WAV-wrapped, built inline (no asset).
+  const rate = 24000;
+  const samples = Math.floor(rate * 0.1);
+  const buf = new ArrayBuffer(44 + samples * 2);
+  const v = new DataView(buf);
+  const w = (o: number, s: string) => {
+    for (let i = 0; i < s.length; i++) v.setUint8(o + i, s.charCodeAt(i));
+  };
+  w(0, 'RIFF');
+  v.setUint32(4, 36 + samples * 2, true);
+  w(8, 'WAVE');
+  w(12, 'fmt ');
+  v.setUint32(16, 16, true);
+  v.setUint16(20, 1, true);
+  v.setUint16(22, 1, true);
+  v.setUint32(24, rate, true);
+  v.setUint32(28, rate * 2, true);
+  v.setUint16(32, 2, true);
+  v.setUint16(34, 16, true);
+  w(36, 'data');
+  v.setUint32(40, samples * 2, true);
+  el.src = URL.createObjectURL(new Blob([buf], { type: 'audio/wav' }));
+  void el.play().catch(() => {
+    /* even a blocked attempt is harmless; the toggle click usually grants it */
+  });
+}
+
 // RAMPED chunk sizes (3.35). The pipeline only stays gapless if each clip's
 // PLAYBACK time covers the NEXT chunk's SYNTH time. Speech ≈ 13 chars/sec but
 // synth on this webhook ≈ overhead + ~25ms/char — so a tiny 220-char opener
@@ -102,9 +164,11 @@ async function synthChunk(
  * is created synchronously, in the user gesture).
  */
 export function playVoiceover(text: string, opts: Opts = {}): VoiceoverController {
-  const chunks = planChunks(text);
-  const audio = new Audio(); // created in-gesture
-  audio.preload = 'auto';
+  const chunks = planChunks(speakableText(text));
+  // The SHARED element: unlocked once via unlockAudio() (Audio Mode), and one
+  // voice at a time — starting this read stops whichever one was playing.
+  activeCtl?.stop();
+  const audio = getSharedEl();
   const ac = new AbortController();
   let stopped = false;
 
@@ -175,16 +239,18 @@ export function playVoiceover(text: string, opts: Opts = {}): VoiceoverControlle
     if (!stopped) opts.onEnd?.();
   })();
 
-  return {
+  const ctl: VoiceoverController = {
     stop: () => {
       stopped = true;
       ac.abort();
+      if (activeCtl === ctl) activeCtl = null;
       try {
         audio.pause();
-        audio.src = '';
       } catch {
         /* already torn down */
       }
     }
   };
+  activeCtl = ctl;
+  return ctl;
 }
