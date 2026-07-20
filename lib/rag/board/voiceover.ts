@@ -92,13 +92,11 @@ export function unlockAudio(): void {
   });
 }
 
-// RAMPED chunk sizes (3.35). The pipeline only stays gapless if each clip's
-// PLAYBACK time covers the NEXT chunk's SYNTH time. Speech ≈ 13 chars/sec but
-// synth on this webhook ≈ overhead + ~25ms/char — so a tiny 220-char opener
-// (~17s of audio) could never cover a 1200-char follow-up (~35s synth): the
-// user heard "two lines… long gap… the rest". Growing sizes gradually keeps
-// every clip long enough to hide the synth of the one after it, while the
-// first still starts in seconds.
+// RAMPED chunk sizes. Small opener → fast first audio; sizes grow so later
+// clips carry more text per round-trip (fewer Make ops). MEASURED rates
+// (2026-07-20): speech ≈ 60ms/char, synth ≈ 1.7-3.5s + 31-45ms/char — with the
+// 2-concurrent pool below, every clip's playback comfortably covers the
+// remaining synth even at worst-case variance.
 const RAMP = [220, 350, 500, 700, 1000];
 const REST_MAX = 1200; // steady-state chunk once the buffer is built
 
@@ -177,28 +175,40 @@ export function playVoiceover(text: string, opts: Opts = {}): VoiceoverControlle
     return { stop: () => {} };
   }
 
-  // SERIALIZED synth via a promise CHAIN — chunk i's synth starts only after
-  // chunk i-1's settles, so the webhook is never called concurrently (a burst
-  // is what 502'd in 3.32). Each entry is a plain promise<url|null>. Awaiting a
-  // plain promise CANNOT lose a wakeup, unlike the hand-rolled latch this
-  // replaces: if the producer signalled in the gap between the consumer's
-  // "is it ready?" check and its sleep, that signal was lost and playback
-  // stalled after the first clip — the "reads 2 lines then stops" bug.
-  const synth: Array<Promise<string | null>> = [];
-  let prev: Promise<unknown> = Promise.resolve();
-  for (let i = 0; i < chunks.length; i++) {
-    const idx = i;
-    const mine = prev.then(async () => {
-      if (stopped) return null;
-      try {
-        return await synthChunk(chunks[idx], opts.voice, ac.signal);
-      } catch {
-        return null; // failed chunk → skipped at play time; chain continues
-      }
-    });
-    synth.push(mine);
-    prev = mine.catch(() => null); // keep the chain alive past any one failure
-  }
+  // ORDERED POOL OF 2 (3.38) — MEASURED on the live webhook (2026-07-20):
+  // synth ≈ 1.7-3.5s fixed + 31-45ms/char (variance is real: 16.6/21.3/21.7s
+  // for the same 480 chars), speech plays at ~60ms/char. Serially, a small
+  // chunk's audio could NOT cover the next chunk's synth (13s of opener audio
+  // vs ~19s synth) → the "2 lines… gap… continues" seam. The webhook DOES
+  // accept 2 concurrent calls (verified: both 200, truly parallel; the 3.32
+  // silence was a 3-burst) — so run at most TWO synths at once, started in
+  // order: the second chunk cooks WHILE the first plays and every seam closes
+  // even at worst-case variance. Each entry stays a plain promise<url|null> —
+  // awaiting a plain promise cannot lose a wakeup (the 3.33 latch bug).
+  const MAX_CONCURRENT = 2;
+  const resolvers: Array<(u: string | null) => void> = [];
+  const synth: Array<Promise<string | null>> = chunks.map(
+    (_, i) =>
+      new Promise<string | null>((res) => {
+        resolvers[i] = res;
+      })
+  );
+  let nextIdx = 0;
+  let inFlight = 0;
+  const pump = () => {
+    while (!stopped && inFlight < MAX_CONCURRENT && nextIdx < chunks.length) {
+      const i = nextIdx++;
+      inFlight++;
+      synthChunk(chunks[i], opts.voice, ac.signal)
+        .then((u) => resolvers[i](u))
+        .catch(() => resolvers[i](null)) // failed chunk → skipped at play time
+        .finally(() => {
+          inFlight--;
+          pump();
+        });
+    }
+  };
+  pump();
 
   // Consumer: play chunks strictly in order. synth[i+1] is already running while
   // chunk i plays, so these awaits resolve near-instantly and playback is gapless.
