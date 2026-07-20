@@ -13,7 +13,11 @@ import {
 } from '@/lib/rag/board/brain-messages-store';
 import { useRag } from '@/lib/rag/store';
 import { askBrain, opineBrain } from '@/lib/rag/board/ask';
-import { playVoiceover, type VoiceoverController } from '@/lib/rag/board/voiceover';
+import {
+  playVoiceover,
+  unlockAudio,
+  type VoiceoverController
+} from '@/lib/rag/board/voiceover';
 import { streamText } from '@/lib/rag/mock-answer';
 import { useScrollStyle } from '@/lib/rag/scroll-style';
 import { startHum, stopHum, playChime } from '@/lib/rag/board/sound';
@@ -28,6 +32,7 @@ import {
   Zap,
   Search,
   Telescope,
+  Volume2,
   Mic,
   MoreHorizontal,
   Pencil,
@@ -738,7 +743,7 @@ export function ResearchOverlay({
             </button>
           </div>
           {/* speed: Fast / Detailed / Research — same control as the brain card */}
-          <div className="mt-3 flex justify-center">
+          <div className="mt-3 flex items-center justify-center gap-2">
             <div
               role="group"
               aria-label="Answer speed"
@@ -785,6 +790,35 @@ export function ResearchOverlay({
                 <Telescope className="h-3.5 w-3.5" /> Research
               </button>
             </div>
+            {/* AUDIO MODE (3.37) — same per-bank flag as the brain card, so it
+                can be flipped from research mode too. Enabling it here is a
+                gesture → unlock the shared audio element for auto-play. */}
+            <button
+              onClick={() => {
+                const next = audioModeRef.current !== true;
+                if (next) {
+                  unlockAudio();
+                } else {
+                  voiceCtl.current?.stop();
+                  voiceCtl.current = null;
+                  setVoicingId(null);
+                }
+                updateBoardNodeData(brainId, { audioMode: next });
+              }}
+              title={
+                audioModeRef.current
+                  ? 'Audio mode ON — every answer is read aloud as it arrives. Click to turn off.'
+                  : 'Audio mode — read every answer aloud automatically as it arrives, hands-free.'
+              }
+              className={cn(
+                'flex items-center gap-1 rounded-full px-3 py-1 text-[12px] font-semibold uppercase tracking-wide transition-colors',
+                audioModeRef.current
+                  ? 'bg-accent text-white shadow-[0_1px_3px_rgb(0_0_0/0.18)]'
+                  : 'bg-black/[0.05] text-muted-foreground/70 hover:text-foreground dark:bg-white/[0.06]'
+              )}
+            >
+              <Volume2 className="h-3.5 w-3.5" /> Audio
+            </button>
           </div>
           <p className="mt-2 text-center text-[11px] text-muted-foreground/55">
             answersDoc cites every claim. Press Esc to exit research mode.
