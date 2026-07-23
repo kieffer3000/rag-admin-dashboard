@@ -3,6 +3,7 @@ import { Sidebar } from '@/components/rag/sidebar';
 import { MobileNav } from '@/components/rag/mobile-nav';
 import { ThemeToggle } from '@/components/rag/theme-toggle';
 import { SoundToggle } from '@/components/rag/sound-toggle';
+import { VoicePicker } from '@/components/rag/voice-picker';
 import { HelpBot } from '@/components/rag/help-bot';
 import { SourceViewer } from '@/components/rag/source-viewer';
 import { SelectCopy } from '@/components/rag/select-copy';
@@ -35,6 +36,7 @@ export default function DashboardLayout({
             <div className="flex-1" />
             <HelpBot />
             <SoundToggle />
+            <VoicePicker />
             <ThemeToggle />
             <User />
           </header>

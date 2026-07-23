@@ -22,6 +22,7 @@ import { RoundTableIcon } from '@/components/rag/round-table-icon';
 import { HelpBot } from '@/components/rag/help-bot';
 import { SoundToggle } from '@/components/rag/sound-toggle';
 import { ThemeToggle } from '@/components/rag/theme-toggle';
+import { VoicePicker } from '@/components/rag/voice-picker';
 import { User } from '@/components/rag/user';
 import { useRag } from '@/lib/rag/store';
 import { useIsAdmin } from '@/lib/rag/use-role';
@@ -387,6 +388,7 @@ export function Sidebar() {
       <div className="mt-auto flex flex-col items-center gap-1 pt-3">
         <HelpBot rail />
         <SoundToggle rail />
+        <VoicePicker rail />
         <ThemeToggle rail />
         <User rail />
         {/* Build number — bump rules in lib/version.ts. */}

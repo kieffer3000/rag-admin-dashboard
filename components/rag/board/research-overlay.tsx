@@ -18,6 +18,7 @@ import {
   unlockAudio,
   type VoiceoverController
 } from '@/lib/rag/board/voiceover';
+import { getVoice } from '@/lib/rag/tts-voice';
 import { streamText } from '@/lib/rag/mock-answer';
 import { useScrollStyle } from '@/lib/rag/scroll-style';
 import { startHum, stopHum, playChime } from '@/lib/rag/board/sound';
@@ -159,6 +160,7 @@ export function ResearchOverlay({
     voiceCtl.current?.stop();
     setVoicingId(msgId);
     voiceCtl.current = playVoiceover(content, {
+      voice: getVoice(),
       onEnd: () => {
         voiceCtl.current = null;
         setVoicingId(null);

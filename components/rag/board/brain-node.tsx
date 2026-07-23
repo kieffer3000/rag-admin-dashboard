@@ -19,6 +19,7 @@ import {
   unlockAudio,
   type VoiceoverController
 } from '@/lib/rag/board/voiceover';
+import { getVoice } from '@/lib/rag/tts-voice';
 import { ConnectDialog } from './connect-dialog';
 import { DoctrineDialog } from './doctrine-dialog';
 import {
@@ -353,6 +354,7 @@ function BrainNodeInner({ id, data, selected }: NodeProps) {
     voiceCtl.current?.stop(); // a new read supersedes any current one
     setVoicingId(msgId);
     voiceCtl.current = playVoiceover(content, {
+      voice: getVoice(),
       onEnd: () => {
         voiceCtl.current = null;
         setVoicingId(null);
