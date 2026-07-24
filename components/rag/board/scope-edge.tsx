@@ -120,10 +120,12 @@ export function ScopeEdge({
         }}
       />
       <EdgeLabelRenderer>
-        {/* A scissor sits on EVERY cable, always visible (so each connection is
-            individually snippable at a glance — no hover-hunting). It rests
-            subtle and lifts to full red on hover. Anchored beside its own
-            source (cutX/cutY) so many cables don't stack their scissors. */}
+        {/* The cut handle reveals on HOVER only. A permanent red ✕ on every
+            cable read as an error state (and cluttered the board as sources
+            grew); now the wire rests clean and the scissors fades in — red,
+            because cutting is destructive — only when you're on that cable.
+            Anchored at the cable midpoint (cutX/cutY). The whole wire is still
+            click-to-cut, so this is a visible affordance, not the only way. */}
         <button
           title="Cut this connection"
           onMouseEnter={() => setHover(true)}
@@ -135,13 +137,13 @@ export function ScopeEdge({
           style={{
             position: 'absolute',
             transform: `translate(-50%, -50%) translate(${cutX}px, ${cutY}px)`,
-            pointerEvents: 'all'
+            pointerEvents: hover ? 'all' : 'none'
           }}
           className={cn(
             'nodrag nopan flex h-[22px] w-[22px] items-center justify-center rounded-full ring-2 ring-card transition-all duration-150',
             hover
-              ? 'scale-110 bg-red-500 text-white shadow-[0_2px_8px_rgb(239_68_68/0.5)]'
-              : 'scale-100 bg-card text-red-500/80 opacity-85 shadow-[0_1px_5px_rgb(0_0_0/0.22)]'
+              ? 'scale-110 bg-red-500 text-white opacity-100 shadow-[0_2px_8px_rgb(239_68_68/0.5)]'
+              : 'scale-75 bg-card text-red-500/80 opacity-0 shadow-[0_1px_5px_rgb(0_0_0/0.22)]'
           )}
         >
           <Scissors className="h-3.5 w-3.5" strokeWidth={2.5} />
