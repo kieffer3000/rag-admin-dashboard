@@ -295,8 +295,27 @@ function ChipNodeInner({ id, data, selected, parentId }: NodeProps) {
                 </span>
               )}
             </>
+          ) : item.content?.trim() ? (
+            // No thumbnail (text / doc / website / audio) but we DO have the
+            // extracted preview text: fill the banner with a faded peek at the
+            // real content over a type-tinted wash, so the piece reads as
+            // "holds this source" instead of a lonely glyph on flat gray. Banner
+            // height is unchanged, so every piece still stacks the same size.
+            <div className="relative h-full w-full overflow-hidden">
+              <div className={cn('absolute inset-0 opacity-[0.06]', meta.solid)} />
+              <p className="relative line-clamp-4 px-2.5 pt-2.5 text-[8.5px] font-medium leading-[1.55] tracking-tight text-foreground/55">
+                {item.content.trim().slice(0, 200)}
+              </p>
+              {/* fade the text into the title bar so the crop looks intentional */}
+              <div className="pointer-events-none absolute inset-x-0 bottom-0 h-6 bg-gradient-to-t from-card to-transparent" />
+              {/* small type badge anchors the family colour */}
+              <div className="absolute bottom-1 right-1.5">
+                <MediaIcon type={item.type} size="sm" />
+              </div>
+            </div>
           ) : (
-            <div className="flex h-full w-full items-center justify-center bg-black/[0.035] dark:bg-white/[0.05]">
+            <div className="relative flex h-full w-full items-center justify-center bg-black/[0.035] dark:bg-white/[0.05]">
+              <div className={cn('absolute inset-0 opacity-[0.05]', meta.solid)} />
               <MediaIcon type={item.type} size="lg" />
             </div>
           )}
