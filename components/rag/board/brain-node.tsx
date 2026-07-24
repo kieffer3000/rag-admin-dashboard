@@ -240,6 +240,10 @@ function BrainNodeInner({ id, data, selected }: NodeProps) {
   // mic flashes red in the final ~10s before the 2-min cap
   const warnTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [recWarn, setRecWarn] = useState(false);
+  // "The Pulse": timers for the cited-source ripple cascade that fires when an
+  // answer lands. Tracked so they're cleared on unmount / new query — a stray
+  // setTimeout writing node data after this brain is gone is the #1 bug class.
+  const pulseTimersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
 
   function clearRecTimers() {
     if (maxTimerRef.current) {
@@ -545,6 +549,10 @@ function BrainNodeInner({ id, data, selected }: NodeProps) {
     () => () => {
       if (maxTimerRef.current) clearTimeout(maxTimerRef.current);
       if (warnTimerRef.current) clearTimeout(warnTimerRef.current);
+      // stop any in-flight pulse cascade + drop lingering pulse flags so a
+      // ripple can't outlive this brain (see pulseTimersRef note above)
+      for (const t of pulseTimersRef.current) clearTimeout(t);
+      pulseTimersRef.current = [];
     },
     []
   );
@@ -714,6 +722,8 @@ function BrainNodeInner({ id, data, selected }: NodeProps) {
         setBrainBusy(id, false);
         stopHum();
         playChime(); // the answer landed
+        // The Pulse: ripple the cited sources on the board, in retrieval order
+        if (citations.length) firePulseCascade(citations);
         // AUDIO MODE: the arriving answer reads itself — no 🔈 press needed.
         // Uses the element unlocked at toggle time (autoplay-policy safe).
         if (audioModeRef.current && content && !noMatch)
@@ -741,6 +751,44 @@ function BrainNodeInner({ id, data, selected }: NodeProps) {
       if (n.type === 'chip' && n.data.mediaId === mediaId && !!n.data.pulse !== on)
         updateBoardNodeData(n.id, { pulse: on });
     }
+  }
+
+  /**
+   * The Pulse: when an answer lands, ripple the cited source pieces in
+   * CITATION ORDER (= retrieval rank) — the board visibly shows which sources
+   * this answer rests on, in the order they were retrieved. Reuses the existing
+   * hover-pulse (animate-cite-ripple). Every timer is tracked in pulseTimersRef
+   * so a ripple can never write node data after this brain unmounts or the next
+   * query starts. Honors prefers-reduced-motion by not firing.
+   */
+  function firePulseCascade(cites: { mediaId: string }[]) {
+    // cancel any prior cascade + clear its pending ripples first
+    for (const t of pulseTimersRef.current) clearTimeout(t);
+    pulseTimersRef.current = [];
+    if (
+      typeof window !== 'undefined' &&
+      window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
+    )
+      return;
+    // unique sources, preserving retrieval order; cap so the cascade stays snappy
+    const seen = new Set<string>();
+    const ordered: string[] = [];
+    for (const c of cites) {
+      if (c.mediaId && !seen.has(c.mediaId)) {
+        seen.add(c.mediaId);
+        ordered.push(c.mediaId);
+      }
+    }
+    const STAGGER = 240; // ms between each source firing
+    const HOLD = 900; // ms a ripple stays lit (matches animate-cite-ripple)
+    ordered.slice(0, 8).forEach((mediaId, i) => {
+      const on = setTimeout(() => pulseSource(mediaId, true), i * STAGGER);
+      const off = setTimeout(
+        () => pulseSource(mediaId, false),
+        i * STAGGER + HOLD
+      );
+      pulseTimersRef.current.push(on, off);
+    });
   }
 
   function clearConversation() {
