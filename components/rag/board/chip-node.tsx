@@ -314,9 +314,21 @@ function ChipNodeInner({ id, data, selected, parentId }: NodeProps) {
               </div>
             </div>
           ) : (
-            <div className="relative flex h-full w-full items-center justify-center bg-black/[0.035] dark:bg-white/[0.05]">
-              <div className={cn('absolute inset-0 opacity-[0.05]', meta.solid)} />
+            // No thumbnail AND no preview text: compose an intentional "type
+            // card" — a type-tinted gradient wash + the glyph + the type label —
+            // instead of a lone letter floating on flat gray.
+            <div className="relative flex h-full w-full flex-col items-center justify-center gap-1.5 overflow-hidden">
+              <div className={cn('absolute inset-0 opacity-[0.08]', meta.solid)} />
+              <div className="absolute inset-0 bg-gradient-to-b from-transparent to-black/[0.05] dark:to-black/25" />
               <MediaIcon type={item.type} size="lg" />
+              <span
+                className={cn(
+                  'relative text-[8px] font-semibold uppercase tracking-[0.12em] opacity-75',
+                  meta.text
+                )}
+              >
+                {meta.label}
+              </span>
             </div>
           )}
           {item.status === 'processing' && (

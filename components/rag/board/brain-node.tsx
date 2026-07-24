@@ -973,13 +973,17 @@ function BrainNodeInner({ id, data, selected }: NodeProps) {
 
       <div
         className={cn(
-          'flex h-full w-full flex-col overflow-hidden rounded-[24px] bg-card',
+          'relative flex h-full w-full flex-col overflow-hidden rounded-[24px] bg-card',
           'shadow-[0_1px_2px_rgba(0,0,0,0.1),0_8px_32px_-4px_rgba(0,0,0,0.12),0_20px_48px_-8px_rgba(0,0,0,0.15)]',
           'dark:shadow-[0_1px_2px_rgba(0,0,0,0.4),0_8px_32px_-4px_rgba(0,0,0,0.5),0_20px_48px_-8px_rgba(0,0,0,0.6)]',
           'dark:ring-1 dark:ring-white/[0.06]',
           selected && 'ring-2 ring-accent/60 dark:ring-accent/60 shadow-[0_0_0_4px_rgba(107,115,51,0.08)]'
         )}
       >
+        {/* lit top edge — a hairline of the olive brand accent marks the Answers
+            Bank as the destination surface (the payoff the sources feed into).
+            Brightest at center, fading to the corners. */}
+        <div className="pointer-events-none absolute inset-x-0 top-0 z-20 h-px bg-gradient-to-r from-transparent via-accent/80 to-transparent" />
         {/* header */}
         <div
           className={cn(
