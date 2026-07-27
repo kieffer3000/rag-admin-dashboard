@@ -151,6 +151,32 @@ export interface DetailedTranscript {
 // CloudConvert (direct upload) instead of POSTing it inline.
 const COMPRESS_OVER_BYTES = 4 * 1024 * 1024;
 
+// ---- "Is this speech to transcribe?" — ONE predicate, every caller ----------
+// HISTORY (2026-07-27): a 21 MB WhatsApp voice note failed with "over the ~4 MB
+// direct-upload limit". WhatsApp exports voice notes as **.mp4** (AAC in an MP4
+// container) and the browser types those `video/mp4` — so a test of
+// `audio/*` + a short extension list missed it entirely, the file fell through
+// to the DOCUMENT path, and the document path (correctly) refused 21 MB of
+// non-binary. The big-audio fix was never broken; this file simply never
+// reached it. Detection must be generous: for a transcript, a video
+// container's audio track IS the content.
+const TRANSCRIBABLE_EXT =
+  /\.(mp3|wav|m4a|m4b|aac|ogg|oga|opus|flac|webm|mp4|m4v|mov|mpeg|mpg|mpga|3gp|3gpp|amr|caf|aif|aiff|wma|avi|mkv)$/i;
+
+/** Containers OpenAI's transcription endpoint accepts as-is. Anything else must
+ *  ride the CloudConvert hop to be transcoded first, whatever its size. */
+const WHISPER_NATIVE_EXT = /\.(flac|m4a|mp3|mp4|mpeg|mpga|oga|ogg|wav|webm)$/i;
+
+/** True when a picked file should be TRANSCRIBED rather than text-extracted.
+ *  Use this everywhere a file is classified — never re-hand-roll the regex. */
+export function isAudioFile(f: { name?: string; type?: string }): boolean {
+  const type = (f.type ?? '').toLowerCase();
+  if (type.startsWith('audio/')) return true;
+  if (TRANSCRIBABLE_EXT.test(f.name ?? '')) return true;
+  // Any other video container: transcribe its audio track.
+  return type.startsWith('video/');
+}
+
 /** The TRUE file extension, so CloudConvert detects the format correctly. The
  *  old code named everything .wav/.mp3, so an m4a/aac/ogg upload was mislabeled
  *  and the convert job failed ("Something went wrong"). Prefer the real filename,
@@ -256,7 +282,13 @@ export async function transcribeAudioDetailed(
   phrases: string[] = []
 ): Promise<DetailedTranscript> {
   const durationSec = await audioDurationSec(blob);
-  if (blob.size > COMPRESS_OVER_BYTES || durationSec > LONG_AUDIO_SEC) {
+  // A container Whisper can't read inline (.mov/.amr/.wma/.opus…) must be
+  // transcoded first REGARDLESS of size — otherwise a 2 MB .mov would be POSTed
+  // straight to a route that rejects the format. Mic blobs have no filename and
+  // are already MP3/WAV, so they stay inline.
+  const name = typeof (blob as { name?: unknown }).name === 'string' ? (blob as File).name : '';
+  const inlineSafe = !name || WHISPER_NATIVE_EXT.test(name);
+  if (blob.size > COMPRESS_OVER_BYTES || durationSec > LONG_AUDIO_SEC || !inlineSafe) {
     const viaCompress = await transcribeViaCompression(blob, phrases, durationSec);
     if (viaCompress) return viaCompress;
     // compression unavailable → fall through (works for borderline sizes)

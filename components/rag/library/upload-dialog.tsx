@@ -5,6 +5,7 @@ import { useRag } from '@/lib/rag/store';
 import { MediaType } from '@/lib/rag/types';
 import { indexDocumentFile } from '@/lib/rag/doc-upload';
 import { prepareImageForIndex } from '@/lib/rag/image-upload';
+import { isAudioFile } from '@/lib/rag/board/dictation';
 import {
   Dialog,
   DialogContent,
@@ -42,10 +43,13 @@ function today() {
   return new Date().toISOString().slice(0, 10);
 }
 
-function inferFileType(name: string): MediaType {
-  const ext = name.split('.').pop()?.toLowerCase() ?? '';
+function inferFileType(file: File): MediaType {
+  const ext = file.name.split('.').pop()?.toLowerCase() ?? '';
   if (['png', 'jpg', 'jpeg', 'gif', 'webp', 'heic'].includes(ext)) return 'image';
-  if (['mp3', 'm4a', 'wav', 'aac', 'flac', 'ogg'].includes(ext)) return 'audio';
+  // Shared predicate (lib/rag/board/dictation) — a short hand-rolled extension
+  // list missed .mp4 WhatsApp voice notes (typed video/mp4), which then fell to
+  // the document path and died on its ~4 MB direct-upload cap.
+  if (isAudioFile(file)) return 'audio';
   return 'document';
 }
 
@@ -147,7 +151,7 @@ export function UploadDialog({
 
     if (method === 'file') {
       for (const file of files) {
-        const type = inferFileType(file.name);
+        const type = inferFileType(file);
         const nm = single && name.trim() ? name.trim() : file.name.replace(/\.[^.]+$/, '');
         // Audio → transcribe CLIENT-side via the shared hardened path
         // (transcribeAudioDetailed → /api/transcribe = OpenAI Whisper; large/long
@@ -389,7 +393,7 @@ export function UploadDialog({
                   </span>
                   <span className="inline-flex items-center gap-1">
                     <AudioLines className="h-3 w-3" />
-                    MP3 · M4A
+                    MP3 · M4A · MP4
                   </span>
                   <span className="inline-flex items-center gap-1">
                     <ImageIcon className="h-3 w-3" />

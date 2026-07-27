@@ -14,6 +14,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { cn } from '@/lib/utils';
 import { extractFileText } from '@/lib/rag/doc-upload';
+import { isAudioFile } from '@/lib/rag/board/dictation';
 import { UploadCloud, Globe, Type, FileText, X, Loader2, AlertCircle } from 'lucide-react';
 
 export interface NewArtifact {
@@ -121,9 +122,9 @@ export function ArtifactDialog({
         const parts: string[] = [];
         for (const f of files) {
           let fileText = '';
-          const isAudio =
-            /^audio\//.test(f.type) || /\.(mp3|wav|m4a|aac|ogg|flac|webm)$/i.test(f.name);
-          if (isAudio) {
+          // Shared predicate (lib/rag/board/dictation) — MIME `audio/*` alone
+          // misses WhatsApp voice notes, which arrive as .mp4 typed video/mp4.
+          if (isAudioFile(f)) {
             const { transcribeAudioDetailed, timestampedTranscript } = await import(
               '@/lib/rag/board/dictation'
             );
@@ -254,7 +255,7 @@ export function ArtifactDialog({
                   ref={fileRef}
                   type="file"
                   multiple
-                  accept=".pdf,.docx,.epub,.txt,.md,.mp3,.wav,.m4a,.aac,.ogg,.flac,.webm,text/*,application/pdf,audio/*"
+                  accept=".pdf,.docx,.epub,.txt,.md,.mp3,.wav,.m4a,.m4b,.aac,.ogg,.oga,.opus,.flac,.webm,.mp4,.m4v,.mov,.mpeg,.mpg,.3gp,.amr,.caf,.aiff,.wma,text/*,application/pdf,audio/*,video/*"
                   className="hidden"
                   onChange={(e) => {
                     addFiles(e.target.files);
@@ -264,8 +265,8 @@ export function ArtifactDialog({
                 <UploadCloud className="mb-2 h-7 w-7 text-muted-foreground" />
                 <p className="text-sm font-medium">Drop files or click to browse</p>
                 <p className="mt-1 text-[11px] text-muted-foreground">
-                  PDF · DOCX · EPUB · TXT · MD · audio (mp3/wav/m4a) · multiple
-                  OK · max 100 MB each
+                  PDF · DOCX · EPUB · TXT · MD · audio &amp; video (mp3/m4a/mp4/wav/mov —
+                  transcribed) · multiple OK · max 100 MB each
                 </p>
               </div>
               {files.length > 0 && (
@@ -278,7 +279,7 @@ export function ArtifactDialog({
                       <span className="flex min-w-0 items-center gap-1.5">
                         <FileText className="h-3.5 w-3.5 shrink-0" />
                         <span className="truncate">{f.name}</span>
-                        {/^audio\//.test(f.type) && (
+                        {isAudioFile(f) && (
                           <span className="shrink-0 rounded-full bg-indigo-500/20 px-1.5 text-[10px]">
                             transcribe
                           </span>

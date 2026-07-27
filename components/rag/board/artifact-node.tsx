@@ -3,7 +3,7 @@
 import { memo, useState, useEffect, useRef } from 'react';
 import { Handle, NodeResizer, Position, type NodeProps } from '@xyflow/react';
 import { cn } from '@/lib/utils';
-import { FileText, X, Download, Loader2, AlertCircle, Check } from 'lucide-react';
+import { FileText, X, Download, Loader2, AlertCircle, Check, Copy } from 'lucide-react';
 import { useBoard } from '@/lib/rag/board/store';
 import { CHIP_W, CHIP_H, type ArtifactData } from '@/lib/rag/board/types';
 
@@ -23,12 +23,40 @@ function ArtifactNodeInner({ id, data, selected, parentId }: NodeProps) {
   // og:image, then hide entirely.
   const [shotFailed, setShotFailed] = useState(false);
   const [shotPending, setShotPending] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const copyTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const shotReq = useRef<string | undefined>(undefined);
   const preview = !shotFailed && d.screenshot ? d.screenshot : d.image;
   // Truth indicator: does the brain actually have text to opine on? (<200 chars
   // = effectively empty — the same threshold the server uses to re-load.)
   const contentLen = (d.content ?? '').trim().length;
   const hasText = contentLen >= 200;
+
+  // COPY the whole doc (2026-07-27, user request). The global highlight-to-copy
+  // (SelectCopy) deliberately SKIPS editable surfaces, and this body is a live
+  // <textarea> — so a transcript dropped in here had no one-click copy the way
+  // the rest of the app does. Explicit button, same Copy→Check confirmation as
+  // Notes / the Answers Bank. Timer is tracked and cleared on unmount so it can
+  // never fire into a dead node.
+  async function copyContent() {
+    const text = (d.content ?? '').trim();
+    if (!text) return;
+    try {
+      await navigator.clipboard.writeText(text);
+    } catch {
+      return; // unfocused tab / insecure context — never flash a lying check
+    }
+    setCopied(true);
+    if (copyTimer.current) clearTimeout(copyTimer.current);
+    copyTimer.current = setTimeout(() => setCopied(false), 1500);
+  }
+
+  useEffect(
+    () => () => {
+      if (copyTimer.current) clearTimeout(copyTimer.current);
+    },
+    []
+  );
 
   // Capture a pixel-accurate screenshot via CloudConvert (persisted to Blob),
   // in the BACKGROUND — the og:image shows instantly and swaps when this lands.
@@ -172,6 +200,25 @@ function ArtifactNodeInner({ id, data, selected, parentId }: NodeProps) {
         <span className="ml-auto text-[9px] uppercase tracking-wide text-muted-foreground/50">
           not indexed
         </span>
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            void copyContent();
+          }}
+          disabled={!contentLen}
+          title={
+            contentLen
+              ? 'Copy the whole text (transcript / draft) to the clipboard'
+              : 'Nothing to copy yet'
+          }
+          className="nodrag ml-1 flex h-5 w-5 shrink-0 items-center justify-center rounded-md text-muted-foreground/60 transition-colors hover:bg-indigo-500/10 hover:text-indigo-600 disabled:opacity-30 disabled:hover:bg-transparent dark:hover:text-indigo-400"
+        >
+          {copied ? (
+            <Check className="h-3.5 w-3.5 text-emerald-500" />
+          ) : (
+            <Copy className="h-3.5 w-3.5" />
+          )}
+        </button>
         <button
           onClick={(e) => {
             e.stopPropagation();
